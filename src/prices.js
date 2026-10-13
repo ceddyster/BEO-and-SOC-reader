@@ -39,9 +39,9 @@
     { category: "Dinner Buffet", name: "Dinner Buffet Additional Course", price: 16, unit: "pp", note: "Additional course" },
 
     // ---------- DINNER — PLATED ----------
-    { category: "Dinner Plated", name: "Plated Dinner Menu One", price: 96, unit: "pp", minGuests: 50, aliases: ["Dinner Plated Menu One"] },
-    { category: "Dinner Plated", name: "Plated Dinner Menu Two", price: 105, unit: "pp", minGuests: 50, aliases: ["Dinner Plated Menu Two"] },
-    { category: "Dinner Plated", name: "Plated Dinner Menu Three", price: 120, unit: "pp", minGuests: 50, aliases: ["Dinner Plated Menu Three"] },
+    { category: "Dinner Plated", name: "Plated Dinner Menu One", price: 96, unit: "pp", minGuests: 50, composable: true, altPrice: 10, addCoursePrice: 22, aliases: ["Dinner Plated Menu One", "Dinner Set Menu One", "Set Dinner Menu One"] },
+    { category: "Dinner Plated", name: "Plated Dinner Menu Two", price: 105, unit: "pp", minGuests: 50, composable: true, altPrice: 10, addCoursePrice: 22, aliases: ["Dinner Plated Menu Two", "Dinner Set Menu Two", "Set Dinner Menu Two"] },
+    { category: "Dinner Plated", name: "Plated Dinner Menu Three", price: 120, unit: "pp", minGuests: 50, composable: true, altPrice: 10, addCoursePrice: 22, aliases: ["Dinner Plated Menu Three", "Dinner Set Menu Three", "Set Dinner Menu Three"] },
     { category: "Dinner Plated", name: "Plated Dinner Additional Course", price: 22, unit: "pp" },
     { category: "Dinner Plated", name: "Plated Dinner Alternating Service", price: 10, unit: "pp_per_course" },
     { category: "Dinner Plated", name: "Plated Dinner Salad Enhancement", price: 14, unit: "pp" },
@@ -78,10 +78,10 @@
     { category: "Lunch Buffet", name: "Lunch Buffet Item Swap Surcharge", price: 16, unit: "pp", note: "Swapping any items" },
 
     // ---------- LUNCH — PLATED ----------
-    { category: "Lunch Plated", name: "Plated Lunch Menu One Two Course", price: 81, unit: "pp", minGuests: 30 },
-    { category: "Lunch Plated", name: "Plated Lunch Menu One Three Course", price: 99, unit: "pp", minGuests: 30 },
-    { category: "Lunch Plated", name: "Plated Lunch Menu Two Two Course", price: 91, unit: "pp", minGuests: 30 },
-    { category: "Lunch Plated", name: "Plated Lunch Menu Two Three Course", price: 109, unit: "pp", minGuests: 30 },
+    { category: "Lunch Plated", name: "Plated Lunch Menu One Two Course", price: 81, unit: "pp", minGuests: 30, composable: true, altPrice: 10, addCoursePrice: 18 },
+    { category: "Lunch Plated", name: "Plated Lunch Menu One Three Course", price: 99, unit: "pp", minGuests: 30, composable: true, altPrice: 10, addCoursePrice: 18 },
+    { category: "Lunch Plated", name: "Plated Lunch Menu Two Two Course", price: 91, unit: "pp", minGuests: 30, composable: true, altPrice: 10, addCoursePrice: 18 },
+    { category: "Lunch Plated", name: "Plated Lunch Menu Two Three Course", price: 109, unit: "pp", minGuests: 30, composable: true, altPrice: 10, addCoursePrice: 18 },
     { category: "Lunch Plated", name: "Plated Lunch Additional Course", price: 18, unit: "pp" },
     { category: "Lunch Plated", name: "Plated Lunch Alternating Service", price: 10, unit: "pp_per_course" },
 
@@ -274,7 +274,7 @@
   // these against the catalogue; it only verifies their internal maths and
   // whether the BEO and SOC agree. Kept here so the UI can explain them.
   var NON_MENU_HINTS = [
-    "attrition", "minimum spend", "audio visual", "av ", "encore",
+    "attrition", "minimum spend", "event spend", "audio visual", "av ", "encore",
     "security", "room hire", "venue hire", "room rental", "cleaning",
     "contractor pass", "accommodation", "theming", "staging", "pinboard",
     "linen", "deposit", "surcharge", "delivery", "coat check", "cloak"

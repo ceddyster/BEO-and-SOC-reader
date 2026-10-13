@@ -110,6 +110,7 @@
     border: 1px solid; margin-top: 20px; }
   .banner.ok { background: var(--ok-bg); border-color: var(--ok-bd); }
   .banner.bad { background: var(--bad-bg); border-color: var(--bad-bd); }
+  .banner.warn { background: var(--warn-bg); border-color: var(--warn-bd); }
   .banner .big { font-size: 26px; line-height: 1; }
   .banner h2 { font-family: var(--display); margin: 0 0 3px; font-size: 18px; letter-spacing: -.01em; }
   .banner p { margin: 0; font-size: 13.5px; color: var(--muted); }
@@ -138,6 +139,7 @@
   tr.row-under td { background: color-mix(in srgb, var(--bad-bg) 55%, transparent); }
   tr.row-over td { background: color-mix(in srgb, var(--warn-bg) 55%, transparent); }
   tr.row-math td { background: color-mix(in srgb, var(--bad-bg) 55%, transparent); }
+  tr.row-review td { background: color-mix(in srgb, var(--warn-bg) 40%, transparent); }
   .chip { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 6px; white-space: nowrap;
     display: inline-block; }
   .chip.correct { color: var(--ok); background: var(--ok-bg); }
@@ -145,6 +147,7 @@
   .chip.overcharged { color: var(--warn); background: var(--warn-bg); }
   .chip.math-error { color: var(--bad); background: var(--bad-bg); }
   .chip.non-menu { color: var(--info); background: var(--info-bg); }
+  .chip.review { color: var(--warn); background: var(--warn-bg); }
   .chip.unmatched, .chip.beo-only, .chip.soc-only, .chip.mismatch { color: var(--warn); background: var(--warn-bg); }
   .chip.match { color: var(--ok); background: var(--ok-bg); }
   .note { font-size: 12px; color: var(--muted); margin-top: 3px; }
@@ -454,33 +457,41 @@
   function renderBanner(out, report, recon, label) {
     var s = report.summary;
     var reconBad = recon ? recon.mismatches : 0;
-    var clean = s.issues === 0 && reconBad === 0;
+    var hard = s.issues + reconBad;
     var div = document.createElement("div");
-    div.className = "banner " + (clean ? "ok" : "bad");
-    var headline, detail;
-    if (clean) {
-      headline = "Charges look correct";
-      detail = "Every priced line in the " + label + " matches the 2026 menu price book" +
-        (recon ? ", and the BEO and SOC agree." : ".");
-    } else {
+    var headline, detail, icon, cls;
+    if (hard > 0) {
+      cls = "bad"; icon = "⚠️";
       var bits = [];
       if (s.undercharged) bits.push(s.undercharged + " undercharged");
       if (s.overcharged) bits.push(s.overcharged + " overcharged");
       if (s.mathErrors) bits.push(s.mathErrors + " maths error" + (s.mathErrors > 1 ? "s" : ""));
       if (s.unmatched) bits.push(s.unmatched + " unmatched");
       if (reconBad) bits.push(reconBad + " BEO/SOC difference" + (reconBad > 1 ? "s" : ""));
-      headline = (s.issues + reconBad) + " thing" + ((s.issues + reconBad) > 1 ? "s" : "") + " to check";
-      detail = bits.join(" · ") + ".";
+      headline = hard + " thing" + (hard > 1 ? "s" : "") + " to check";
+      detail = bits.join(" · ") + (s.review ? " · " + s.review + " to confirm" : "") + ".";
+    } else if (s.review > 0) {
+      cls = "warn"; icon = "🔎";
+      headline = s.review + " line" + (s.review > 1 ? "s" : "") + " to confirm";
+      detail = "No mispricing found. Some set/plated menu lines are above their base price — " +
+        "normal if alternating service or extra courses were added. Check the notes below.";
+    } else {
+      cls = "ok"; icon = "✅";
+      headline = "Charges look correct";
+      detail = "Every priced line in the " + label + " matches the 2026 menu price book" +
+        (recon ? ", and the BEO and SOC agree." : ".");
     }
+    div.className = "banner " + cls;
     var pills = '<div class="pill-row">' +
       pill("ok", s.correct + " correct") +
       (s.undercharged ? pill("under", s.undercharged + " undercharged") : "") +
       (s.overcharged ? pill("over", s.overcharged + " overcharged") : "") +
       (s.mathErrors ? pill("math", s.mathErrors + " maths error" + (s.mathErrors > 1 ? "s" : "")) : "") +
+      (s.review ? pill("over", s.review + " to confirm") : "") +
       (s.nonMenu ? pill("info", s.nonMenu + " non-menu") : "") +
       (s.unmatched ? pill("over", s.unmatched + " unmatched") : "") +
       "</div>";
-    div.innerHTML = '<div class="big">' + (clean ? "✅" : "⚠️") + "</div><div>" +
+    div.innerHTML = '<div class="big">' + icon + "</div><div>" +
       "<h2>" + esc(headline) + "</h2><p>" + esc(detail) + "</p>" + pills + "</div>";
     out.appendChild(div);
   }
@@ -509,15 +520,17 @@
     report.items.forEach(function (r) {
       var rowClass = r.status === "undercharged" ? "row-under"
         : r.status === "overcharged" ? "row-over"
-        : r.status === "math-error" ? "row-math" : "";
+        : r.status === "math-error" ? "row-math"
+        : r.status === "review" ? "row-review" : "";
       var statusLabel = r.status === "math-error" ? "maths error" : (r.priceStatus === "not-checked" ? "non-menu"
         : r.priceStatus === "no-match" ? "unmatched" : r.priceStatus || r.status);
       var chipCls = r.status === "math-error" ? "math-error" : (r.priceStatus === "correct" ? "correct"
         : r.priceStatus === "undercharged" ? "undercharged" : r.priceStatus === "overcharged" ? "overcharged"
+        : r.priceStatus === "review" ? "review"
         : r.priceStatus === "not-checked" ? "non-menu" : "unmatched");
       var expected = r.expectedPrice != null ? money(r.expectedPrice) : "—";
       var notes = (r.notes || []).map(function (n) {
-        var flag = /under by|over by|should be|No menu match/i.test(n) ? " flag" : "";
+        var flag = /under by|over by|should be|No menu match|unaccounted|isn't a standard/i.test(n) ? " flag" : "";
         return '<div class="note' + flag + '">' + esc(n) + "</div>";
       }).join("");
       html += "<tr class='" + rowClass + "'>" +
@@ -594,8 +607,9 @@
     report.items.forEach(function (r) {
       var line = "• " + r.name + " — " + (r.qty != null ? r.qty + " × " : "") + money(r.unitPrice);
       if (r.priceStatus === "correct") line += "  [OK]";
-      else if (r.priceStatus === "undercharged") line += "  [UNDER by " + money(Math.abs(r.priceDiff)) + "/ea, " + money(Math.abs(r.priceImpact)) + " total; menu " + money(r.expectedPrice) + "]";
-      else if (r.priceStatus === "overcharged") line += "  [OVER by " + money(Math.abs(r.priceDiff)) + "/ea, " + money(Math.abs(r.priceImpact)) + " total; menu " + money(r.expectedPrice) + "]";
+      else if (r.priceStatus === "undercharged") line += "  [UNDER by " + money(Math.abs(r.priceDiff)) + "/ea" + (r.priceImpact != null ? ", " + money(Math.abs(r.priceImpact)) + " total" : "") + "; menu " + money(r.expectedPrice) + "]";
+      else if (r.priceStatus === "overcharged") line += "  [OVER by " + money(Math.abs(r.priceDiff)) + "/ea" + (r.priceImpact != null ? ", " + money(Math.abs(r.priceImpact)) + " total" : "") + "; menu " + money(r.expectedPrice) + "]";
+      else if (r.priceStatus === "review") line += "  [CONFIRM: " + money(r.priceDiff) + " above base " + money(r.expectedPrice) + "]";
       else if (r.priceStatus === "not-checked") line += "  [non-menu]";
       else line += "  [unmatched]";
       if (r.status === "math-error") line += "  [MATHS: total reads " + money(r.lineTotal) + ", expected " + money(r.mathExpectedTotal) + "]";

@@ -176,16 +176,19 @@
         if (!key) return;
         var from = 0, idx;
         while ((idx = soft.indexOf(key, from)) !== -1) {
-          nameHits.push({ index: idx, end: idx + key.length, item: item, label: item.name });
+          nameHits.push({ index: idx, end: idx + key.length, item: item, label: nm });
           from = idx + key.length;
         }
       });
     });
 
     function nearestNameBefore(pos) {
+      // Pick the closest catalogue name before this charge. The window is
+      // generous because a plated/set menu lists a long dish block between its
+      // heading and the "N guests @ $X" line.
       var best = null;
       nameHits.forEach(function (h) {
-        if (h.end <= pos && pos - h.end < 400) {
+        if (h.end <= pos && pos - h.end < 1500) {
           if (!best || h.end > best.end) best = h;
         }
       });
@@ -207,9 +210,33 @@
       var qty = parseInt(m[1], 10);
       var price = parseMoney(m[2]);
       var anchor = nearestNameBefore(m.index);
+      // Count "alternating with" in the menu block between the name and the price,
+      // so a set/plated menu's alternating-service surcharge can be accounted for.
+      var altCourses = 0;
+      if (anchor) {
+        var blk = soft.substring(anchor.end, m.index).match(/alternating with/g);
+        altCourses = blk ? blk.length : 0;
+      }
       pushUnique({ qty: qty, name: anchor ? anchor.label : "(unidentified per-person item)",
         unitPrice: price, lineTotal: round2(qty * price), kind: "per-person",
-        confident: !!anchor, source: "BEO" });
+        alternatingCourses: altCourses, confident: !!anchor, source: "BEO" });
+    }
+
+    // On-consumption beverages: "Leeuwin Estate Sparkling Brut @ $75.00 per bottle"
+    String(text || "").split(/\r?\n/).forEach(function (line) {
+      var cm = line.match(/^(.*?)\s*@\s*\$([\d,]+(?:\.\d{1,2})?)\s*per\s+(bottle|glass|can|nip|jug|pint)\b/i);
+      if (!cm) return;
+      var nm = cm[1].replace(/\s+/g, " ").trim().replace(/^[>•\-\s]+/, "");
+      if (nm.length < 2) return;
+      pushUnique({ qty: null, name: nm, unitPrice: parseMoney(cm[2]),
+        beoUnit: cm[3].toLowerCase(), kind: "consumption", source: "BEO" });
+    });
+
+    // Minimum / event spend: "1 @ $5,400.00 event spend"
+    re = /\$([\d,]+(?:\.\d{1,2})?)\s*event spend/gi;
+    while ((m = re.exec(soft)) !== null) {
+      pushUnique({ qty: 1, name: "Minimum event spend", unitPrice: parseMoney(m[1]),
+        lineTotal: parseMoney(m[1]), kind: "non-menu", source: "BEO" });
     }
 
     // Security officer hours: "5 Security officer hours ... @ $75.00 per hour"
@@ -253,20 +280,22 @@
   function checkItem(item, catalogue) {
     var result = {
       qty: item.qty, name: item.name, unitPrice: item.unitPrice, lineTotal: item.lineTotal,
-      source: item.source, kind: item.kind || null, status: "ok", notes: []
+      source: item.source, kind: item.kind || null, beoUnit: item.beoUnit || null,
+      alternatingCourses: item.alternatingCourses || 0, status: "ok", notes: []
     };
 
-    // Internal maths check (qty x unit price == line total).
+    // Internal maths check (qty x unit price == line total) — only when we have both.
     if (item.lineTotal != null && item.unitPrice != null && item.qty != null) {
       var expectedTotal = round2(item.qty * item.unitPrice);
       if (Math.abs(expectedTotal - item.lineTotal) > 0.005) {
         result.status = "math-error";
         result.mathExpectedTotal = expectedTotal;
         result.notes.push("Line total should be " + money(expectedTotal) +
-          " (" + item.qty + " x " + money(item.unitPrice) + "), but reads " + money(item.lineTotal) + ".");
+          " (" + item.qty + " × " + money(item.unitPrice) + "), but reads " + money(item.lineTotal) + ".");
       }
     }
 
+    var per = item.beoUnit ? (" per " + item.beoUnit) : "";
     var match = findMatch(item.name, catalogue);
     if (match) {
       result.matchedName = match.item.name;
@@ -274,30 +303,34 @@
       result.expectedPrice = match.item.price;
       result.unit = match.item.unit;
       result.category = match.item.category;
-      var diff = round2(item.unitPrice - match.item.price);
+      var base = match.item.price;
+      var diff = round2(item.unitPrice - base);
       result.priceDiff = diff;
-      result.priceImpact = round2(diff * (item.qty || 1));
-      if (Math.abs(diff) <= 0.005) {
-        if (result.status === "ok") result.status = "ok";
+      result.priceImpact = (item.qty != null) ? round2(diff * item.qty) : null;
+
+      if (match.item.composable && diff > 0.005) {
+        composableExplain(result, item, match.item, base, diff);
+      } else if (Math.abs(diff) <= 0.005) {
         result.priceStatus = "correct";
       } else {
         result.priceStatus = diff < 0 ? "undercharged" : "overcharged";
         if (result.status !== "math-error") result.status = result.priceStatus;
-        // Helpful hint: does the charged price match another tier of the same package?
         var sameCat = (catalogue.items || []).filter(function (x) {
           return x.category === match.item.category && Math.abs(x.price - item.unitPrice) <= 0.005;
         });
         if (sameCat.length) {
-          result.notes.push("Charged price " + money(item.unitPrice) + " matches " +
-            sameCat[0].name + ".");
+          result.notes.push("Charged price " + money(item.unitPrice) + " matches " + sameCat[0].name + ".");
         }
-        result.notes.push("Menu price for " + match.item.name + " is " + money(match.item.price) +
-          " per " + unitLabel(match.item.unit) + "; charged " + money(item.unitPrice) +
-          " (" + (diff < 0 ? "under" : "over") + " by " + money(Math.abs(diff)) + " each, " +
-          money(Math.abs(result.priceImpact)) + " across " + (item.qty || 1) + ").");
+        var impactText = (item.qty != null)
+          ? (money(Math.abs(diff)) + " each, " + money(Math.abs(result.priceImpact)) + " across " + item.qty)
+          : (money(Math.abs(diff)) + per);
+        result.notes.push("Menu price for " + match.item.name + " is " + money(base) + per +
+          "; charged " + money(item.unitPrice) + per + " (" + (diff < 0 ? "under" : "over") +
+          " by " + impactText + ").");
       }
-      if (match.score < 0.999) {
-        result.notes.push("Matched to “" + match.item.name + "” (review if that is not the right item).");
+      if (match.score < 0.999 && !result._explained) {
+        result.notes.push("Matched to “" + match.item.name + "”" +
+          (normalize(item.name) !== normalize(match.item.name) ? " (from “" + item.name + "”)" : "") + ".");
       }
     } else if (looksNonMenu(item.name, catalogue) || item.kind === "non-menu") {
       if (result.status === "ok") result.status = "non-menu";
@@ -311,11 +344,55 @@
     return result;
   }
 
+  // A set/plated menu charged above its base price: explain the excess via the
+  // alternating-service and additional-course surcharges.
+  function composableExplain(result, item, cat, base, diff) {
+    var altCourses = item.alternatingCourses || 0;
+    var altPrice = cat.altPrice || 10;
+    var altAmount = round2(altCourses * altPrice);
+    var remainder = round2(diff - altAmount);
+    result._explained = true;
+
+    if (altCourses > 0 && Math.abs(remainder) <= 0.005) {
+      // Fully explained by the alternating courses the BEO actually shows.
+      result.priceStatus = "correct";
+      result.notes.push("Correct: base " + cat.name + " " + money(base) + " + " + altCourses +
+        " alternating course" + (altCourses > 1 ? "s" : "") + " (+" + money(altAmount) + ") = " +
+        money(item.unitPrice) + " per person.");
+      return;
+    }
+
+    result.priceStatus = "review";
+    if (result.status !== "math-error") result.status = "review";
+    var note = "Charged " + money(item.unitPrice) + " is " + money(diff) + " above the base " +
+      cat.name + " (" + money(base) + ").";
+    if (altCourses > 0) {
+      note += " " + altCourses + " alternating course" + (altCourses > 1 ? "s" : "") +
+        " accounts for " + money(altAmount) + ", leaving " + money(remainder) + ".";
+    }
+    var hints = [];
+    var altN = remainder / altPrice;
+    if (Math.abs(altN - Math.round(altN)) < 0.001 && Math.round(altN) > 0) {
+      hints.push(Math.round(altN) + " alternating course" + (Math.round(altN) > 1 ? "s" : "") +
+        " (" + money(altPrice) + "pp each)");
+    }
+    if (cat.addCoursePrice) {
+      var addN = remainder / cat.addCoursePrice;
+      if (Math.abs(addN - Math.round(addN)) < 0.001 && Math.round(addN) > 0) {
+        hints.push(Math.round(addN) + " additional course" + (Math.round(addN) > 1 ? "s" : "") +
+          " (" + money(cat.addCoursePrice) + "pp)");
+      }
+    }
+    if (hints.length) note += " The extra " + money(remainder) + " matches " + hints.join(" or ") + " — confirm the menu composition.";
+    else note += " The extra " + money(remainder) + " isn't a standard add-on — please check.";
+    result.notes.push(note);
+  }
+
   function checkDocument(items, catalogue) {
     var checked = (items || []).map(function (it) { return checkItem(it, catalogue); });
     var summary = {
       total: checked.length,
-      correct: 0, undercharged: 0, overcharged: 0, mathErrors: 0, nonMenu: 0, unmatched: 0,
+      correct: 0, undercharged: 0, overcharged: 0, mathErrors: 0, nonMenu: 0, unmatched: 0, review: 0,
       chargedTotal: 0, expectedTotal: 0, variance: 0, issues: 0
     };
     checked.forEach(function (r) {
@@ -325,12 +402,17 @@
       else if (r.priceStatus === "correct") summary.correct++;
       else if (r.priceStatus === "not-checked") summary.nonMenu++;
       else if (r.priceStatus === "no-match") summary.unmatched++;
+      else if (r.priceStatus === "review") summary.review++;
 
-      var charged = r.lineTotal != null ? r.lineTotal : round2((r.qty || 1) * (r.unitPrice || 0));
+      // Lines with no quantity (beverages on consumption) can't be totalled.
+      var charged = r.lineTotal != null ? r.lineTotal
+        : (r.qty != null ? round2(r.qty * (r.unitPrice || 0)) : 0);
       summary.chargedTotal = round2(summary.chargedTotal + charged);
-      var expectedLine = (r.expectedPrice != null)
-        ? round2((r.qty || 1) * r.expectedPrice)
-        : charged; // non-menu / unmatched: no independent expectation
+      // Only over/undercharges carry an independent expectation; everything else
+      // (correct, review, non-menu, unmatched) expects what was charged.
+      var expectedLine = (r.qty != null && (r.priceStatus === "overcharged" || r.priceStatus === "undercharged"))
+        ? round2(r.qty * r.expectedPrice)
+        : charged;
       summary.expectedTotal = round2(summary.expectedTotal + expectedLine);
     });
     summary.variance = round2(summary.chargedTotal - summary.expectedTotal);

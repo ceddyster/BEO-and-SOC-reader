@@ -105,6 +105,43 @@ var rec2 = engine.reconcile(beoItems, socAltered);
 var m2 = rec2.rows.find(function (r) { return r.beo && /crown reserve/i.test(r.beo.name); });
 ok(m2 && m2.status === "mismatch", "reconcile flags a BEO/SOC price disagreement");
 
+section("Set / plated dinner menu (BEO #56002, alternating service)");
+var beo2 = fs.readFileSync(path.join(__dirname, "fixtures", "shvfrs_beo.txt"), "utf8");
+var beo2Items = engine.parseBeo(beo2, catalogue);
+
+var setMenu = beo2Items.find(function (i) { return /set menu/i.test(i.name); });
+ok(setMenu && setMenu.qty === 64 && setMenu.unitPrice === 125, "parses Dinner Set Menu Two 64 @ $125");
+ok(setMenu && setMenu.alternatingCourses === 2, "detects 2 alternating courses (got " + (setMenu && setMenu.alternatingCourses) + ")");
+
+var rep2 = engine.checkDocument(beo2Items, catalogue);
+var rSet = rep2.items.find(function (r) { return /set menu/i.test(r.name); });
+ok(rSet.matchedName === "Plated Dinner Menu Two", "Set Menu Two matched to Plated Dinner Menu Two");
+ok(rSet.priceStatus === "correct", "$125 validated correct ($105 base + 2 × $10 alternating)");
+ok(rSet.notes.join(" ").indexOf("alternating") !== -1, "explanation mentions alternating service");
+
+section("On-consumption beverage checks");
+var rBrut = rep2.items.find(function (r) { return /sparkling brut/i.test(r.name); });
+ok(rBrut && rBrut.priceStatus === "correct", "Leeuwin Sparkling Brut $75/bottle correct");
+var rHeineken = rep2.items.find(function (r) { return /heineken zero/i.test(r.name); });
+ok(rHeineken && rHeineken.priceStatus === "undercharged", "Heineken Zero $12.00 flagged (menu $12.50)");
+ok(rHeineken && rHeineken.priceDiff === -0.5, "Heineken Zero under by $0.50");
+var rKetel = rep2.items.find(function (r) { return /ketel one/i.test(r.name); });
+ok(rKetel && rKetel.priceStatus === "correct", "Ketel One $15.50/glass correct (matched to Ketel One Vodka)");
+var rSpend = rep2.items.find(function (r) { return /event spend/i.test(r.name); });
+ok(rSpend && rSpend.priceStatus === "not-checked", "minimum event spend treated as non-menu");
+var rSec2 = rep2.items.find(function (r) { return /security/i.test(r.name); });
+ok(rSec2 && rSec2.qty === 6 && rSec2.priceStatus === "not-checked", "Security 6 hrs non-menu");
+
+section("Set menu on a SOC (no alternating info) → review, not false overcharge");
+var socSet = engine.parseSocRows([["64", "Dinner Set Menu Two", "$125.00", "", "$8,000.00"]]);
+var repSocSet = engine.checkDocument(socSet, catalogue);
+ok(repSocSet.items[0].priceStatus === "review", "SOC set menu $125 marked review (not overcharged)");
+ok(repSocSet.items[0].notes.join(" ").indexOf("alternating") !== -1, "review note explains the $20 as alternating courses");
+
+section("Regression: undercharge below base is still caught");
+var under = engine.checkDocument(engine.parseSocRows([["50", "Dinner Set Menu Two", "$100.00", "", "$5,000.00"]]), catalogue);
+ok(under.items[0].priceStatus === "undercharged", "$100 below base $105 flagged undercharged");
+
 console.log("\n----------------------------------------");
 console.log(passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);
