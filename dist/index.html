@@ -1,0 +1,1334 @@
+<title>BEO &amp; SOC Charge Checker</title>
+<meta name="description" content="Checks Crown Events BEOs and Statements of Charges against the 2026 menu price book.">
+
+<!-- Layout: a utility reconciliation dashboard — summary banner first, then
+     line-item checks, then BEO vs SOC, built from the token system below. -->
+<style>
+  :root {
+    --bg: #eef1f5; --surface: #ffffff; --surface-2: #e9edf2; --border: #d6dde5;
+    --fg: #182230; --muted: #5a6775; --accent: #2f62e6; --accent-fg: #ffffff;
+    --ok: #157f54; --ok-bg: #e2f3eb; --ok-bd: #bfe3d1;
+    --warn: #a86400; --warn-bg: #fbefd8; --warn-bd: #f0d7a5;
+    --bad: #c62f3d; --bad-bg: #fbe4e7; --bad-bd: #f2c0c6;
+    --info: #4650c8; --info-bg: #e7e9fb;
+    --shadow: 0 1px 2px rgba(20,30,45,.06), 0 6px 20px rgba(20,30,45,.06);
+    --radius: 12px;
+    --display: "Bricolage Grotesque", "Trebuchet MS", system-ui, sans-serif;
+    --body: "IBM Plex Sans", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0e141b; --surface: #161e28; --surface-2: #1c2632; --border: #2a3744;
+      --fg: #e8eef4; --muted: #9ba8b6; --accent: #6b9bff; --accent-fg: #0e141b;
+      --ok: #45cf92; --ok-bg: #11271f; --ok-bd: #1f4636;
+      --warn: #e2ab4c; --warn-bg: #2f2410; --warn-bd: #4d3c18;
+      --bad: #ff7079; --bad-bg: #2f1619; --bad-bd: #512329;
+      --info: #9aa2ff; --info-bg: #1b1f3a;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0e141b; --surface: #161e28; --surface-2: #1c2632; --border: #2a3744;
+    --fg: #e8eef4; --muted: #9ba8b6; --accent: #6b9bff; --accent-fg: #0e141b;
+    --ok: #45cf92; --ok-bg: #11271f; --ok-bd: #1f4636;
+    --warn: #e2ab4c; --warn-bg: #2f2410; --warn-bd: #4d3c18;
+    --bad: #ff7079; --bad-bg: #2f1619; --bad-bd: #512329;
+    --info: #9aa2ff; --info-bg: #1b1f3a;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--fg); font-family: var(--body);
+    line-height: 1.5; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding-block: 0 56px; padding-inline: 16px; }
+
+  header.top {
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(8px); border-bottom: 1px solid var(--border);
+    margin-bottom: 24px;
+  }
+  .top-in { max-width: 1040px; margin: 0 auto; padding: 12px 16px;
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .brandmark { width: 34px; height: 34px; border-radius: 9px; flex: none;
+    background: linear-gradient(145deg, var(--accent), color-mix(in srgb, var(--accent) 60%, #000));
+    display: grid; place-items: center; color: #fff; font-family: var(--display);
+    font-weight: 800; font-size: 15px; }
+  .brand h1 { font-family: var(--display); font-size: 18px; font-weight: 700;
+    margin: 0; letter-spacing: -.01em; line-height: 1.15; }
+  .brand p { margin: 0; font-size: 12px; color: var(--muted); }
+  .top .spacer { flex: 1; }
+  .cat-chip { font-size: 12px; color: var(--muted); border: 1px solid var(--border);
+    background: var(--surface); padding: 5px 10px; border-radius: 999px; white-space: nowrap; }
+  .cat-chip b { color: var(--ok); font-weight: 600; }
+  .icon-btn { border: 1px solid var(--border); background: var(--surface); color: var(--fg);
+    width: 34px; height: 34px; border-radius: 9px; cursor: pointer; font-size: 15px; }
+  .icon-btn:hover { background: var(--surface-2); }
+
+  .lede { color: var(--muted); font-size: 15px; max-width: 70ch; margin: 0 0 22px; }
+
+  /* Upload zones */
+  .drops { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 620px) { .drops { grid-template-columns: 1fr; } }
+  .drop { background: var(--surface); border: 1.5px dashed var(--border); border-radius: var(--radius);
+    padding: 20px; text-align: center; cursor: pointer; transition: border-color .15s, background .15s;
+    display: flex; flex-direction: column; gap: 6px; align-items: center; min-height: 148px;
+    justify-content: center; }
+  .drop:hover, .drop.hover { border-color: var(--accent); background: var(--surface-2); }
+  .drop.loaded { border-style: solid; border-color: var(--ok-bd); }
+  .drop .kind { font-family: var(--display); font-weight: 700; font-size: 15px; }
+  .drop .hint { font-size: 12.5px; color: var(--muted); }
+  .drop .fname { font-size: 13px; color: var(--ok); font-weight: 600; word-break: break-word; }
+  .drop .doticon { font-size: 22px; line-height: 1; }
+  .drop input { display: none; }
+
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; margin: 18px 0 6px; align-items: center; }
+  button.btn { font-family: var(--body); font-size: 14px; font-weight: 600; cursor: pointer;
+    border-radius: 9px; padding: 9px 16px; border: 1px solid var(--border); background: var(--surface); color: var(--fg); }
+  button.btn.primary { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
+  button.btn.primary:disabled { opacity: .5; cursor: not-allowed; }
+  button.btn:hover:not(:disabled) { filter: brightness(1.03); }
+  .muted-note { font-size: 12.5px; color: var(--muted); }
+
+  #status { margin-top: 14px; font-size: 13.5px; color: var(--muted); min-height: 1.2em; }
+  #status.err { color: var(--bad); }
+
+  /* Results */
+  section.block { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow); margin-top: 20px; overflow: hidden; }
+  .block > h2 { font-family: var(--display); font-size: 15px; font-weight: 700; margin: 0;
+    padding: 14px 18px; border-bottom: 1px solid var(--border); letter-spacing: -.01em;
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .block > h2 .sub { font-family: var(--body); font-weight: 400; font-size: 12.5px; color: var(--muted); }
+  .block .body { padding: 6px 18px 16px; }
+
+  /* Summary banner */
+  .banner { display: flex; gap: 16px; align-items: flex-start; padding: 18px; border-radius: var(--radius);
+    border: 1px solid; margin-top: 20px; }
+  .banner.ok { background: var(--ok-bg); border-color: var(--ok-bd); }
+  .banner.bad { background: var(--bad-bg); border-color: var(--bad-bd); }
+  .banner .big { font-size: 26px; line-height: 1; }
+  .banner h2 { font-family: var(--display); margin: 0 0 3px; font-size: 18px; letter-spacing: -.01em; }
+  .banner p { margin: 0; font-size: 13.5px; color: var(--muted); }
+  .pill-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .pill { font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); }
+  .pill.ok { color: var(--ok); background: var(--ok-bg); border-color: var(--ok-bd); }
+  .pill.under { color: var(--bad); background: var(--bad-bg); border-color: var(--bad-bd); }
+  .pill.over { color: var(--warn); background: var(--warn-bg); border-color: var(--warn-bd); }
+  .pill.math { color: var(--bad); background: var(--bad-bg); border-color: var(--bad-bd); }
+  .pill.info { color: var(--info); background: var(--info-bg); border-color: transparent; }
+
+  /* Event facts */
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 2px;
+    background: var(--border); border-radius: 10px; overflow: hidden; margin: 14px 0 2px; }
+  .facts div { background: var(--surface); padding: 10px 12px; }
+  .facts dt { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 2px; }
+  .facts dd { margin: 0; font-size: 14px; font-weight: 600; }
+
+  /* Tables */
+  .tscroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; min-width: 560px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600;
+    position: sticky; top: 0; background: var(--surface); }
+  td.num, th.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  tr.row-under td { background: color-mix(in srgb, var(--bad-bg) 55%, transparent); }
+  tr.row-over td { background: color-mix(in srgb, var(--warn-bg) 55%, transparent); }
+  tr.row-math td { background: color-mix(in srgb, var(--bad-bg) 55%, transparent); }
+  .chip { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 6px; white-space: nowrap;
+    display: inline-block; }
+  .chip.correct { color: var(--ok); background: var(--ok-bg); }
+  .chip.undercharged { color: var(--bad); background: var(--bad-bg); }
+  .chip.overcharged { color: var(--warn); background: var(--warn-bg); }
+  .chip.math-error { color: var(--bad); background: var(--bad-bg); }
+  .chip.non-menu { color: var(--info); background: var(--info-bg); }
+  .chip.unmatched, .chip.beo-only, .chip.soc-only, .chip.mismatch { color: var(--warn); background: var(--warn-bg); }
+  .chip.match { color: var(--ok); background: var(--ok-bg); }
+  .note { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .note.flag { color: var(--bad); }
+  .itemname { font-weight: 600; }
+
+  /* Totals */
+  .totals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; background: var(--border);
+    border-radius: 10px; overflow: hidden; margin-top: 14px; }
+  @media (max-width: 520px) { .totals { grid-template-columns: 1fr; } }
+  .totals div { background: var(--surface); padding: 12px 14px; }
+  .totals dt { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 3px; }
+  .totals dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 18px; font-weight: 600; }
+  .totals dd.flag { color: var(--bad); }
+  .totals dd.good { color: var(--ok); }
+
+  details.prices { margin-top: 22px; border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--surface); }
+  details.prices > summary { cursor: pointer; padding: 13px 18px; font-weight: 600; font-family: var(--display);
+    font-size: 14px; }
+  details.prices .body { padding: 0 18px 14px; }
+  .cat-head { font-family: var(--display); font-size: 12px; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--accent); margin: 14px 0 4px; }
+
+  footer.foot { margin-top: 30px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--border);
+    padding-top: 16px; }
+  footer.foot code { font-family: var(--mono); background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+  a { color: var(--accent); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<header class="top">
+  <div class="top-in">
+    <div class="brandmark">✓$</div>
+    <div class="brand">
+      <h1>BEO &amp; SOC Charge Checker</h1>
+      <p>Crown Events &amp; Conferences Perth</p>
+    </div>
+    <div class="spacer"></div>
+    <span class="cat-chip" id="catChip">Loading price book…</span>
+    <button class="icon-btn" id="themeBtn" title="Toggle light / dark" aria-label="Toggle theme">◐</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <p class="lede">Drop in an event order (<b>BEO</b>, PDF) and/or a statement of charges
+  (<b>SOC</b>, Word). The tool reads the charges, checks every per-person and package
+  price against the 2026 menu price book, and — when you load both — confirms the BEO and
+  SOC agree. Files are read in your browser; nothing is uploaded.</p>
+
+  <div class="drops">
+    <label class="drop" id="dropBeo">
+      <span class="doticon">📄</span>
+      <span class="kind">BEO — Event Order</span>
+      <span class="hint">PDF · drag &amp; drop or click</span>
+      <span class="fname" id="beoName" hidden></span>
+      <input type="file" id="beoInput" accept=".pdf,application/pdf">
+    </label>
+    <label class="drop" id="dropSoc">
+      <span class="doticon">📝</span>
+      <span class="kind">SOC — Statement of Charges</span>
+      <span class="hint">Word .docx · drag &amp; drop or click</span>
+      <span class="fname" id="socName" hidden></span>
+      <input type="file" id="socInput" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+    </label>
+  </div>
+
+  <div class="actions">
+    <button class="btn primary" id="runBtn" disabled>Check charges</button>
+    <button class="btn" id="resetBtn">Clear</button>
+    <button class="btn" id="copyBtn" hidden>Copy summary</button>
+    <span class="muted-note" id="needInternet">Needs internet on first load (reads PDF/Word in-browser).</span>
+  </div>
+
+  <div id="status" role="status" aria-live="polite"></div>
+
+  <div id="results" hidden></div>
+
+  <details class="prices">
+    <summary>View the 2026 menu price book this checks against</summary>
+    <div class="body" id="priceList"></div>
+  </details>
+
+  <footer class="foot">
+    <p><b>How the price check works.</b> Each charge line is matched by name to the menu
+    price book (tier-aware, so a “6 Hour” package only matches the 6-hour price). Matched
+    lines are compared penny-for-penny: <code>correct</code>, <code>undercharged</code> or
+    <code>overcharged</code>, with the per-person difference and the total impact across the
+    guest count. The tool also recomputes <code>qty × price</code> to catch arithmetic slips.
+    Operational charges with no menu price — audio-visual, security, room hire, attrition /
+    minimum spend — are listed as <code>non-menu</code> for you to confirm manually.</p>
+    <p>Prices come from the <b>E&amp;C Menu 2026</b> price book. Food and most beverages are
+    valid 01 Jul 2026 – 30 Jun 2027; the Christmas buffet to 31 Dec 2026. If a menu changes,
+    update <code>src/prices.js</code> and reload.</p>
+  </footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://unpkg.com/mammoth@1.6.0/mammoth.browser.min.js"></script>
+<script>
+/*
+ * Crown Events & Conferences Perth — 2026 menu price catalogue.
+ *
+ * Source: the "E&C Menu 2026" PDF price books held in Google Drive.
+ * Food/most beverage menus are valid 01 Jul 2026 – 30 Jun 2027.
+ * The Christmas Buffet is valid 01 Jul 2026 – 31 Dec 2026.
+ *
+ * To re-sync after a price change: update the prices here (or re-run the
+ * extraction) and bump CATALOGUE_META.updated. This file is the single
+ * source of truth the checker compares BEO/SOC charges against.
+ *
+ * unit values:
+ *   pp              = per person
+ *   pp_per_course   = per person, per course
+ *   pp_per_selection= per person, per selection
+ *   child           = per child
+ *   glass / bottle  = per glass / per bottle (served on consumption)
+ *   each            = per item (e.g. cocktails)
+ *   flat            = flat fee (e.g. barista cart hire)
+ */
+(function (root) {
+  "use strict";
+
+  var CATALOGUE_META = {
+    venue: "Crown Events & Conferences Perth",
+    year: "2026",
+    validFrom: "2026-07-01",
+    validTo: "2027-06-30",
+    updated: "2026-10-13",
+    source: "Google Drive — E&C Menu 2026 folder"
+  };
+
+  // category, name (as it typically appears on a BEO/SOC), price, unit, extras
+  var ITEMS = [
+    // ---------- DINNER — BUFFET ----------
+    { category: "Dinner Buffet", name: "Dinner Buffet Menu One", price: 90, unit: "pp", minGuests: 50, aliases: ["Dinner Buffet Menu 1"] },
+    { category: "Dinner Buffet", name: "Dinner Buffet Menu Two", price: 104, unit: "pp", minGuests: 50, aliases: ["Dinner Buffet Menu 2"] },
+    { category: "Dinner Buffet", name: "Dinner Buffet Menu Three", price: 120, unit: "pp", minGuests: 50, aliases: ["Dinner Buffet Menu 3"] },
+    { category: "Dinner Buffet", name: "Dinner Buffet Additional Course", price: 16, unit: "pp", note: "Additional course" },
+
+    // ---------- DINNER — PLATED ----------
+    { category: "Dinner Plated", name: "Plated Dinner Menu One", price: 96, unit: "pp", minGuests: 50, aliases: ["Dinner Plated Menu One"] },
+    { category: "Dinner Plated", name: "Plated Dinner Menu Two", price: 105, unit: "pp", minGuests: 50, aliases: ["Dinner Plated Menu Two"] },
+    { category: "Dinner Plated", name: "Plated Dinner Menu Three", price: 120, unit: "pp", minGuests: 50, aliases: ["Dinner Plated Menu Three"] },
+    { category: "Dinner Plated", name: "Plated Dinner Additional Course", price: 22, unit: "pp" },
+    { category: "Dinner Plated", name: "Plated Dinner Alternating Service", price: 10, unit: "pp_per_course" },
+    { category: "Dinner Plated", name: "Plated Dinner Salad Enhancement", price: 14, unit: "pp" },
+    { category: "Dinner Plated", name: "Plated Dinner Pasta Enhancement", price: 24, unit: "pp" },
+    { category: "Dinner Plated", name: "Plated Dinner Charcuterie and Cheese Platter", price: 30, unit: "pp" },
+    { category: "Dinner Plated", name: "Plated Dinner Charcuterie and Cheese Individual", price: 34, unit: "pp" },
+    { category: "Dinner Plated", name: "Plated Dinner Sides", price: 14, unit: "pp" },
+
+    // ---------- DINNER — INDIAN ----------
+    { category: "Dinner Indian", name: "Indian Buffet Package One", price: 129, unit: "pp", minGuests: 50 },
+    { category: "Dinner Indian", name: "Indian Buffet Package Two", price: 150, unit: "pp", minGuests: 50 },
+    { category: "Dinner Indian", name: "Indian Buffet Vegetarian Option", price: 126, unit: "pp", minGuests: 50 },
+
+    // ---------- CHINESE BANQUET ----------
+    { category: "Chinese Banquet", name: "Chinese Banquet Menu One", price: 160, unit: "pp", minGuests: 50 },
+    { category: "Chinese Banquet", name: "Chinese Banquet Menu Two", price: 175, unit: "pp", minGuests: 50 },
+    { category: "Chinese Banquet", name: "Children's Chinese Banquet Menu", price: 40, unit: "pp" },
+
+    // ---------- CHILDREN ----------
+    { category: "Children", name: "Children's Main Course", price: 30, unit: "child", aliases: ["Childrens Menu Main Course", "Kids Main"] },
+    { category: "Children", name: "Children's Beverages", price: 12.5, unit: "child" },
+
+    // ---------- CHRISTMAS BUFFET (valid to 31 Dec 2026) ----------
+    { category: "Christmas Buffet", name: "Christmas Buffet Menu One", price: 90, unit: "pp", minGuests: 50, validTo: "2026-12-31" },
+    { category: "Christmas Buffet", name: "Christmas Buffet Menu Two", price: 104, unit: "pp", minGuests: 50, validTo: "2026-12-31" },
+    { category: "Christmas Buffet", name: "Christmas Buffet Menu Three", price: 120, unit: "pp", minGuests: 50, validTo: "2026-12-31" },
+    { category: "Christmas Buffet", name: "Christmas Buffet Additional Course", price: 16, unit: "pp", validTo: "2026-12-31" },
+
+    // ---------- LUNCH — BUFFET ----------
+    { category: "Lunch Buffet", name: "Lunch Buffet Menu One", price: 62, unit: "pp", minGuests: 30 },
+    { category: "Lunch Buffet", name: "Lunch Buffet Menu Two", price: 69, unit: "pp", minGuests: 30 },
+    { category: "Lunch Buffet", name: "Lunch Buffet Menu Three", price: 88, unit: "pp", minGuests: 30 },
+    { category: "Lunch Buffet", name: "Lunch Buffet Seated Surcharge", price: 12, unit: "pp", note: "Menu served seated" },
+    { category: "Lunch Buffet", name: "Lunch Buffet Item Swap Surcharge", price: 16, unit: "pp", note: "Swapping any items" },
+
+    // ---------- LUNCH — PLATED ----------
+    { category: "Lunch Plated", name: "Plated Lunch Menu One Two Course", price: 81, unit: "pp", minGuests: 30 },
+    { category: "Lunch Plated", name: "Plated Lunch Menu One Three Course", price: 99, unit: "pp", minGuests: 30 },
+    { category: "Lunch Plated", name: "Plated Lunch Menu Two Two Course", price: 91, unit: "pp", minGuests: 30 },
+    { category: "Lunch Plated", name: "Plated Lunch Menu Two Three Course", price: 109, unit: "pp", minGuests: 30 },
+    { category: "Lunch Plated", name: "Plated Lunch Additional Course", price: 18, unit: "pp" },
+    { category: "Lunch Plated", name: "Plated Lunch Alternating Service", price: 10, unit: "pp_per_course" },
+
+    // ---------- LUNCH — WORKING ----------
+    { category: "Working Lunch", name: "Working Lunch Menu One", price: 44, unit: "pp" },
+    { category: "Working Lunch", name: "Working Lunch Menu Two", price: 49, unit: "pp" },
+    { category: "Working Lunch", name: "Working Lunch Menu Three", price: 62, unit: "pp" },
+
+    // ---------- LUNCHBOX ----------
+    { category: "Lunchbox", name: "Lunchbox Package", price: 48.5, unit: "pp", aliases: ["Lunch Box", "Lunchbox Menu One", "Lunchbox Menu Two", "Lunchbox Menu Three", "Lunchbox Menu Four"] },
+
+    // ---------- BREAKFAST ----------
+    { category: "Breakfast Plated", name: "Plated Breakfast Menu One", price: 56, unit: "pp", minGuests: 30 },
+    { category: "Breakfast Plated", name: "Plated Breakfast Menu Two", price: 60, unit: "pp", minGuests: 30 },
+    { category: "Breakfast Buffet", name: "Breakfast Buffet", price: 59.5, unit: "pp", minGuests: 30 },
+    { category: "Breakfast Continental", name: "Continental Breakfast", price: 48.5, unit: "pp", minGuests: 30 },
+    { category: "Breakfast Standup", name: "Standup Breakfast Egg and Bacon Sliders", price: 30, unit: "pp_per_selection", minGuests: 30 },
+    { category: "Breakfast Standup", name: "Standup Breakfast Sliced Tropical Fruit Platter", price: 35, unit: "pp_per_selection" },
+    { category: "Breakfast Standup", name: "Standup Breakfast Laugen Croissant", price: 30, unit: "pp_per_selection" },
+    { category: "Breakfast Standup", name: "Standup Breakfast Butter Croissant", price: 30, unit: "pp_per_selection" },
+    { category: "Breakfast Standup", name: "Standup Breakfast Tropical Bircher Muesli", price: 28, unit: "pp_per_selection" },
+    { category: "Breakfast Standup", name: "Standup Breakfast Croque Monsieur", price: 30, unit: "pp_per_selection" },
+
+    // ---------- COFFEE BREAKS ----------
+    { category: "Coffee Breaks", name: "Coffee Break One", price: 30, unit: "pp" },
+    { category: "Coffee Breaks", name: "Coffee Break Two", price: 37, unit: "pp" },
+    { category: "Coffee Breaks", name: "Coffee Break Three", price: 55, unit: "pp" },
+    { category: "Coffee Breaks", name: "Tea and Coffee Four Hour", price: 22, unit: "pp" },
+    { category: "Coffee Breaks", name: "Tea and Coffee Eight Hour", price: 28, unit: "pp" },
+    { category: "Coffee Breaks", name: "Barista Coffee Cart Half Day", price: 495, unit: "flat" },
+    { category: "Coffee Breaks", name: "Barista Coffee Cart Full Day", price: 640, unit: "flat" },
+    { category: "Coffee Breaks", name: "Individual Coffee", price: 6.5, unit: "each" },
+
+    // ---------- CREW PACKAGES ----------
+    { category: "Crew Packages", name: "Crew Hot Breakfast Plate", price: 31, unit: "pp" },
+    { category: "Crew Packages", name: "Crew Danish and Muffins", price: 10, unit: "pp" },
+    { category: "Crew Packages", name: "Crew Set Menu Main Lunch", price: 39, unit: "pp" },
+    { category: "Crew Packages", name: "Crew Set Menu Main Dinner", price: 44, unit: "pp" },
+    { category: "Crew Packages", name: "Crew Set Menu Two Course Lunch", price: 55, unit: "pp" },
+    { category: "Crew Packages", name: "Crew Set Menu Two Course Dinner", price: 61, unit: "pp" },
+    { category: "Crew Packages", name: "Crew Wedges", price: 12, unit: "pp" },
+    { category: "Crew Packages", name: "Crew Pies and Sausage Rolls", price: 17, unit: "pp" },
+    { category: "Crew Packages", name: "Crew Mini Gourmet Quiches", price: 16, unit: "pp" },
+    { category: "Crew Packages", name: "Crew Sandwiches Platter", price: 19.5, unit: "each" },
+    { category: "Crew Packages", name: "Crew Mini Muffins Platter", price: 8, unit: "each" },
+    { category: "Crew Packages", name: "Crew Cheese Platter", price: 24, unit: "each" },
+    { category: "Crew Packages", name: "Crew Fresh Fruit Platter", price: 12.5, unit: "each" },
+    { category: "Crew Packages", name: "Crew Sushi Platter", price: 12, unit: "each" },
+    { category: "Crew Packages", name: "Crew Turkish Bread and Dips", price: 12, unit: "each" },
+    { category: "Crew Packages", name: "Crew Buffet Package", price: 42, unit: "pp", minGuests: 20 },
+
+    // ---------- CANAPÉS / COCKTAIL RECEPTION ----------
+    { category: "Canapes", name: "Cocktail Reception One Hour", price: 39, unit: "pp", minGuests: 30, note: "Select four items" },
+    { category: "Canapes", name: "Cocktail Reception Two Hour", price: 58, unit: "pp", minGuests: 30, note: "Select six items" },
+    { category: "Canapes", name: "Cocktail Reception Three Hour", price: 75, unit: "pp", minGuests: 30, note: "Select ten items" },
+    { category: "Canapes", name: "Cocktail Reception Four Hour", price: 88, unit: "pp", minGuests: 30, note: "Select twelve items" },
+    { category: "Canapes", name: "Substantial Enhancement", price: 17, unit: "pp_per_selection" },
+    { category: "Canapes", name: "Carvery Station", price: 42, unit: "pp_per_selection" },
+    { category: "Canapes", name: "Oyster Station Three Pieces", price: 26, unit: "pp" },
+    { category: "Canapes", name: "Oyster Station Six Pieces", price: 52, unit: "pp" },
+    { category: "Canapes", name: "Taco Station", price: 29, unit: "pp" },
+
+    // ---------- BEVERAGE PACKAGES (per person, incl. soft drink + OJ) ----------
+    { category: "Beverage Package", name: "Crown Reserve Package - 2 Hour", price: 54, unit: "pp" },
+    { category: "Beverage Package", name: "Crown Reserve Package - 3 Hour", price: 58, unit: "pp" },
+    { category: "Beverage Package", name: "Crown Reserve Package - 4 Hour", price: 62, unit: "pp" },
+    { category: "Beverage Package", name: "Crown Reserve Package - 5 Hour", price: 66, unit: "pp" },
+    { category: "Beverage Package", name: "Crown Reserve Package - 6 Hour", price: 70, unit: "pp" },
+    { category: "Beverage Package", name: "Crown Deluxe Package - 2 Hour", price: 65, unit: "pp" },
+    { category: "Beverage Package", name: "Crown Deluxe Package - 3 Hour", price: 70, unit: "pp" },
+    { category: "Beverage Package", name: "Crown Deluxe Package - 4 Hour", price: 75, unit: "pp" },
+    { category: "Beverage Package", name: "Crown Deluxe Package - 5 Hour", price: 80, unit: "pp" },
+    { category: "Beverage Package", name: "Crown Deluxe Package - 6 Hour", price: 85, unit: "pp" },
+    { category: "Beverage Package", name: "WA Premium Package - 2 Hour", price: 85, unit: "pp" },
+    { category: "Beverage Package", name: "WA Premium Package - 3 Hour", price: 94, unit: "pp" },
+    { category: "Beverage Package", name: "WA Premium Package - 4 Hour", price: 101, unit: "pp" },
+    { category: "Beverage Package", name: "WA Premium Package - 5 Hour", price: 108, unit: "pp" },
+    { category: "Beverage Package", name: "WA Premium Package - 6 Hour", price: 115, unit: "pp" },
+    { category: "Beverage Package", name: "Soft Drink Only Package - 1 Hour", price: 16, unit: "pp" },
+    { category: "Beverage Package", name: "Soft Drink Only Package - 2 Hour", price: 18, unit: "pp" },
+    { category: "Beverage Package", name: "Soft Drink Only Package - 3 Hour", price: 20, unit: "pp" },
+    { category: "Beverage Package", name: "Soft Drink Only Package - 4 Hour", price: 22, unit: "pp" },
+    { category: "Beverage Package", name: "Soft Drink Only Package - 5 Hour", price: 24, unit: "pp" },
+    { category: "Beverage Package", name: "Additional Deluxe Wine Selection", price: 10, unit: "pp_per_selection" },
+    { category: "Beverage Package", name: "Additional WA Premium Wine Selection", price: 15, unit: "pp_per_selection" },
+    { category: "Beverage Package", name: "Additional Beer or Cider Selection", price: 4.5, unit: "pp_per_selection" },
+
+    // ---------- COCKTAILS (each, min 50) ----------
+    { category: "Cocktails", name: "Cosmopolitan", price: 21, unit: "each" },
+    { category: "Cocktails", name: "Strawberry Mojito", price: 23, unit: "each" },
+    { category: "Cocktails", name: "Aperol Spritz", price: 21, unit: "each" },
+    { category: "Cocktails", name: "Elderflower Gin Spritz", price: 21, unit: "each" },
+    { category: "Cocktails", name: "Negroni", price: 21, unit: "each" },
+    { category: "Cocktails", name: "Margarita", price: 21, unit: "each" },
+    { category: "Cocktails", name: "Old Fashioned", price: 23, unit: "each" },
+    { category: "Cocktails", name: "Crown Sunrise", price: 21, unit: "each" },
+    { category: "Cocktails", name: "Virgin Apple Mojito", price: 14.5, unit: "each" },
+    { category: "Cocktails", name: "Virgin Strawberry Mojito", price: 14.5, unit: "each" },
+    { category: "Cocktails", name: "Virgin Crown Sunrise", price: 14.5, unit: "each" },
+    { category: "Cocktails", name: "Elderflower Citrus Spritz", price: 14.5, unit: "each" },
+    { category: "Cocktails", name: "Cranberry Ginger Fizz", price: 14.5, unit: "each" },
+
+    // ---------- BEER & CIDER (each, on consumption) ----------
+    { category: "Beer and Cider", name: "Corona", price: 13.5, unit: "each" },
+    { category: "Beer and Cider", name: "Heineken Zero", price: 12.5, unit: "each" },
+    { category: "Beer and Cider", name: "Heineken", price: 13.5, unit: "each" },
+    { category: "Beer and Cider", name: "Peroni", price: 13.5, unit: "each" },
+    { category: "Beer and Cider", name: "Guinness", price: 15.5, unit: "each" },
+    { category: "Beer and Cider", name: "James Squire Orchard Crush Apple Cider", price: 13.5, unit: "each" },
+    { category: "Beer and Cider", name: "Hahn Premium Light", price: 11.5, unit: "each" },
+    { category: "Beer and Cider", name: "Hahn Super Dry 3.5", price: 11.5, unit: "each" },
+    { category: "Beer and Cider", name: "Rogers Amber Ale", price: 12.5, unit: "each" },
+    { category: "Beer and Cider", name: "Little Creatures Pale Ale", price: 13.5, unit: "each" },
+    { category: "Beer and Cider", name: "Carlton Dry", price: 12.5, unit: "each" },
+    { category: "Beer and Cider", name: "Crown Lager", price: 12.5, unit: "each" },
+
+    // ---------- WINE (per bottle) ----------
+    { category: "Wine — Sparkling", name: "Leeuwin Estate Sparkling Brut", price: 75, unit: "bottle" },
+    { category: "Wine — Sparkling", name: "Veuve Tailhan Blanc de Blancs Brut NV", price: 60, unit: "bottle" },
+    { category: "Wine — Sparkling", name: "Chandon Brut NV", price: 85, unit: "bottle" },
+    { category: "Wine — Sparkling", name: "Moet et Chandon NV", price: 175, unit: "bottle" },
+    { category: "Wine — Sparkling", name: "Veuve Clicquot Brut NV", price: 255, unit: "bottle" },
+    { category: "Wine — Sparkling", name: "Dom Perignon Brut", price: 625, unit: "bottle" },
+    { category: "Wine — White", name: "Leo Buring Clare Valley Riesling", price: 60, unit: "bottle" },
+    { category: "Wine — White", name: "Henschke Julius Riesling", price: 90, unit: "bottle" },
+    { category: "Wine — White", name: "Leeuwin Estate Art Series Sauvignon Blanc", price: 70, unit: "bottle" },
+    { category: "Wine — White", name: "Vasse Felix Filius Sauvignon Blanc Semillon", price: 60, unit: "bottle" },
+    { category: "Wine — White", name: "Babich Black Label Pinot Gris", price: 55, unit: "bottle" },
+    { category: "Wine — White", name: "Domaine de Montille Bourgogne Le Clos du Chateau Chardonnay", price: 180, unit: "bottle" },
+    { category: "Wine — White", name: "Vasse Felix Filius Chardonnay", price: 65, unit: "bottle" },
+    { category: "Wine — White", name: "Leeuwin Estate Prelude Vineyards Chardonnay", price: 90, unit: "bottle" },
+    { category: "Wine — White", name: "Shaw and Smith M3 Chardonnay", price: 120, unit: "bottle" },
+    { category: "Wine — Red", name: "Eddystone Point Pinot Noir", price: 85, unit: "bottle" },
+    { category: "Wine — Red", name: "Amelia Park Trellis Cabernet Merlot", price: 65, unit: "bottle" },
+    { category: "Wine — Red", name: "Fraser Gallop Cabernet Merlot", price: 60, unit: "bottle" },
+    { category: "Wine — Red", name: "Vasse Felix Filius Cabernet Sauvignon", price: 75, unit: "bottle" },
+    { category: "Wine — Red", name: "Amelia Park Reserve Cabernet Sauvignon", price: 140, unit: "bottle" },
+    { category: "Wine — Red", name: "Leeuwin Estate Prelude Vineyards Cabernet Sauvignon", price: 85, unit: "bottle" },
+    { category: "Wine — Red", name: "2019 Penfolds Bin 407 Cabernet Sauvignon", price: 210, unit: "bottle" },
+    { category: "Wine — Red", name: "Vasse Felix Filius Shiraz", price: 60, unit: "bottle" },
+    { category: "Wine — Red", name: "Leeuwin Estate Art Series Shiraz", price: 80, unit: "bottle" },
+    { category: "Wine — Red", name: "Penfolds Bin 28 Shiraz", price: 110, unit: "bottle" },
+    { category: "Wine — Dessert & Fortified", name: "Penfolds Club Tawny", price: 40, unit: "bottle" },
+    { category: "Wine — Dessert & Fortified", name: "De Bortoli Noble One Botrytis Semillon", price: 70, unit: "bottle" },
+    { category: "Wine — Dessert & Fortified", name: "T'Gallant Juliet Moscato", price: 65, unit: "bottle" },
+    { category: "Wine — Dessert & Fortified", name: "Penfolds Grandfather Fine Old Tawny", price: 200, unit: "bottle" },
+
+    // ---------- SPIRITS (per glass) ----------
+    { category: "Spirits", name: "Ketel One Vodka", price: 15.5, unit: "glass" },
+    { category: "Spirits", name: "Tanqueray Gin", price: 15.5, unit: "glass" },
+    { category: "Spirits", name: "Bulleit Bourbon", price: 15.5, unit: "glass" },
+    { category: "Spirits", name: "Johnnie Walker Black Label", price: 15.5, unit: "glass" },
+    { category: "Spirits", name: "Bacardi Rum", price: 15.5, unit: "glass" },
+    { category: "Spirits", name: "Bombay Sapphire", price: 15.5, unit: "glass" },
+    { category: "Spirits", name: "Chivas Regal 12 Year Old", price: 15.5, unit: "glass" },
+    { category: "Spirits", name: "Chivas Regal 18 Year Old", price: 18.5, unit: "glass" },
+    { category: "Spirits", name: "Glenfiddich 18 Year Old", price: 29, unit: "glass" },
+    { category: "Spirits", name: "Johnnie Walker Blue Label", price: 42.5, unit: "glass" },
+    { category: "Spirits", name: "Belvedere", price: 17.5, unit: "glass" },
+    { category: "Spirits", name: "Grey Goose", price: 17.5, unit: "glass" },
+    { category: "Spirits", name: "Jack Daniel's", price: 15.5, unit: "glass" },
+    { category: "Spirits", name: "Wild Turkey", price: 14.5, unit: "glass" },
+    { category: "Spirits", name: "Maker's Mark", price: 15.5, unit: "glass" },
+    { category: "Spirits", name: "Gentleman Jack", price: 16.5, unit: "glass" },
+    { category: "Spirits", name: "Jameson 12 Year Old", price: 14.5, unit: "glass" },
+    { category: "Spirits", name: "Don Julio Blanco", price: 16.5, unit: "glass" },
+    { category: "Spirits", name: "El Jimador Reposado", price: 15.5, unit: "glass" },
+    { category: "Spirits", name: "Cointreau", price: 14.5, unit: "glass" },
+    { category: "Spirits", name: "Wild Turkey American Honey", price: 14.5, unit: "glass" },
+    { category: "Spirits", name: "Bailey's Irish Cream", price: 14.5, unit: "glass" },
+    { category: "Spirits", name: "Kahlua", price: 14.5, unit: "glass" },
+    { category: "Spirits", name: "Malibu", price: 14.5, unit: "glass" },
+    { category: "Spirits", name: "Penfolds Grandfather Fine Old Tawny (Glass)", price: 18.5, unit: "glass" },
+    { category: "Spirits", name: "Pimm's No. 1", price: 12.5, unit: "glass" },
+    { category: "Spirits", name: "Campari", price: 11.5, unit: "glass" },
+    { category: "Spirits", name: "Remy Martin XO", price: 33, unit: "glass" },
+    { category: "Spirits", name: "Hennessey VSOP", price: 17.5, unit: "glass" },
+    { category: "Spirits", name: "Hennessey XO", price: 34, unit: "glass" },
+
+    // ---------- NON-ALCOHOLIC ----------
+    { category: "Non-Alcoholic", name: "Soft Drink (Glass)", price: 6.5, unit: "glass" },
+    { category: "Non-Alcoholic", name: "Soft Drink (Bottle)", price: 7.5, unit: "bottle" },
+    { category: "Non-Alcoholic", name: "Fruit Juice (Glass)", price: 6.5, unit: "glass" },
+    { category: "Non-Alcoholic", name: "Spring Valley Juice (Bottle)", price: 7.5, unit: "bottle" },
+    { category: "Non-Alcoholic", name: "Acqua Panna Still Mineral Water 250ml", price: 6.5, unit: "bottle" },
+    { category: "Non-Alcoholic", name: "San Pellegrino Sparkling Mineral Water 250ml", price: 6.5, unit: "bottle" }
+  ];
+
+  // Charge lines that are NOT menu-priced. The checker will not price-check
+  // these against the catalogue; it only verifies their internal maths and
+  // whether the BEO and SOC agree. Kept here so the UI can explain them.
+  var NON_MENU_HINTS = [
+    "attrition", "minimum spend", "audio visual", "av ", "encore",
+    "security", "room hire", "venue hire", "room rental", "cleaning",
+    "contractor pass", "accommodation", "theming", "staging", "pinboard",
+    "linen", "deposit", "surcharge", "delivery", "coat check", "cloak"
+  ];
+
+  var API = {
+    meta: CATALOGUE_META,
+    items: ITEMS,
+    nonMenuHints: NON_MENU_HINTS
+  };
+
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports = API;
+  }
+  root.PRICE_CATALOGUE = API;
+})(typeof window !== "undefined" ? window : this);
+
+</script>
+<script>
+/*
+ * BEO & SOC charge checker — comparison engine.
+ *
+ * Pure, dependency-free logic so it can run both in the browser (via the UI)
+ * and in Node (via the tests). It does three jobs:
+ *   1. Turn a BEO (text extracted from the PDF) or a SOC (rows/text from the
+ *      Word doc) into a list of charge line items.
+ *   2. Price-check each line item against the menu catalogue (over/under).
+ *   3. Reconcile a BEO against a SOC (do the two documents agree?).
+ */
+(function (root) {
+  "use strict";
+
+  // ---------------------------------------------------------------- helpers
+  function round2(n) { return Math.round((Number(n) + Number.EPSILON) * 100) / 100; }
+
+  function parseMoney(s) {
+    if (s === null || s === undefined) return null;
+    var m = String(s).replace(/[,\s]/g, "").match(/-?\d+(?:\.\d+)?/);
+    return m ? parseFloat(m[0]) : null;
+  }
+
+  var NUM_WORDS = { one: "1", two: "2", three: "3", four: "4", five: "5", six: "6",
+    seven: "7", eight: "8", nine: "9", ten: "10", twelve: "12" };
+
+  // Loose normalisation for matching names. Number words -> digits,
+  // "hours" -> "hour", punctuation dropped, whitespace collapsed.
+  function normalize(s) {
+    s = String(s === null || s === undefined ? "" : s).toLowerCase();
+    s = s.replace(/&/g, " and ");
+    s = s.replace(/\b(one|two|three|four|five|six|seven|eight|nine|ten|twelve)\b/g,
+      function (w) { return NUM_WORDS[w]; });
+    s = s.replace(/\bhrs?\b/g, "hour").replace(/\bhours\b/g, "hour");
+    s = s.replace(/\bpax\b/g, "").replace(/\bper person\b/g, "").replace(/\bpp\b/g, "");
+    s = s.replace(/[^a-z0-9 ]+/g, " ");
+    return s.replace(/\s+/g, " ").trim();
+  }
+
+  // Softer normalisation that KEEPS money/@ so charge phrases survive.
+  function softNorm(s) {
+    s = String(s === null || s === undefined ? "" : s).toLowerCase();
+    s = s.replace(/\b(one|two|three|four|five|six|seven|eight|nine|ten|twelve)\b/g,
+      function (w) { return NUM_WORDS[w]; });
+    s = s.replace(/\bhours\b/g, "hour");
+    s = s.replace(/[^a-z0-9 $.,@%&/():+-]+/g, " ");
+    return s.replace(/[ \t]+/g, " ").trim();
+  }
+
+  function numMultiset(norm) {
+    return (String(norm).match(/\d+/g) || []).slice().sort().join(",");
+  }
+
+  // ------------------------------------------------------------ name matching
+  // Score how well a document item name matches a catalogue name: coverage of
+  // the catalogue name's tokens, gated by matching numbers (so "6 hour" never
+  // matches "5 hour", and "menu two" never matches "menu one").
+  function scoreNames(docName, catName) {
+    var d = normalize(docName), c = normalize(catName);
+    if (!c) return 0;
+    if (d === c) return 1; // exact full-name match always wins
+    if (numMultiset(d) !== numMultiset(c)) return 0;
+    var docTokens = {};
+    var dList = d.split(" ").filter(Boolean);
+    dList.forEach(function (t) { docTokens[t] = true; });
+    var cTokens = c.split(" ").filter(Boolean);
+    if (!dList.length || !cTokens.length) return 0;
+    var hit = 0;
+    cTokens.forEach(function (t) { if (docTokens[t]) hit++; });
+    // F1 of precision (over doc tokens) and recall (over catalogue tokens), so a
+    // short generic name can't fully "cover" a longer, more specific document name.
+    var recall = hit / cTokens.length;
+    var precision = hit / dList.length;
+    if (hit === 0) return 0;
+    return (2 * precision * recall) / (precision + recall);
+  }
+
+  function buildMatchNames(item) {
+    var names = [item.name];
+    if (item.aliases) names = names.concat(item.aliases);
+    return names;
+  }
+
+  // Return { item, score } for the best catalogue match, or null.
+  function findMatch(name, catalogue, threshold) {
+    threshold = threshold === undefined ? 0.7 : threshold;
+    var best = null;
+    (catalogue.items || []).forEach(function (item) {
+      buildMatchNames(item).forEach(function (candidate) {
+        var sc = scoreNames(name, candidate);
+        if (!best || sc > best.score) best = { item: item, score: sc };
+      });
+    });
+    if (best && best.score >= threshold) return best;
+    return null;
+  }
+
+  function looksNonMenu(name, catalogue) {
+    var n = normalize(name);
+    return (catalogue.nonMenuHints || []).some(function (h) {
+      return n.indexOf(normalize(h)) !== -1;
+    });
+  }
+
+  // ------------------------------------------------------------- SOC parsing
+  // Primary path: rows from the Word table, each an array of cell strings
+  // [Qty, Name, Price, Discounts, Total]. Section headers / blank rows skipped.
+  function parseSocRows(rows) {
+    var items = [];
+    var section = "";
+    (rows || []).forEach(function (cells) {
+      var clean = cells.map(function (c) { return String(c == null ? "" : c).trim(); });
+      var nonEmpty = clean.filter(Boolean);
+      if (!nonEmpty.length) return;
+
+      // A data row starts with an integer quantity and carries a $ amount.
+      var qty = clean[0] && /^\d+$/.test(clean[0]) ? parseInt(clean[0], 10) : null;
+      var moneyCells = clean.filter(function (c) { return /\$\s*[\d,]/.test(c); });
+
+      if (qty === null || moneyCells.length === 0) {
+        // Treat a single-cell text row as a section header (e.g. "Food & Beverage").
+        if (nonEmpty.length <= 2 && !moneyCells.length) section = nonEmpty.join(" ");
+        return;
+      }
+
+      var name = clean[1] || "";
+      var unitPrice = parseMoney(moneyCells[0]);
+      var lineTotal = parseMoney(moneyCells[moneyCells.length - 1]);
+      // If only one money cell is present, treat it as the line total.
+      if (moneyCells.length === 1) { lineTotal = unitPrice; unitPrice = round2(lineTotal / qty); }
+
+      items.push({ qty: qty, name: name, unitPrice: unitPrice, lineTotal: lineTotal,
+        section: section, source: "SOC" });
+    });
+    return items;
+  }
+
+  // Fallback: group the SOC's plain text into (qty, name, price, total) blocks.
+  function parseSocText(text) {
+    var lines = String(text || "").split(/\r?\n/).map(function (l) { return l.trim(); })
+      .filter(function (l) { return l.length; });
+    var items = [], i = 0;
+    while (i < lines.length) {
+      if (/^\d+$/.test(lines[i])) {
+        var qty = parseInt(lines[i], 10);
+        var name = lines[i + 1] || "";
+        var monies = [];
+        var j = i + 2;
+        while (j < lines.length && monies.length < 3 && /\$\s*[\d,]/.test(lines[j])) {
+          monies.push(parseMoney(lines[j])); j++;
+        }
+        if (name && monies.length) {
+          var unitPrice = monies[0];
+          var lineTotal = monies[monies.length - 1];
+          if (monies.length === 1) { lineTotal = unitPrice; unitPrice = round2(lineTotal / qty); }
+          items.push({ qty: qty, name: name, unitPrice: unitPrice, lineTotal: lineTotal, source: "SOC" });
+          i = j; continue;
+        }
+      }
+      i++;
+    }
+    return items;
+  }
+
+  // ------------------------------------------------------------- BEO parsing
+  // The BEO is prose, so anchor each charge to the nearest catalogue name that
+  // appears before it in the text.
+  function parseBeo(text, catalogue) {
+    var soft = softNorm(text);
+    var items = [];
+
+    // Index every catalogue name occurrence (by last position before a charge).
+    var nameHits = [];
+    (catalogue.items || []).forEach(function (item) {
+      buildMatchNames(item).forEach(function (nm) {
+        var key = softNorm(nm);
+        if (!key) return;
+        var from = 0, idx;
+        while ((idx = soft.indexOf(key, from)) !== -1) {
+          nameHits.push({ index: idx, end: idx + key.length, item: item, label: item.name });
+          from = idx + key.length;
+        }
+      });
+    });
+
+    function nearestNameBefore(pos) {
+      var best = null;
+      nameHits.forEach(function (h) {
+        if (h.end <= pos && pos - h.end < 400) {
+          if (!best || h.end > best.end) best = h;
+        }
+      });
+      return best;
+    }
+
+    function pushUnique(it) {
+      var dup = items.some(function (x) {
+        return x.name === it.name && x.unitPrice === it.unitPrice && x.qty === it.qty && x.kind === it.kind;
+      });
+      if (!dup) items.push(it);
+    }
+
+    var re, m;
+
+    // Per-person food/beverage: "215 guests @ $90.00 per person"
+    re = /(\d+)\s+guests?\s*@\s*\$?([\d,]+(?:\.\d{1,2})?)\s*per\s+person/g;
+    while ((m = re.exec(soft)) !== null) {
+      var qty = parseInt(m[1], 10);
+      var price = parseMoney(m[2]);
+      var anchor = nearestNameBefore(m.index);
+      pushUnique({ qty: qty, name: anchor ? anchor.label : "(unidentified per-person item)",
+        unitPrice: price, lineTotal: round2(qty * price), kind: "per-person",
+        confident: !!anchor, source: "BEO" });
+    }
+
+    // Security officer hours: "5 Security officer hours ... @ $75.00 per hour"
+    re = /(\d+)\s+security officer hours?[\s\S]{0,120}?@\s*\$?([\d,]+(?:\.\d{1,2})?)\s*per\s+hour/g;
+    while ((m = re.exec(soft)) !== null) {
+      var h = parseInt(m[1], 10), rate = parseMoney(m[2]);
+      pushUnique({ qty: h, name: "Security officer hours", unitPrice: rate,
+        lineTotal: round2(h * rate), kind: "non-menu", source: "BEO" });
+    }
+
+    // Attrition / minimum spend: "@ $5,460.00 per event"
+    re = /attrition[\s\S]{0,80}?@\s*\$?([\d,]+(?:\.\d{1,2})?)\s*per\s+event/g;
+    while ((m = re.exec(soft)) !== null) {
+      pushUnique({ qty: 1, name: "Attrition to meet minimum spend", unitPrice: parseMoney(m[1]),
+        lineTotal: parseMoney(m[1]), kind: "non-menu", source: "BEO" });
+    }
+
+    // Audio visual quote: "... $3,589.65 per quote"
+    re = /\$([\d,]+(?:\.\d{1,2})?)\s*per\s+quote/g;
+    while ((m = re.exec(soft)) !== null) {
+      pushUnique({ qty: 1, name: "Audio visual", unitPrice: parseMoney(m[1]),
+        lineTotal: parseMoney(m[1]), kind: "non-menu", source: "BEO" });
+    }
+
+    return items;
+  }
+
+  // Pull a few event details out of a BEO for display.
+  function parseBeoHeader(text) {
+    var t = String(text || "");
+    function grab(re) { var m = t.match(re); return m ? m[1].trim() : ""; }
+    return {
+      beoNumber: grab(/BEO#?:?\s*([0-9]{3,})/i),
+      account: grab(/Account:\s*([^\n]+)/i),
+      bookingName: grab(/Booking Name:\s*([^\n]+)/i),
+      guests: (function () { var m = t.match(/(\d+)\s+guests?\s*@/); return m ? parseInt(m[1], 10) : null; })()
+    };
+  }
+
+  // ----------------------------------------------------------- price checking
+  function checkItem(item, catalogue) {
+    var result = {
+      qty: item.qty, name: item.name, unitPrice: item.unitPrice, lineTotal: item.lineTotal,
+      source: item.source, kind: item.kind || null, status: "ok", notes: []
+    };
+
+    // Internal maths check (qty x unit price == line total).
+    if (item.lineTotal != null && item.unitPrice != null && item.qty != null) {
+      var expectedTotal = round2(item.qty * item.unitPrice);
+      if (Math.abs(expectedTotal - item.lineTotal) > 0.005) {
+        result.status = "math-error";
+        result.mathExpectedTotal = expectedTotal;
+        result.notes.push("Line total should be " + money(expectedTotal) +
+          " (" + item.qty + " x " + money(item.unitPrice) + "), but reads " + money(item.lineTotal) + ".");
+      }
+    }
+
+    var match = findMatch(item.name, catalogue);
+    if (match) {
+      result.matchedName = match.item.name;
+      result.matchScore = round2(match.score);
+      result.expectedPrice = match.item.price;
+      result.unit = match.item.unit;
+      result.category = match.item.category;
+      var diff = round2(item.unitPrice - match.item.price);
+      result.priceDiff = diff;
+      result.priceImpact = round2(diff * (item.qty || 1));
+      if (Math.abs(diff) <= 0.005) {
+        if (result.status === "ok") result.status = "ok";
+        result.priceStatus = "correct";
+      } else {
+        result.priceStatus = diff < 0 ? "undercharged" : "overcharged";
+        if (result.status !== "math-error") result.status = result.priceStatus;
+        // Helpful hint: does the charged price match another tier of the same package?
+        var sameCat = (catalogue.items || []).filter(function (x) {
+          return x.category === match.item.category && Math.abs(x.price - item.unitPrice) <= 0.005;
+        });
+        if (sameCat.length) {
+          result.notes.push("Charged price " + money(item.unitPrice) + " matches " +
+            sameCat[0].name + ".");
+        }
+        result.notes.push("Menu price for " + match.item.name + " is " + money(match.item.price) +
+          " per " + unitLabel(match.item.unit) + "; charged " + money(item.unitPrice) +
+          " (" + (diff < 0 ? "under" : "over") + " by " + money(Math.abs(diff)) + " each, " +
+          money(Math.abs(result.priceImpact)) + " across " + (item.qty || 1) + ").");
+      }
+      if (match.score < 0.999) {
+        result.notes.push("Matched to “" + match.item.name + "” (review if that is not the right item).");
+      }
+    } else if (looksNonMenu(item.name, catalogue) || item.kind === "non-menu") {
+      if (result.status === "ok") result.status = "non-menu";
+      result.priceStatus = "not-checked";
+      result.notes.push("Not a menu item — confirm this charge manually (no menu price to check against).");
+    } else {
+      if (result.status === "ok") result.status = "unmatched";
+      result.priceStatus = "no-match";
+      result.notes.push("No menu match found — check the item name or add it to the price list.");
+    }
+    return result;
+  }
+
+  function checkDocument(items, catalogue) {
+    var checked = (items || []).map(function (it) { return checkItem(it, catalogue); });
+    var summary = {
+      total: checked.length,
+      correct: 0, undercharged: 0, overcharged: 0, mathErrors: 0, nonMenu: 0, unmatched: 0,
+      chargedTotal: 0, expectedTotal: 0, variance: 0, issues: 0
+    };
+    checked.forEach(function (r) {
+      if (r.status === "math-error") summary.mathErrors++;
+      if (r.priceStatus === "undercharged") summary.undercharged++;
+      else if (r.priceStatus === "overcharged") summary.overcharged++;
+      else if (r.priceStatus === "correct") summary.correct++;
+      else if (r.priceStatus === "not-checked") summary.nonMenu++;
+      else if (r.priceStatus === "no-match") summary.unmatched++;
+
+      var charged = r.lineTotal != null ? r.lineTotal : round2((r.qty || 1) * (r.unitPrice || 0));
+      summary.chargedTotal = round2(summary.chargedTotal + charged);
+      var expectedLine = (r.expectedPrice != null)
+        ? round2((r.qty || 1) * r.expectedPrice)
+        : charged; // non-menu / unmatched: no independent expectation
+      summary.expectedTotal = round2(summary.expectedTotal + expectedLine);
+    });
+    summary.variance = round2(summary.chargedTotal - summary.expectedTotal);
+    summary.issues = summary.undercharged + summary.overcharged + summary.mathErrors + summary.unmatched;
+    return { items: checked, summary: summary };
+  }
+
+  // ------------------------------------------------------------- reconcile
+  // Compare a BEO's charges against a SOC's charges item by item.
+  function reconcile(beoItems, socItems) {
+    var rows = [];
+    var usedSoc = {};
+    (beoItems || []).forEach(function (b) {
+      var bestIdx = -1, bestScore = 0;
+      (socItems || []).forEach(function (s, idx) {
+        if (usedSoc[idx]) return;
+        var sc = scoreNames(b.name, s.name);
+        if (sc > bestScore) { bestScore = sc; bestIdx = idx; }
+      });
+      if (bestIdx >= 0 && bestScore >= 0.6) {
+        usedSoc[bestIdx] = true;
+        var s = socItems[bestIdx];
+        var diffs = [];
+        if (b.qty != null && s.qty != null && b.qty !== s.qty) diffs.push("qty " + b.qty + " vs " + s.qty);
+        if (b.unitPrice != null && s.unitPrice != null && Math.abs(b.unitPrice - s.unitPrice) > 0.005)
+          diffs.push("price " + money(b.unitPrice) + " vs " + money(s.unitPrice));
+        if (b.lineTotal != null && s.lineTotal != null && Math.abs(b.lineTotal - s.lineTotal) > 0.005)
+          diffs.push("total " + money(b.lineTotal) + " vs " + money(s.lineTotal));
+        rows.push({ status: diffs.length ? "mismatch" : "match", beo: b, soc: s, diffs: diffs });
+      } else {
+        rows.push({ status: "beo-only", beo: b, soc: null, diffs: ["On BEO but not matched on SOC"] });
+      }
+    });
+    (socItems || []).forEach(function (s, idx) {
+      if (!usedSoc[idx]) rows.push({ status: "soc-only", beo: null, soc: s, diffs: ["On SOC but not matched on BEO"] });
+    });
+    var mismatches = rows.filter(function (r) { return r.status !== "match"; }).length;
+    return { rows: rows, mismatches: mismatches, matched: rows.length - mismatches };
+  }
+
+  // ------------------------------------------------------------- formatting
+  function money(n) {
+    if (n == null || isNaN(n)) return "—";
+    return "$" + Number(n).toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function unitLabel(u) {
+    return ({ pp: "person", pp_per_course: "person per course", pp_per_selection: "person per selection",
+      child: "child", glass: "glass", bottle: "bottle", each: "item", flat: "event" })[u] || "unit";
+  }
+
+  var API = {
+    round2: round2, parseMoney: parseMoney, normalize: normalize, softNorm: softNorm,
+    scoreNames: scoreNames, findMatch: findMatch, looksNonMenu: looksNonMenu,
+    parseSocRows: parseSocRows, parseSocText: parseSocText,
+    parseBeo: parseBeo, parseBeoHeader: parseBeoHeader,
+    checkItem: checkItem, checkDocument: checkDocument, reconcile: reconcile,
+    money: money, unitLabel: unitLabel
+  };
+
+  if (typeof module !== "undefined" && module.exports) module.exports = API;
+  root.BEOEngine = API;
+})(typeof window !== "undefined" ? window : this);
+
+</script>
+<script>
+(function () {
+  "use strict";
+  var E = window.BEOEngine, CAT = window.PRICE_CATALOGUE;
+  if (window.pdfjsLib) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  }
+
+  var state = { beoText: null, beoName: null, socRows: null, socText: null, socName: null };
+  var $ = function (id) { return document.getElementById(id); };
+  var money = E.money;
+
+  // ---- theme toggle (per-viewer convenience) ----
+  try {
+    var saved = localStorage.getItem("ccc-theme");
+    if (saved) document.documentElement.setAttribute("data-theme", saved);
+  } catch (e) {}
+  $("themeBtn").addEventListener("click", function () {
+    var cur = document.documentElement.getAttribute("data-theme");
+    var isDark = cur === "dark" || (!cur && matchMedia("(prefers-color-scheme: dark)").matches);
+    var next = isDark ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    try { localStorage.setItem("ccc-theme", next); } catch (e) {}
+  });
+
+  // ---- catalogue chip + price list ----
+  $("catChip").innerHTML = "Price book: <b>" + CAT.meta.year + "</b> · " + CAT.items.length + " items";
+  (function renderPriceList() {
+    var byCat = {};
+    CAT.items.forEach(function (it) { (byCat[it.category] = byCat[it.category] || []).push(it); });
+    var html = "";
+    Object.keys(byCat).forEach(function (cat) {
+      html += '<div class="cat-head">' + esc(cat) + "</div>";
+      html += '<div class="tscroll"><table><tbody>';
+      byCat[cat].forEach(function (it) {
+        html += "<tr><td>" + esc(it.name) + '</td><td class="num">' + money(it.price) +
+          "</td><td>" + esc(unitWord(it.unit)) + "</td></tr>";
+      });
+      html += "</tbody></table></div>";
+    });
+    $("priceList").innerHTML = html;
+  })();
+
+  // ---- file wiring ----
+  wireDrop("dropBeo", "beoInput", handleBeo);
+  wireDrop("dropSoc", "socInput", handleSoc);
+  $("runBtn").addEventListener("click", run);
+  $("resetBtn").addEventListener("click", reset);
+  $("copyBtn").addEventListener("click", copySummary);
+
+  function wireDrop(dropId, inputId, handler) {
+    var drop = $(dropId), input = $(inputId);
+    input.addEventListener("change", function () { if (input.files[0]) handler(input.files[0]); });
+    ["dragenter", "dragover"].forEach(function (ev) {
+      drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add("hover"); });
+    });
+    ["dragleave", "drop"].forEach(function (ev) {
+      drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove("hover"); });
+    });
+    drop.addEventListener("drop", function (e) {
+      var f = e.dataTransfer && e.dataTransfer.files[0];
+      if (f) handler(f);
+    });
+  }
+
+  function setStatus(msg, isErr) {
+    var s = $("status"); s.textContent = msg || ""; s.className = isErr ? "err" : "";
+  }
+  function refreshRun() {
+    $("runBtn").disabled = !(state.beoText || state.socRows || state.socText);
+  }
+
+  // ---- BEO (PDF) ----
+  function handleBeo(file) {
+    setStatus("Reading BEO: " + file.name + " …");
+    var reader = new FileReader();
+    reader.onload = function () {
+      var task = pdfjsLib.getDocument({ data: new Uint8Array(reader.result) });
+      task.promise.then(function (pdf) {
+        var pages = [];
+        var seq = Promise.resolve();
+        for (var p = 1; p <= pdf.numPages; p++) {
+          (function (p) {
+            seq = seq.then(function () {
+              return pdf.getPage(p).then(function (page) {
+                return page.getTextContent().then(function (tc) {
+                  pages[p] = reflow(tc.items);
+                });
+              });
+            });
+          })(p);
+        }
+        return seq.then(function () {
+          state.beoText = pages.join("\n");
+          state.beoName = file.name;
+          markLoaded("dropBeo", "beoName", file.name);
+          setStatus("BEO loaded (" + pdf.numPages + " pages). " + (state.socRows ? "Ready." : "Add the SOC or press Check charges."));
+          refreshRun();
+        });
+      }).catch(function (err) {
+        setStatus("Could not read that PDF: " + err.message, true);
+      });
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  // Reassemble pdf.js text items into lines using their Y positions.
+  function reflow(items) {
+    var lines = [], cur = null, lastY = null;
+    items.forEach(function (it) {
+      var y = it.transform[5];
+      if (lastY === null || Math.abs(y - lastY) > 3) {
+        cur = []; lines.push(cur); lastY = y;
+      }
+      if (it.str) cur.push(it.str);
+    });
+    return lines.map(function (l) { return l.join(" ").replace(/\s+/g, " ").trim(); })
+      .filter(Boolean).join("\n");
+  }
+
+  // ---- SOC (Word) ----
+  function handleSoc(file) {
+    setStatus("Reading SOC: " + file.name + " …");
+    var reader = new FileReader();
+    reader.onload = function () {
+      var buf = reader.result;
+      mammoth.convertToHtml({ arrayBuffer: buf }).then(function (res) {
+        var doc = new DOMParser().parseFromString(res.value, "text/html");
+        var rows = [];
+        doc.querySelectorAll("table tr").forEach(function (tr) {
+          var cells = [];
+          tr.querySelectorAll("th,td").forEach(function (td) {
+            cells.push((td.textContent || "").replace(/\s+/g, " ").trim());
+          });
+          if (cells.length) rows.push(cells);
+        });
+        state.socRows = rows.length ? rows : null;
+        return mammoth.extractRawText({ arrayBuffer: buf }).then(function (r2) {
+          state.socText = r2.value;
+          state.socName = file.name;
+          markLoaded("dropSoc", "socName", file.name);
+          setStatus("SOC loaded. " + (state.beoText ? "Ready." : "Add the BEO or press Check charges."));
+          refreshRun();
+        });
+      }).catch(function (err) {
+        setStatus("Could not read that Word file: " + err.message, true);
+      });
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function markLoaded(dropId, nameId, fname) {
+    $(dropId).classList.add("loaded");
+    var el = $(nameId); el.textContent = "✓ " + fname; el.hidden = false;
+  }
+
+  function reset() {
+    state = { beoText: null, beoName: null, socRows: null, socText: null, socName: null };
+    ["dropBeo", "dropSoc"].forEach(function (d) { $(d).classList.remove("loaded"); });
+    ["beoName", "socName"].forEach(function (n) { $(n).hidden = true; });
+    $("beoInput").value = ""; $("socInput").value = "";
+    $("results").hidden = true; $("results").innerHTML = "";
+    $("copyBtn").hidden = true;
+    setStatus(""); refreshRun();
+  }
+
+  var lastSummaryText = "";
+
+  function run() {
+    setStatus("");
+    var out = $("results"); out.innerHTML = ""; out.hidden = false;
+
+    var beoItems = state.beoText ? E.parseBeo(state.beoText, CAT) : null;
+    var beoHeader = state.beoText ? E.parseBeoHeader(state.beoText) : null;
+    var socItems = state.socRows ? E.parseSocRows(state.socRows)
+      : (state.socText ? E.parseSocText(state.socText) : null);
+
+    // Choose the document to price-check: prefer the SOC (the billing doc); else BEO.
+    var primary = (socItems && socItems.length) ? { items: socItems, label: "SOC" }
+      : (beoItems && beoItems.length ? { items: beoItems, label: "BEO" } : null);
+
+    if (!primary) {
+      out.innerHTML = '<div class="banner bad"><div class="big">⚠️</div><div>' +
+        '<h2>No charges found</h2><p>The file loaded, but no priced line items were recognised. ' +
+        'If this is an unusual layout, check the file or add the item to the price list.</p></div></div>';
+      return;
+    }
+
+    var report = E.checkDocument(primary.items, CAT);
+    var recon = (beoItems && beoItems.length && socItems && socItems.length)
+      ? E.reconcile(beoItems, socItems) : null;
+
+    renderBanner(out, report, recon, primary.label);
+    if (beoHeader) renderFacts(out, beoHeader, report, primary.label);
+    renderCheckTable(out, report, primary.label);
+    if (recon) renderRecon(out, recon);
+    renderTotals(out, report);
+
+    buildSummaryText(report, recon, primary.label, beoHeader);
+    $("copyBtn").hidden = false;
+    out.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function renderBanner(out, report, recon, label) {
+    var s = report.summary;
+    var reconBad = recon ? recon.mismatches : 0;
+    var clean = s.issues === 0 && reconBad === 0;
+    var div = document.createElement("div");
+    div.className = "banner " + (clean ? "ok" : "bad");
+    var headline, detail;
+    if (clean) {
+      headline = "Charges look correct";
+      detail = "Every priced line in the " + label + " matches the 2026 menu price book" +
+        (recon ? ", and the BEO and SOC agree." : ".");
+    } else {
+      var bits = [];
+      if (s.undercharged) bits.push(s.undercharged + " undercharged");
+      if (s.overcharged) bits.push(s.overcharged + " overcharged");
+      if (s.mathErrors) bits.push(s.mathErrors + " maths error" + (s.mathErrors > 1 ? "s" : ""));
+      if (s.unmatched) bits.push(s.unmatched + " unmatched");
+      if (reconBad) bits.push(reconBad + " BEO/SOC difference" + (reconBad > 1 ? "s" : ""));
+      headline = (s.issues + reconBad) + " thing" + ((s.issues + reconBad) > 1 ? "s" : "") + " to check";
+      detail = bits.join(" · ") + ".";
+    }
+    var pills = '<div class="pill-row">' +
+      pill("ok", s.correct + " correct") +
+      (s.undercharged ? pill("under", s.undercharged + " undercharged") : "") +
+      (s.overcharged ? pill("over", s.overcharged + " overcharged") : "") +
+      (s.mathErrors ? pill("math", s.mathErrors + " maths error" + (s.mathErrors > 1 ? "s" : "")) : "") +
+      (s.nonMenu ? pill("info", s.nonMenu + " non-menu") : "") +
+      (s.unmatched ? pill("over", s.unmatched + " unmatched") : "") +
+      "</div>";
+    div.innerHTML = '<div class="big">' + (clean ? "✅" : "⚠️") + "</div><div>" +
+      "<h2>" + esc(headline) + "</h2><p>" + esc(detail) + "</p>" + pills + "</div>";
+    out.appendChild(div);
+  }
+  function pill(cls, text) { return '<span class="pill ' + cls + '">' + esc(text) + "</span>"; }
+
+  function renderFacts(out, h, report, label) {
+    if (!h.beoNumber && !h.account && !h.bookingName) return;
+    var sec = block("Event details", "from the BEO");
+    var facts = '<div class="facts">';
+    if (h.beoNumber) facts += fact("BEO #", h.beoNumber);
+    if (h.bookingName) facts += fact("Event", h.bookingName);
+    if (h.account) facts += fact("Account", h.account);
+    if (h.guests) facts += fact("Guests", String(h.guests));
+    facts += "</div>";
+    sec.querySelector(".body").innerHTML = facts;
+    out.appendChild(sec);
+  }
+  function fact(k, v) { return "<div><dt>" + esc(k) + "</dt><dd>" + esc(v) + "</dd></div>"; }
+
+  function renderCheckTable(out, report, label) {
+    var sec = block("Charge check", "vs 2026 menu prices · source: " + label);
+    var html = '<div class="tscroll"><table><thead><tr>' +
+      "<th>Item</th><th class='num'>Qty</th><th class='num'>Charged</th>" +
+      "<th class='num'>Menu price</th><th class='num'>Line total</th><th>Status</th>" +
+      "</tr></thead><tbody>";
+    report.items.forEach(function (r) {
+      var rowClass = r.status === "undercharged" ? "row-under"
+        : r.status === "overcharged" ? "row-over"
+        : r.status === "math-error" ? "row-math" : "";
+      var statusLabel = r.status === "math-error" ? "maths error" : (r.priceStatus === "not-checked" ? "non-menu"
+        : r.priceStatus === "no-match" ? "unmatched" : r.priceStatus || r.status);
+      var chipCls = r.status === "math-error" ? "math-error" : (r.priceStatus === "correct" ? "correct"
+        : r.priceStatus === "undercharged" ? "undercharged" : r.priceStatus === "overcharged" ? "overcharged"
+        : r.priceStatus === "not-checked" ? "non-menu" : "unmatched");
+      var expected = r.expectedPrice != null ? money(r.expectedPrice) : "—";
+      var notes = (r.notes || []).map(function (n) {
+        var flag = /under by|over by|should be|No menu match/i.test(n) ? " flag" : "";
+        return '<div class="note' + flag + '">' + esc(n) + "</div>";
+      }).join("");
+      html += "<tr class='" + rowClass + "'>" +
+        "<td><span class='itemname'>" + esc(r.name) + "</span>" + notes + "</td>" +
+        "<td class='num'>" + (r.qty != null ? r.qty : "—") + "</td>" +
+        "<td class='num'>" + money(r.unitPrice) + "</td>" +
+        "<td class='num'>" + expected + "</td>" +
+        "<td class='num'>" + money(r.lineTotal) + "</td>" +
+        "<td><span class='chip " + chipCls + "'>" + esc(statusLabel) + "</span></td></tr>";
+    });
+    html += "</tbody></table></div>";
+    sec.querySelector(".body").innerHTML = html;
+    out.appendChild(sec);
+  }
+
+  function renderRecon(out, recon) {
+    var sub = recon.mismatches ? recon.mismatches + " difference" + (recon.mismatches > 1 ? "s" : "")
+      : "fully consistent";
+    var sec = block("BEO vs SOC", sub);
+    var html = '<div class="tscroll"><table><thead><tr>' +
+      "<th>Item</th><th>BEO</th><th>SOC</th><th>Status</th></tr></thead><tbody>";
+    recon.rows.forEach(function (r) {
+      var name = (r.beo && r.beo.name) || (r.soc && r.soc.name) || "—";
+      var beoCell = r.beo ? fmtLine(r.beo) : "<span class='note'>not on BEO</span>";
+      var socCell = r.soc ? fmtLine(r.soc) : "<span class='note'>not on SOC</span>";
+      var chipCls = r.status;
+      var statusLabel = r.status === "match" ? "match" : r.status === "mismatch" ? "differs"
+        : r.status === "beo-only" ? "BEO only" : "SOC only";
+      var diffNote = r.diffs && r.diffs.length && r.status !== "match"
+        ? '<div class="note flag">' + esc(r.diffs.join("; ")) + "</div>" : "";
+      html += "<tr><td><span class='itemname'>" + esc(name) + "</span>" + diffNote + "</td>" +
+        "<td>" + beoCell + "</td><td>" + socCell + "</td>" +
+        "<td><span class='chip " + chipCls + "'>" + esc(statusLabel) + "</span></td></tr>";
+    });
+    html += "</tbody></table></div>";
+    sec.querySelector(".body").innerHTML = html;
+    out.appendChild(sec);
+  }
+  function fmtLine(x) {
+    return "<span class='note'>" + (x.qty != null ? x.qty + " × " : "") + money(x.unitPrice) +
+      (x.lineTotal != null ? " = " + money(x.lineTotal) : "") + "</span>";
+  }
+
+  function renderTotals(out, report) {
+    var s = report.summary;
+    var sec = block("Totals", "priced lines compared to the menu book");
+    var varClass = Math.abs(s.variance) < 0.005 ? "good" : "flag";
+    var varText = (s.variance < 0 ? "−" : s.variance > 0 ? "+" : "") + money(Math.abs(s.variance));
+    sec.querySelector(".body").innerHTML = '<div class="totals">' +
+      "<div><dt>Charged total</dt><dd>" + money(s.chargedTotal) + "</dd></div>" +
+      "<div><dt>Expected at menu prices</dt><dd>" + money(s.expectedTotal) + "</dd></div>" +
+      "<div><dt>Variance</dt><dd class='" + varClass + "'>" + esc(varText) + "</dd></div>" +
+      "</div><p class='note'>“Expected” uses menu prices for matched items and the charged amount " +
+      "for non-menu lines (AV, security, attrition), so the variance isolates menu mispricing.</p>";
+    out.appendChild(sec);
+  }
+
+  function block(title, sub) {
+    var sec = document.createElement("section");
+    sec.className = "block";
+    sec.innerHTML = "<h2>" + esc(title) + (sub ? ' <span class="sub">· ' + esc(sub) + "</span>" : "") +
+      '</h2><div class="body"></div>';
+    return sec;
+  }
+
+  function buildSummaryText(report, recon, label, header) {
+    var s = report.summary;
+    var L = [];
+    L.push("BEO & SOC Charge Check — Crown Events & Conferences Perth");
+    if (header && header.bookingName) L.push("Event: " + header.bookingName);
+    if (header && header.beoNumber) L.push("BEO #" + header.beoNumber);
+    L.push("Source checked: " + label);
+    L.push("");
+    report.items.forEach(function (r) {
+      var line = "• " + r.name + " — " + (r.qty != null ? r.qty + " × " : "") + money(r.unitPrice);
+      if (r.priceStatus === "correct") line += "  [OK]";
+      else if (r.priceStatus === "undercharged") line += "  [UNDER by " + money(Math.abs(r.priceDiff)) + "/ea, " + money(Math.abs(r.priceImpact)) + " total; menu " + money(r.expectedPrice) + "]";
+      else if (r.priceStatus === "overcharged") line += "  [OVER by " + money(Math.abs(r.priceDiff)) + "/ea, " + money(Math.abs(r.priceImpact)) + " total; menu " + money(r.expectedPrice) + "]";
+      else if (r.priceStatus === "not-checked") line += "  [non-menu]";
+      else line += "  [unmatched]";
+      if (r.status === "math-error") line += "  [MATHS: total reads " + money(r.lineTotal) + ", expected " + money(r.mathExpectedTotal) + "]";
+      L.push(line);
+    });
+    L.push("");
+    L.push("Charged total " + money(s.chargedTotal) + " · expected at menu prices " +
+      money(s.expectedTotal) + " · variance " + money(s.variance));
+    if (recon) {
+      L.push("");
+      L.push("BEO vs SOC: " + (recon.mismatches ? recon.mismatches + " difference(s)" : "consistent"));
+      recon.rows.filter(function (r) { return r.status !== "match"; }).forEach(function (r) {
+        var nm = (r.beo && r.beo.name) || (r.soc && r.soc.name);
+        L.push("  - " + nm + ": " + r.diffs.join("; "));
+      });
+    }
+    lastSummaryText = L.join("\n");
+  }
+
+  function copySummary() {
+    var btn = $("copyBtn");
+    function done(ok) { btn.textContent = ok ? "Copied ✓" : "Copy failed"; setTimeout(function () { btn.textContent = "Copy summary"; }, 1600); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(lastSummaryText).then(function () { done(true); }, function () { selectFallback(); });
+    } else { selectFallback(); }
+    function selectFallback() {
+      var ta = document.createElement("textarea");
+      ta.value = lastSummaryText; document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); done(true); } catch (e) { done(false); }
+      document.body.removeChild(ta);
+    }
+  }
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function unitWord(u) {
+    return ({ pp: "per person", pp_per_course: "per person / course", pp_per_selection: "per person / selection",
+      child: "per child", glass: "per glass", bottle: "per bottle", each: "each", flat: "flat fee" })[u] || u;
+  }
+})();
+</script>

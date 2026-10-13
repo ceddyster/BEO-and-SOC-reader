@@ -1,0 +1,11 @@
+{
+  "name": "beo-and-soc-reader",
+  "version": "1.0.0",
+  "description": "Checks Crown Events & Conferences BEOs and Statements of Charges against the 2026 menu price book.",
+  "scripts": {
+    "test": "node test/run-tests.js",
+    "build": "node build.js"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}

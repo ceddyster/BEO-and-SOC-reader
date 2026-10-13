@@ -1,0 +1,73 @@
+# BEO & SOC Charge Checker
+
+A small, no-install browser tool that reads a **BEO** (Banquet/Event Order, PDF) and/or a
+**SOC** (Statement of Charges, Word) for a Crown Events & Conferences Perth event and checks
+that everything is **charged correctly** against the official **2026 menu price book**.
+
+It answers three questions:
+
+1. **Are the menu prices right?** Every per-person and package charge is matched to the
+   price book and compared penny-for-penny — flagged `correct`, `undercharged`, or
+   `overcharged`, with the per-person difference and the total impact across the guest count.
+2. **Does the maths add up?** It recomputes `quantity × price` for every line and flags any
+   line total that doesn't match.
+3. **Do the BEO and SOC agree?** Load both and it reconciles them line by line, flagging any
+   quantity, price, or total that differs between the two documents.
+
+Operational charges with no menu price (audio-visual, security, room hire, attrition /
+minimum spend) are listed separately as `non-menu` for manual confirmation.
+
+Everything runs in your browser — the BEO and SOC are read locally and never uploaded.
+
+## How to use it
+
+Open **`index.html`** in any modern browser (Chrome, Edge, Firefox, Safari). Then:
+
+1. Drag the **BEO PDF** onto the left box and/or the **SOC .docx** onto the right box.
+2. Press **Check charges**.
+3. Read the report: a summary banner, the line-by-line price check, the BEO-vs-SOC
+   comparison (when both are loaded), and totals. **Copy summary** puts a plain-text version
+   on your clipboard to paste into an email or note.
+
+You can check just one document or both. An internet connection is needed the first time so
+the page can load the PDF and Word readers.
+
+### Worked example (the IGCC event)
+
+For the Italian Golf Challenge Cup BEO/SOC, the tool confirms **Dinner Buffet Menu One** at
+**$90pp** is correct, and flags **Crown Reserve Package – 6 Hours** charged at **$66pp** when
+the 2026 book lists the 6-hour tier at **$70pp** — an undercharge of **$4pp (−$860 across 215
+guests)**, noting that $66 is actually the *5-hour* price.
+
+## The price book
+
+Prices come from the **E&C Menu 2026** PDFs in Google Drive (dinner, lunch, breakfast,
+canapés, beverage packages, wine/beer/spirits, and more). They're stored in
+[`src/prices.js`](src/prices.js). Food and most beverages are valid **01 Jul 2026 – 30 Jun
+2027**; the Christmas buffet to **31 Dec 2026**.
+
+**When a menu price changes:** edit the relevant entry in `src/prices.js`, bump
+`CATALOGUE_META.updated`, and reload the page (or re-run the build for the shareable version).
+
+## Project layout
+
+```
+index.html         The tool (open this). Loads src/prices.js + src/engine.js.
+src/prices.js       The 2026 menu price catalogue — the source of truth.
+src/engine.js       Parsing + price-check + reconciliation logic (no dependencies).
+test/run-tests.js   Tests for the engine, incl. the real IGCC figures.
+build.js            Bundles everything into dist/index.html (single shareable file).
+dist/index.html     Generated single-file build (after `npm run build`).
+```
+
+## Developing
+
+```bash
+npm test     # run the engine tests (node test/run-tests.js)
+npm run build  # regenerate dist/index.html
+```
+
+The matching is tier-aware: a "6 Hour" package only matches the 6-hour price, and "Menu Two"
+never matches "Menu One". If a document uses wording the matcher doesn't recognise, the line
+is shown as `unmatched` so it's never silently passed — add an alias in `src/prices.js` to
+teach it.
