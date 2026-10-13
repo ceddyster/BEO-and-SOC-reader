@@ -39,6 +39,26 @@ For the Italian Golf Challenge Cup BEO/SOC, the tool confirms **Dinner Buffet Me
 the 2026 book lists the 6-hour tier at **$70pp** — an undercharge of **$4pp (−$860 across 215
 guests)**, noting that $66 is actually the *5-hour* price.
 
+## Preview it live from GitHub (GitHub Pages)
+
+To open the tool from a web link instead of a downloaded file, turn on GitHub Pages once:
+
+1. Go to the repo on GitHub → **Settings** → **Pages** (left sidebar).
+2. Under **Build and deployment**, set **Source** to **Deploy from a branch**.
+3. Set **Branch** to `claude/determined-pascal-0utbcf` and the folder to **`/ (root)`**, then **Save**.
+4. Wait ~1 minute, then open:
+
+   **https://ceddyster.github.io/BEO-and-SOC-reader/**
+
+That's it — no build step. The root `index.html` is the tool.
+
+> **Note on privacy:** this repository is private. On a free GitHub plan, a Pages
+> site published from a private repo is **publicly viewable** (the tool and the menu
+> price list would be reachable by anyone with the link). Your BEO/SOC files are never
+> in the repo — they're read in the browser — but if the menu prices shouldn't be public,
+> either keep Pages off (use the local `index.html`) or use GitHub Pro to set the Pages
+> site to private.
+
 ## The price book
 
 Prices come from the **E&C Menu 2026** PDFs in Google Drive (dinner, lunch, breakfast,
