@@ -32,6 +32,9 @@
       function (w) { return NUM_WORDS[w]; });
     s = s.replace(/\bhrs?\b/g, "hour").replace(/\bhours\b/g, "hour");
     s = s.replace(/\bpax\b/g, "").replace(/\bper person\b/g, "").replace(/\bpp\b/g, "");
+    // Drop filler words BEOs insert that carry no identity, so e.g.
+    // "Coffee Break Menu Two" matches the price-book "Coffee Break Two".
+    s = s.replace(/\b(menu|package|pkg|option|selection)\b/g, " ");
     s = s.replace(/[^a-z0-9 ]+/g, " ");
     return s.replace(/\s+/g, " ").trim();
   }
@@ -162,38 +165,14 @@
   }
 
   // ------------------------------------------------------------- BEO parsing
-  // The BEO is prose, so anchor each charge to the nearest catalogue name that
-  // appears before it in the text.
+  // The BEO is prose. For each "N guests @ $X per person" charge, look back over
+  // the preceding heading lines and pick the best catalogue match — so the BEO's
+  // own wording ("Coffee Break Menu Two", "Dinner Set Menu Two") maps to the
+  // right price-book page even when it differs from the catalogue name.
   function parseBeo(text, catalogue) {
+    var lines = String(text || "").split(/\r?\n/);
     var soft = softNorm(text);
     var items = [];
-
-    // Index every catalogue name occurrence (by last position before a charge).
-    var nameHits = [];
-    (catalogue.items || []).forEach(function (item) {
-      buildMatchNames(item).forEach(function (nm) {
-        var key = softNorm(nm);
-        if (!key) return;
-        var from = 0, idx;
-        while ((idx = soft.indexOf(key, from)) !== -1) {
-          nameHits.push({ index: idx, end: idx + key.length, item: item, label: nm });
-          from = idx + key.length;
-        }
-      });
-    });
-
-    function nearestNameBefore(pos) {
-      // Pick the closest catalogue name before this charge. The window is
-      // generous because a plated/set menu lists a long dish block between its
-      // heading and the "N guests @ $X" line.
-      var best = null;
-      nameHits.forEach(function (h) {
-        if (h.end <= pos && pos - h.end < 1500) {
-          if (!best || h.end > best.end) best = h;
-        }
-      });
-      return best;
-    }
 
     function pushUnique(it) {
       var dup = items.some(function (x) {
@@ -205,22 +184,30 @@
     var re, m;
 
     // Per-person food/beverage: "215 guests @ $90.00 per person"
-    re = /(\d+)\s+guests?\s*@\s*\$?([\d,]+(?:\.\d{1,2})?)\s*per\s+person/g;
-    while ((m = re.exec(soft)) !== null) {
-      var qty = parseInt(m[1], 10);
-      var price = parseMoney(m[2]);
-      var anchor = nearestNameBefore(m.index);
-      // Count "alternating with" in the menu block between the name and the price,
-      // so a set/plated menu's alternating-service surcharge can be accounted for.
-      var altCourses = 0;
-      if (anchor) {
-        var blk = soft.substring(anchor.end, m.index).match(/alternating with/g);
-        altCourses = blk ? blk.length : 0;
+    lines.forEach(function (line, i) {
+      var pm = softNorm(line).match(/(\d+)\s+guests?\s*@\s*\$?([\d,]+(?:\.\d{1,2})?)\s*per\s+person/);
+      if (!pm) return;
+      var qty = parseInt(pm[1], 10);
+      var price = parseMoney(pm[2]);
+
+      // Best catalogue match among the up-to-30 heading lines above the price.
+      var best = null;
+      for (var j = i - 1; j >= Math.max(0, i - 30); j--) {
+        var cand = lines[j].replace(/\s+/g, " ").trim();
+        if (cand.length < 3 || /@|\$|^\d/.test(cand)) continue; // skip charge/time lines
+        var mm = findMatch(cand, catalogue);
+        if (mm && (!best || mm.score > best.score)) best = { score: mm.score, name: cand, j: j };
       }
-      pushUnique({ qty: qty, name: anchor ? anchor.label : "(unidentified per-person item)",
-        unitPrice: price, lineTotal: round2(qty * price), kind: "per-person",
-        alternatingCourses: altCourses, confident: !!anchor, source: "BEO" });
-    }
+
+      // Count "alternating with" in the menu block (heading → price) for set menus.
+      var altCourses = 0, nameOut = "(unidentified per-person item)";
+      if (best) {
+        nameOut = best.name;
+        for (var k = best.j; k < i; k++) if (/alternating with/i.test(lines[k])) altCourses++;
+      }
+      pushUnique({ qty: qty, name: nameOut, unitPrice: price, lineTotal: round2(qty * price),
+        kind: "per-person", alternatingCourses: altCourses, confident: !!best, source: "BEO" });
+    });
 
     // On-consumption beverages: "Leeuwin Estate Sparkling Brut @ $75.00 per bottle"
     String(text || "").split(/\r?\n/).forEach(function (line) {
@@ -303,6 +290,18 @@
       result.expectedPrice = match.item.price;
       result.unit = match.item.unit;
       result.category = match.item.category;
+      result.menuNote = match.item.note || null;
+
+      if (match.item.price == null) {
+        // Package whose price isn't fixed in the menu (e.g. Day Delegate).
+        result.priceStatus = "review";
+        if (result.status !== "math-error") result.status = "review";
+        result._explained = true;
+        result.notes.push("Menu price varies for " + match.item.name + " — confirm against the quote.");
+        if (result.menuNote) result.notes.push(result.menuNote);
+        return result;
+      }
+
       var base = match.item.price;
       var diff = round2(item.unitPrice - base);
       result.priceDiff = diff;
@@ -328,10 +327,11 @@
           "; charged " + money(item.unitPrice) + per + " (" + (diff < 0 ? "under" : "over") +
           " by " + impactText + ").");
       }
-      if (match.score < 0.999 && !result._explained) {
+      if (match.score < 0.999) {
         result.notes.push("Matched to “" + match.item.name + "”" +
           (normalize(item.name) !== normalize(match.item.name) ? " (from “" + item.name + "”)" : "") + ".");
       }
+      if (result.menuNote) result.notes.push(result.menuNote);
     } else if (looksNonMenu(item.name, catalogue) || item.kind === "non-menu") {
       if (result.status === "ok") result.status = "non-menu";
       result.priceStatus = "not-checked";

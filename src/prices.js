@@ -33,9 +33,9 @@
   // category, name (as it typically appears on a BEO/SOC), price, unit, extras
   var ITEMS = [
     // ---------- DINNER — BUFFET ----------
-    { category: "Dinner Buffet", name: "Dinner Buffet Menu One", price: 90, unit: "pp", minGuests: 50, aliases: ["Dinner Buffet Menu 1"] },
-    { category: "Dinner Buffet", name: "Dinner Buffet Menu Two", price: 104, unit: "pp", minGuests: 50, aliases: ["Dinner Buffet Menu 2"] },
-    { category: "Dinner Buffet", name: "Dinner Buffet Menu Three", price: 120, unit: "pp", minGuests: 50, aliases: ["Dinner Buffet Menu 3"] },
+    { category: "Dinner Buffet", name: "Dinner Buffet Menu One", price: 90, unit: "pp", minGuests: 50, note: "3 cold, 3 hot, 1 pasta, 1 side, 2 desserts; incl. rolls, coffee & tea (max 2 hrs).", aliases: ["Dinner Buffet Menu 1"] },
+    { category: "Dinner Buffet", name: "Dinner Buffet Menu Two", price: 104, unit: "pp", minGuests: 50, note: "4 cold, 4 hot, 1 pasta, 1 side, 3 desserts.", aliases: ["Dinner Buffet Menu 2"] },
+    { category: "Dinner Buffet", name: "Dinner Buffet Menu Three", price: 120, unit: "pp", minGuests: 50, note: "5 cold, 4 hot, 1 pasta, 2 sides, 3 desserts (incl. cheese or fruit platter).", aliases: ["Dinner Buffet Menu 3"] },
     { category: "Dinner Buffet", name: "Dinner Buffet Additional Course", price: 16, unit: "pp", note: "Additional course" },
 
     // ---------- DINNER — PLATED ----------
@@ -51,13 +51,13 @@
     { category: "Dinner Plated", name: "Plated Dinner Sides", price: 14, unit: "pp" },
 
     // ---------- DINNER — INDIAN ----------
-    { category: "Dinner Indian", name: "Indian Buffet Package One", price: 129, unit: "pp", minGuests: 50 },
-    { category: "Dinner Indian", name: "Indian Buffet Package Two", price: 150, unit: "pp", minGuests: 50 },
-    { category: "Dinner Indian", name: "Indian Buffet Vegetarian Option", price: 126, unit: "pp", minGuests: 50 },
+    { category: "Dinner Indian", name: "Indian Buffet Package One", price: 129, unit: "pp", minGuests: 50, note: "2 entrées, 3 salads, 2 meat/fish, 2 veg, 1 paneer, 1 dahl, 1 rice, 3 desserts, 2 breads." },
+    { category: "Dinner Indian", name: "Indian Buffet Package Two", price: 150, unit: "pp", minGuests: 50, note: "3 entrées, 4 salads, 3 meat/fish, 3 veg, 1 paneer, 1 dahl, 1 rice, 3 desserts, 2 breads." },
+    { category: "Dinner Indian", name: "Indian Buffet Vegetarian Option", price: 126, unit: "pp", minGuests: 50, note: "2 entrées, 3 salads, 4 veg, 1 paneer, 1 dahl, 1 rice, 3 desserts, 2 breads." },
 
     // ---------- CHINESE BANQUET ----------
-    { category: "Chinese Banquet", name: "Chinese Banquet Menu One", price: 160, unit: "pp", minGuests: 50 },
-    { category: "Chinese Banquet", name: "Chinese Banquet Menu Two", price: 175, unit: "pp", minGuests: 50 },
+    { category: "Chinese Banquet", name: "Chinese Banquet Menu One", price: 160, unit: "pp", minGuests: 50, note: "Entrée, soup, 4 main courses, dessert; incl. Tie Guan Yin tea (10 per table)." },
+    { category: "Chinese Banquet", name: "Chinese Banquet Menu Two", price: 175, unit: "pp", minGuests: 50, note: "Entrée, soup, 4 premium main courses, dessert; incl. Tie Guan Yin tea (10 per table)." },
     { category: "Chinese Banquet", name: "Children's Chinese Banquet Menu", price: 40, unit: "pp" },
 
     // ---------- CHILDREN ----------
@@ -71,9 +71,9 @@
     { category: "Christmas Buffet", name: "Christmas Buffet Additional Course", price: 16, unit: "pp", validTo: "2026-12-31" },
 
     // ---------- LUNCH — BUFFET ----------
-    { category: "Lunch Buffet", name: "Lunch Buffet Menu One", price: 62, unit: "pp", minGuests: 30 },
-    { category: "Lunch Buffet", name: "Lunch Buffet Menu Two", price: 69, unit: "pp", minGuests: 30 },
-    { category: "Lunch Buffet", name: "Lunch Buffet Menu Three", price: 88, unit: "pp", minGuests: 30 },
+    { category: "Lunch Buffet", name: "Lunch Buffet Menu One", price: 62, unit: "pp", minGuests: 30, note: "Daily set menu (cold savoury, salad, hot dishes, dessert); incl. rolls, coffee & tea (max 1 hr)." },
+    { category: "Lunch Buffet", name: "Lunch Buffet Menu Two", price: 69, unit: "pp", minGuests: 30, note: "Menu One plus a sandwich and extra dessert/fruit platter." },
+    { category: "Lunch Buffet", name: "Lunch Buffet Menu Three", price: 88, unit: "pp", minGuests: 30, note: "Custom build: sandwich, cold savoury, salad, 3 hot dishes, 3 desserts." },
     { category: "Lunch Buffet", name: "Lunch Buffet Seated Surcharge", price: 12, unit: "pp", note: "Menu served seated" },
     { category: "Lunch Buffet", name: "Lunch Buffet Item Swap Surcharge", price: 16, unit: "pp", note: "Swapping any items" },
 
@@ -106,11 +106,11 @@
     { category: "Breakfast Standup", name: "Standup Breakfast Croque Monsieur", price: 30, unit: "pp_per_selection" },
 
     // ---------- COFFEE BREAKS ----------
-    { category: "Coffee Breaks", name: "Coffee Break One", price: 30, unit: "pp" },
-    { category: "Coffee Breaks", name: "Coffee Break Two", price: 37, unit: "pp" },
-    { category: "Coffee Breaks", name: "Coffee Break Three", price: 55, unit: "pp" },
-    { category: "Coffee Breaks", name: "Tea and Coffee Four Hour", price: 22, unit: "pp" },
-    { category: "Coffee Breaks", name: "Tea and Coffee Eight Hour", price: 28, unit: "pp" },
+    { category: "Coffee Breaks", name: "Coffee Break One", price: 30, unit: "pp", note: "Select one item from sweet or savoury; incl. coffee, tea & assorted cookies (max 1 hr)." },
+    { category: "Coffee Breaks", name: "Coffee Break Two", price: 37, unit: "pp", note: "Select two items from sweet or savoury; incl. coffee, tea & assorted cookies (max 1 hr)." },
+    { category: "Coffee Breaks", name: "Coffee Break Three", price: 55, unit: "pp", note: "Select four items from sweet or savoury; incl. coffee, tea & assorted cookies (max 1 hr)." },
+    { category: "Coffee Breaks", name: "Tea and Coffee Four Hour", price: 22, unit: "pp", note: "Freshly brewed coffee & selection of teas, 4-hour maximum." },
+    { category: "Coffee Breaks", name: "Tea and Coffee Eight Hour", price: 28, unit: "pp", note: "Freshly brewed coffee & selection of teas, 8-hour maximum." },
     { category: "Coffee Breaks", name: "Barista Coffee Cart Half Day", price: 495, unit: "flat" },
     { category: "Coffee Breaks", name: "Barista Coffee Cart Full Day", price: 640, unit: "flat" },
     { category: "Coffee Breaks", name: "Individual Coffee", price: 6.5, unit: "each" },
@@ -132,6 +132,10 @@
     { category: "Crew Packages", name: "Crew Sushi Platter", price: 12, unit: "each" },
     { category: "Crew Packages", name: "Crew Turkish Bread and Dips", price: 12, unit: "each" },
     { category: "Crew Packages", name: "Crew Buffet Package", price: 42, unit: "pp", minGuests: 20 },
+
+    // ---------- DAY DELEGATE (price varies — not fixed in the menu) ----------
+    { category: "Day Delegate", name: "Day Delegate Package One", price: null, unit: "pp", minGuests: 30, priceVaries: true, note: "AM/PM tea, lunch, plenary room hire, mints & water, lectern/mic, notepads & pens. Price varies — confirm against the quote.", aliases: ["Day Delegate One", "DDP One"] },
+    { category: "Day Delegate", name: "Day Delegate Package Two", price: null, unit: "pp", minGuests: 30, priceVaries: true, note: "As Package One, with a sandwich added to lunch. Price varies — confirm against the quote.", aliases: ["Day Delegate Two", "DDP Two"] },
 
     // ---------- CANAPÉS / COCKTAIL RECEPTION ----------
     { category: "Canapes", name: "Cocktail Reception One Hour", price: 39, unit: "pp", minGuests: 30, note: "Select four items" },
@@ -269,6 +273,13 @@
     { category: "Non-Alcoholic", name: "Acqua Panna Still Mineral Water 250ml", price: 6.5, unit: "bottle" },
     { category: "Non-Alcoholic", name: "San Pellegrino Sparkling Mineral Water 250ml", price: 6.5, unit: "bottle" }
   ];
+
+  // Standard inclusion note for the hourly beverage packages.
+  ITEMS.forEach(function (it) {
+    if (it.category === "Beverage Package" && /Reserve|Deluxe|Premium|Soft Drink/.test(it.name) && !it.note) {
+      it.note = "Per person, includes assorted soft drinks & orange juice.";
+    }
+  });
 
   // Charge lines that are NOT menu-priced. The checker will not price-check
   // these against the catalogue; it only verifies their internal maths and

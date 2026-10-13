@@ -473,8 +473,8 @@
     } else if (s.review > 0) {
       cls = "warn"; icon = "🔎";
       headline = s.review + " line" + (s.review > 1 ? "s" : "") + " to confirm";
-      detail = "No mispricing found. Some set/plated menu lines are above their base price — " +
-        "normal if alternating service or extra courses were added. Check the notes below.";
+      detail = "No mispricing found, but some lines need a manual check — a set/plated menu above " +
+        "its base price, or a package whose price isn't fixed in the menu. See the notes below.";
     } else {
       cls = "ok"; icon = "✅";
       headline = "Charges look correct";
@@ -609,7 +609,7 @@
       if (r.priceStatus === "correct") line += "  [OK]";
       else if (r.priceStatus === "undercharged") line += "  [UNDER by " + money(Math.abs(r.priceDiff)) + "/ea" + (r.priceImpact != null ? ", " + money(Math.abs(r.priceImpact)) + " total" : "") + "; menu " + money(r.expectedPrice) + "]";
       else if (r.priceStatus === "overcharged") line += "  [OVER by " + money(Math.abs(r.priceDiff)) + "/ea" + (r.priceImpact != null ? ", " + money(Math.abs(r.priceImpact)) + " total" : "") + "; menu " + money(r.expectedPrice) + "]";
-      else if (r.priceStatus === "review") line += "  [CONFIRM: " + money(r.priceDiff) + " above base " + money(r.expectedPrice) + "]";
+      else if (r.priceStatus === "review") line += (r.expectedPrice != null ? "  [CONFIRM: " + money(r.priceDiff) + " above base " + money(r.expectedPrice) + "]" : "  [CONFIRM — price varies]");
       else if (r.priceStatus === "not-checked") line += "  [non-menu]";
       else line += "  [unmatched]";
       if (r.status === "math-error") line += "  [MATHS: total reads " + money(r.lineTotal) + ", expected " + money(r.mathExpectedTotal) + "]";

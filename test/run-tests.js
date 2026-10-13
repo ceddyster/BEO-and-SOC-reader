@@ -142,6 +142,39 @@ section("Regression: undercharge below base is still caught");
 var under = engine.checkDocument(engine.parseSocRows([["50", "Dinner Set Menu Two", "$100.00", "", "$5,000.00"]]), catalogue);
 ok(under.items[0].priceStatus === "undercharged", "$100 below base $105 flagged undercharged");
 
+section("BEO wording maps to the right price-book page");
+[
+  ["Coffee Break Menu Two", "Coffee Break Two", 37],
+  ["Coffee Break Menu Three", "Coffee Break Three", 55],
+  ["Crown Reserve Beverage Package - 6 Hours", "Crown Reserve Package - 6 Hour", 70],
+  ["Cocktail Package - 3 Hours", "Cocktail Reception Three Hour", 75],
+  ["Working Lunch Menu One", "Working Lunch Menu One", 44],
+  ["Plated Breakfast Menu One", "Plated Breakfast Menu One", 56]
+].forEach(function (c) {
+  var mm = engine.findMatch(c[0], catalogue);
+  ok(mm && mm.item.name === c[1] && mm.item.price === c[2],
+    "\"" + c[0] + "\" -> " + c[1] + " ($" + c[2] + ")");
+});
+
+section("Coffee Break Two price + inclusions note");
+var cb = engine.checkDocument(engine.parseSocRows([["80", "Coffee Break Menu Two", "$37.00", "", "$2,960.00"]]), catalogue);
+ok(cb.items[0].priceStatus === "correct", "Coffee Break Menu Two @ $37 correct");
+ok(cb.items[0].notes.join(" ").toLowerCase().indexOf("two items") !== -1, "shows 'select two items' inclusions note");
+var cbOver = engine.checkDocument(engine.parseSocRows([["80", "Coffee Break Menu Two", "$40.00", "", "$3,200.00"]]), catalogue);
+ok(cbOver.items[0].priceStatus === "overcharged", "Coffee Break Two @ $40 flagged overcharged");
+
+section("Coffee break recognised from BEO wording/line layout");
+var cbBeo = engine.parseBeo("Catering\nCoffee Break Menu Two\nSelect two items\n80 guests @ $37.00 per person\n", catalogue);
+var cbItem = engine.checkDocument(cbBeo, catalogue).items[0];
+ok(cbItem && cbItem.matchedName === "Coffee Break Two" && cbItem.priceStatus === "correct",
+  "BEO 'Coffee Break Menu Two' line matched and priced");
+
+section("Day Delegate (variable price) → confirm, not a false flag");
+var dd = engine.checkDocument(engine.parseSocRows([["100", "Day Delegate Package One", "$75.00", "", "$7,500.00"]]), catalogue);
+ok(dd.items[0].matchedName === "Day Delegate Package One", "Day Delegate Package One matched");
+ok(dd.items[0].priceStatus === "review", "Day Delegate flagged as confirm (price varies)");
+ok(dd.items[0].notes.join(" ").toLowerCase().indexOf("varies") !== -1, "note says price varies");
+
 console.log("\n----------------------------------------");
 console.log(passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

@@ -87,7 +87,20 @@ npm test     # run the engine tests (node test/run-tests.js)
 npm run build  # regenerate dist/index.html
 ```
 
-The matching is tier-aware: a "6 Hour" package only matches the 6-hour price, and "Menu Two"
-never matches "Menu One". If a document uses wording the matcher doesn't recognise, the line
-is shown as `unmatched` so it's never silently passed — add an alias in `src/prices.js` to
-teach it.
+The matcher is built for BEO wording, which differs from the price-book wording:
+
+- **Filler words are ignored** — "Coffee Break **Menu** Two" matches the Breaks page's
+  "Coffee Break Two" ($37), "Crown Reserve **Beverage Package** - 6 Hours" matches "Crown
+  Reserve Package - 6 Hour", and so on. Words like *menu*, *package* and *selection* are
+  dropped before matching.
+- **Tier-aware** — a "6 Hour" package only matches the 6-hour price, and "Menu Two" never
+  matches "Menu One".
+- **Set / plated menus** carry alternating-service and additional-course surcharges, so they
+  are validated against their base price plus those add-ons rather than flagged outright.
+- **Package inclusions are shown** — when a line matches, the report prints what that package
+  includes (e.g. "select two items from sweet or savoury") so you can confirm it's the right
+  one. Day Delegate and other variable-price packages are flagged *to confirm* rather than
+  priced.
+
+If a document uses wording the matcher still doesn't recognise, the line is shown as
+`unmatched` so it's never silently passed — add an alias in `src/prices.js` to teach it.
