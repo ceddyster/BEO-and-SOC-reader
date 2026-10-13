@@ -175,6 +175,27 @@ ok(dd.items[0].matchedName === "Day Delegate Package One", "Day Delegate Package
 ok(dd.items[0].priceStatus === "review", "Day Delegate flagged as confirm (price varies)");
 ok(dd.items[0].notes.join(" ").toLowerCase().indexOf("varies") !== -1, "note says price varies");
 
+section("Cocktail reception priced by canapé count (BEO wording)");
+var cocktailBeo = "18:00 - 18:30 Pre-Event Drinks\nCrown Ballroom Foyer\nCustom Cocktail Reception - 30 minutes\n6 canapes served per person\nCOLD CANAPES\nCured salmon, nashi pear, Pemberton lime\nGoat cheese tartlet, pistachio, strawberry\nHOT CANAPES\nWA lobster spring rolls, sweet chilli sauce\nMargaret River wagyu beef sirloin, country bread\n700 guests @ $58.00 per person\n";
+var ckItems = engine.parseBeo(cocktailBeo, catalogue);
+var ck = engine.checkDocument(ckItems, catalogue).items.find(function (r) { return /canap/i.test(r.name) || /cocktail/i.test(r.name); });
+ok(ck && ck.matchedName === "Cocktail Reception Two Hour", "6 canapés mapped to Cocktail Reception Two Hour");
+ok(ck && ck.priceStatus === "correct", "6 canapés @ $58 validated correct");
+ok(engine.findMatch("Cocktail Reception 10 Canapes", catalogue).item.price === 75, "10 canapés -> $75 tier");
+
+section("Generic course headings no longer mis-match Children's menu");
+ok(engine.findMatch("MAIN COURSE", catalogue) === null, "'MAIN COURSE' does not match any item");
+ok(engine.findMatch("ENTREE", catalogue) === null, "'ENTREE' does not match any item");
+ok(engine.findMatch("Children's Main Course", catalogue).item.name === "Children's Main Course", "real children's main course still matches");
+
+section("Custom / bespoke set menu → confirm, not a false overcharge");
+var customBeo = "Crown Ballroom\nCustom Dinner Set Menu\nAssorted bread rolls and PEPE SAYA butter\nENTREE\nSquid, Hokkaido scallop, furikake, finger lime\nMAIN COURSE\nMargaret River beef, potato\nDESSERT\nChocolate delice\n700 guests @ $167.00 per person\n";
+var customItems = engine.parseBeo(customBeo, catalogue);
+var cu = engine.checkDocument(customItems, catalogue).items[0];
+ok(cu && /custom/i.test(cu.name), "custom set menu captured by name (got: " + (cu && cu.name) + ")");
+ok(cu && cu.priceStatus === "review" && cu.status !== "overcharged", "custom set menu flagged review, not overcharged");
+ok(!customItems.some(function (x) { return /children/i.test(x.name); }), "no spurious children's line produced");
+
 console.log("\n----------------------------------------");
 console.log(passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

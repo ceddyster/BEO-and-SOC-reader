@@ -86,8 +86,15 @@
   // Return { item, score } for the best catalogue match, or null.
   function findMatch(name, catalogue, threshold) {
     threshold = threshold === undefined ? 0.7 : threshold;
+    var nn = normalize(name);
     var best = null;
     (catalogue.items || []).forEach(function (item) {
+      // Some items (e.g. children's meals) must not match unless the document
+      // text actually carries an identifying word — stops a generic "Main Course"
+      // heading matching "Children's Main Course".
+      if (item.mustInclude && !item.mustInclude.some(function (t) {
+        return (" " + nn + " ").indexOf(" " + normalize(t) + " ") !== -1;
+      })) return;
       buildMatchNames(item).forEach(function (candidate) {
         var sc = scoreNames(name, candidate);
         if (!best || sc > best.score) best = { item: item, score: sc };
@@ -183,30 +190,50 @@
 
     var re, m;
 
+    // Course-section labels and structural headers are never package names.
+    var SECTION_RE = /^(entr[eé]{1,2}e?|main course|mains|entrees?|desserts?|dessert platters|sides?|cold canap\w*|hot canap\w*|canap\w*|cold dishes|hot dishes|pasta|salads?|soup|from the (bakery|pan)|continental selection|sandwich|menu|beverages?|program|setup|dietary requirements?|miscellaneous|technical requirement|health and safety|billing instructions|room set up|linen|table items)\b/i;
+
     // Per-person food/beverage: "215 guests @ $90.00 per person"
     lines.forEach(function (line, i) {
       var pm = softNorm(line).match(/(\d+)\s+guests?\s*@\s*\$?([\d,]+(?:\.\d{1,2})?)\s*per\s+person/);
       if (!pm) return;
       var qty = parseInt(pm[1], 10);
       var price = parseMoney(pm[2]);
+      var win = lines.slice(Math.max(0, i - 30), i).join("  ");
 
-      // Best catalogue match among the up-to-30 heading lines above the price.
+      // Best catalogue match among the heading lines above the price, skipping
+      // charge/time lines and generic course-section labels.
       var best = null;
       for (var j = i - 1; j >= Math.max(0, i - 30); j--) {
         var cand = lines[j].replace(/\s+/g, " ").trim();
-        if (cand.length < 3 || /@|\$|^\d/.test(cand)) continue; // skip charge/time lines
+        if (cand.length < 3) continue;
+        if (/[@$]/.test(cand)) continue;              // charge lines
+        if (/^\d+\s+guests?\b/i.test(cand)) continue; // "N guests ..."
+        if (/^\d{3,4}\b/.test(cand)) continue;        // program times (1905 ...)
+        if (SECTION_RE.test(cand)) continue;          // ENTREE / MAIN COURSE / ...
         var mm = findMatch(cand, catalogue);
         if (mm && (!best || mm.score > best.score)) best = { score: mm.score, name: cand, j: j };
       }
 
-      // Count "alternating with" in the menu block (heading → price) for set menus.
-      var altCourses = 0, nameOut = "(unidentified per-person item)";
-      if (best) {
+      var altCourses = 0, kind = "per-person", nameOut;
+      var canap = win.match(/(\d+)\s*canap[eé]/i);
+      if (/cocktail reception|canap[eé]/i.test(win) && canap) {
+        // Cocktail receptions are priced by number of canapés, not by name/hours.
+        nameOut = "Cocktail Reception " + canap[1] + " Canapes";
+      } else if (best) {
         nameOut = best.name;
         for (var k = best.j; k < i; k++) if (/alternating with/i.test(lines[k])) altCourses++;
+      } else if (/\bcustom\b/i.test(win)) {
+        var cm = win.match(/custom[\w' ]*?(?:set menu|dinner|lunch|reception|menu|package)/i);
+        nameOut = cm ? cm[0].replace(/\s+/g, " ").trim() : "Custom package";
+        kind = "custom";
+      } else {
+        nameOut = "(unidentified per-person item)";
       }
+
       pushUnique({ qty: qty, name: nameOut, unitPrice: price, lineTotal: round2(qty * price),
-        kind: "per-person", alternatingCourses: altCourses, confident: !!best, source: "BEO" });
+        kind: kind, alternatingCourses: altCourses,
+        confident: !!best || kind !== "per-person" || /canap/i.test(nameOut), source: "BEO" });
     });
 
     // On-consumption beverages: "Leeuwin Estate Sparkling Brut @ $75.00 per bottle"
@@ -332,6 +359,10 @@
           (normalize(item.name) !== normalize(match.item.name) ? " (from “" + item.name + "”)" : "") + ".");
       }
       if (result.menuNote) result.notes.push(result.menuNote);
+    } else if (item.kind === "custom") {
+      if (result.status !== "math-error") result.status = "review";
+      result.priceStatus = "review";
+      result.notes.push("Custom / bespoke package — no standard menu price. Confirm the agreed price manually.");
     } else if (looksNonMenu(item.name, catalogue) || item.kind === "non-menu") {
       if (result.status === "ok") result.status = "non-menu";
       result.priceStatus = "not-checked";

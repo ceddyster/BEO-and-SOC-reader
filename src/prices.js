@@ -61,8 +61,8 @@
     { category: "Chinese Banquet", name: "Children's Chinese Banquet Menu", price: 40, unit: "pp" },
 
     // ---------- CHILDREN ----------
-    { category: "Children", name: "Children's Main Course", price: 30, unit: "child", aliases: ["Childrens Menu Main Course", "Kids Main"] },
-    { category: "Children", name: "Children's Beverages", price: 12.5, unit: "child" },
+    { category: "Children", name: "Children's Main Course", price: 30, unit: "child", mustInclude: ["child", "children", "childrens", "kid", "kids"], aliases: ["Childrens Menu Main Course", "Kids Main"] },
+    { category: "Children", name: "Children's Beverages", price: 12.5, unit: "child", mustInclude: ["child", "children", "childrens", "kid", "kids"] },
 
     // ---------- CHRISTMAS BUFFET (valid to 31 Dec 2026) ----------
     { category: "Christmas Buffet", name: "Christmas Buffet Menu One", price: 90, unit: "pp", minGuests: 50, validTo: "2026-12-31" },
@@ -138,10 +138,10 @@
     { category: "Day Delegate", name: "Day Delegate Package Two", price: null, unit: "pp", minGuests: 30, priceVaries: true, note: "As Package One, with a sandwich added to lunch. Price varies — confirm against the quote.", aliases: ["Day Delegate Two", "DDP Two"] },
 
     // ---------- CANAPÉS / COCKTAIL RECEPTION ----------
-    { category: "Canapes", name: "Cocktail Reception One Hour", price: 39, unit: "pp", minGuests: 30, note: "Select four items" },
-    { category: "Canapes", name: "Cocktail Reception Two Hour", price: 58, unit: "pp", minGuests: 30, note: "Select six items" },
-    { category: "Canapes", name: "Cocktail Reception Three Hour", price: 75, unit: "pp", minGuests: 30, note: "Select ten items" },
-    { category: "Canapes", name: "Cocktail Reception Four Hour", price: 88, unit: "pp", minGuests: 30, note: "Select twelve items" },
+    { category: "Canapes", name: "Cocktail Reception One Hour", price: 39, unit: "pp", minGuests: 30, note: "1 hour / select four canapés per person.", aliases: ["Cocktail Reception 4 Canapes", "Cocktail Reception Four Canapes"] },
+    { category: "Canapes", name: "Cocktail Reception Two Hour", price: 58, unit: "pp", minGuests: 30, note: "2 hours / select six canapés per person.", aliases: ["Cocktail Reception 6 Canapes", "Cocktail Reception Six Canapes"] },
+    { category: "Canapes", name: "Cocktail Reception Three Hour", price: 75, unit: "pp", minGuests: 30, note: "3 hours / select ten canapés per person.", aliases: ["Cocktail Reception 10 Canapes", "Cocktail Reception Ten Canapes"] },
+    { category: "Canapes", name: "Cocktail Reception Four Hour", price: 88, unit: "pp", minGuests: 30, note: "4 hours / select twelve canapés per person.", aliases: ["Cocktail Reception 12 Canapes", "Cocktail Reception Twelve Canapes"] },
     { category: "Canapes", name: "Substantial Enhancement", price: 17, unit: "pp_per_selection" },
     { category: "Canapes", name: "Carvery Station", price: 42, unit: "pp_per_selection" },
     { category: "Canapes", name: "Oyster Station Three Pieces", price: 26, unit: "pp" },
