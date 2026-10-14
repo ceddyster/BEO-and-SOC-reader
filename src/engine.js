@@ -879,28 +879,58 @@
   function analyzeComposition(item, catItem, catalogue) {
     var comp = catItem.composition;
     var sets = catalogue.compositionSets;
-    if (!comp || !comp.limits || !sets || !sets[comp.set]) return null;
+    if (!comp || !sets || !sets[comp.set]) return null;
+    if (!comp.limits && !comp.options) return null;
     if (!item.contextLines || !item.contextLines.length) return null;
     var sel = sets[comp.set];
-    var limits = comp.limits;
     var text = " " + normalize(item.contextLines.join("  ")) + " ";
-    var counts = {}, flags = [], total = 0, cats = Object.keys(limits);
-    cats.forEach(function (cat) {
+
+    function countCat(cat) {
       var seen = {}, n = 0;
       (sel[cat] || []).forEach(function (kw) {
         var k = normalize(kw);
         if (!seen[k] && text.indexOf(k) !== -1) { seen[k] = 1; n++; }
       });
+      return n;
+    }
+
+    // Options mode (e.g. the lunchbox): each category is a whole menu option;
+    // flag when more distinct options are detected than the package allows.
+    if (comp.options) {
+      var detected = [], counts0 = {};
+      comp.options.forEach(function (opt) {
+        var n = countCat(opt);
+        counts0[opt] = n;
+        if (n > 0) detected.push(opt);
+      });
+      var oflags = [];
+      if (comp.maxOptions != null && detected.length > comp.maxOptions) {
+        oflags.push(detected.length + " menu options selected (" + detected.join(", ") +
+          ") but the package allows a maximum of " + comp.maxOptions);
+      }
+      return { mode: "options", counts: counts0, detected: detected, maxOptions: comp.maxOptions,
+        flags: oflags, total: detected.length };
+    }
+
+    // Limits mode: count dishes per course against each course's allowance.
+    var limits = comp.limits;
+    var counts = {}, flags = [], total = 0, cats = Object.keys(limits);
+    cats.forEach(function (cat) {
+      var n = countCat(cat);
       counts[cat] = n;
       total += n;
       if (limits[cat] != null && n > limits[cat]) {
         flags.push(n + " " + cat + " item" + (n > 1 ? "s" : "") + " selected but the menu allows " + limits[cat]);
       }
     });
-    return { counts: counts, limits: limits, cats: cats, flags: flags, total: total };
+    return { mode: "limits", counts: counts, limits: limits, cats: cats, flags: flags, total: total };
   }
 
   function compositionCountText(info) {
+    if (info.mode === "options") {
+      return (info.detected.length ? info.detected.join(", ") : "none") +
+        " (" + info.detected.length + "/" + info.maxOptions + " options)";
+    }
     return info.cats.map(function (c) {
       return c + " " + info.counts[c] + "/" + info.limits[c];
     }).join(", ");

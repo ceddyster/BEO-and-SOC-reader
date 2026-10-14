@@ -551,6 +551,74 @@ ok(ch1x.priceStatus === "review", "Children's with 2 mains flagged to check (got
 ok(ch1x.notes.join(" ").indexOf("main") !== -1 && ch1x.notes.join(" ").indexOf("allows 1") !== -1,
   "children flag names the main course and allowance");
 
+section("Working Lunch sandwich/salad selection");
+function workBEO(menuLine, dishes, price) {
+  return "Menu\n12:00 - 13:00 Working Lunch\n" + menuLine + "\nFreshly brewed coffee and tea\n" +
+    dishes.join("\n") + "\n40 guests @ $" + price + " per person\n";
+}
+// Menu One: 3 sandwiches + 1 salad → correct.
+var wl1 = engine.checkDocument(engine.parseBeo(workBEO("Working Lunch Menu One", [
+  "Chicken Caesar salad", "Tuna, celery, caper mayo, red onion", "Pastrami, Swiss cheese, truffle aioli",
+  "Quinoa, asparagus, heirloom tomato, feta"
+], "44.00"), catalogue), catalogue).items[0];
+ok(wl1.matchedName === "Working Lunch Menu One", "matched Working Lunch Menu One");
+ok(wl1.priceStatus === "correct", "Working Lunch Menu One 3 sandwiches + 1 salad @ $44 correct (got " + wl1.priceStatus + ")");
+ok(wl1.notes.join(" ").indexOf("sandwich 3/3") !== -1, "shows the sandwich/salad counts");
+
+// Menu One with 4 sandwiches → exceeds 3 → review.
+var wl1x = engine.checkDocument(engine.parseBeo(workBEO("Working Lunch Menu One", [
+  "Chicken Caesar salad", "Tuna, celery, caper mayo", "Pastrami, Swiss cheese", "Barbecue pulled pork, chipotle mayo",
+  "Quinoa, asparagus, heirloom tomato"
+], "44.00"), catalogue), catalogue).items[0];
+ok(wl1x.priceStatus === "review", "Working Lunch Menu One with 4 sandwiches flagged (got " + wl1x.priceStatus + ")");
+ok(wl1x.notes.join(" ").indexOf("sandwich") !== -1 && wl1x.notes.join(" ").indexOf("allows 3") !== -1,
+  "working-lunch flag names the sandwich allowance");
+
+// Menu Two: 4 sandwiches allowed → correct.
+var wl2 = engine.checkDocument(engine.parseBeo(workBEO("Working Lunch Menu Two", [
+  "Chicken Caesar salad", "Turkey, mango chutney, cucumber, mesclun", "Smoked salmon, horseradish cream, pickled onion",
+  "Reuben - silverside beef, sauerkraut"
+], "49.00"), catalogue), catalogue).items[0];
+ok(wl2.matchedName === "Working Lunch Menu Two", "matched Working Lunch Menu Two");
+ok(wl2.priceStatus === "correct", "Working Lunch Menu Two 4 sandwiches @ $49 correct (got " + wl2.priceStatus + ")");
+
+section("Lunchbox — maximum two menu options");
+function boxBEO(dishes, price) {
+  return "Menu\n12:30 Lunch\nLunchbox Package\nBottled water or juice\n" + dishes.join("\n") +
+    "\n50 guests @ $" + price + " per person\n";
+}
+// Two box options (Menu One + Menu Three) → correct.
+var lb2 = engine.checkDocument(engine.parseBeo(boxBEO([
+  "Pastrami, Swiss cheese, truffle aioli, gherkin, baguette", "Dark chocolate tart, truffle ganache, orange gel",
+  "Prosciutto, salami, brie, mesclun, sourdough", "Carrot cake, honey roasted walnut, cream cheese frosting"
+], "48.50"), catalogue), catalogue).items[0];
+ok(lb2.matchedName === "Lunchbox Package", "matched Lunchbox Package (got " + (lb2 && lb2.matchedName) + ")");
+ok(lb2.priceStatus === "correct", "Lunchbox with 2 options @ $48.50 correct (got " + lb2.priceStatus + ")");
+ok(lb2.notes.join(" ").indexOf("Menu One") !== -1 && lb2.notes.join(" ").indexOf("Menu Three") !== -1,
+  "names the detected box options");
+
+// Three box options → exceeds the two-option maximum → review.
+var lb3 = engine.checkDocument(engine.parseBeo(boxBEO([
+  "Pastrami, Swiss cheese, truffle aioli, baguette", "Dark chocolate tart, truffle ganache",
+  "Ras el hanout lamb loin, pearl couscous", "Cherry ripple cheese cake",
+  "Prosciutto, salami, brie, mesclun, sourdough", "Carrot cake, honey roasted walnut"
+], "48.50"), catalogue), catalogue).items[0];
+ok(lb3.priceStatus === "review", "Lunchbox with 3 options flagged to check (got " + lb3.priceStatus + ")");
+ok(lb3.notes.join(" ").indexOf("maximum of 2") !== -1, "lunchbox flag names the two-option maximum");
+
+section("Plated Lunch (composable price + surcharges)");
+// Three-course @ base price → correct.
+var pl3 = engine.checkDocument(engine.parseBeo(
+  "Menu\n12:00 Lunch\nPlated Lunch Menu One Three Course\nCured salmon, Waldorf salad\nChicken breast, potato pave\nBaked lemon tart\n40 guests @ $99.00 per person\n",
+  catalogue), catalogue).items[0];
+ok(pl3.matchedName === "Plated Lunch Menu One Three Course", "matched Plated Lunch Menu One Three Course");
+ok(pl3.priceStatus === "correct", "Plated Lunch three-course @ $99 correct (got " + pl3.priceStatus + ")");
+// Base + one alternating course (+$10) → correct via composable explain.
+var plAlt = engine.checkDocument(engine.parseBeo(
+  "Menu\n12:00 Lunch\nPlated Lunch Menu One Three Course\nChicken breast, potato pave alternating with Angus beef tenderloin\nBaked lemon tart\n40 guests @ $109.00 per person\n",
+  catalogue), catalogue).items[0];
+ok(plAlt.priceStatus === "correct", "Plated Lunch + 1 alternating course @ $109 explained correct (got " + plAlt.priceStatus + ")");
+
 console.log("\n----------------------------------------");
 console.log(passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

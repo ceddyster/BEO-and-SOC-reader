@@ -136,6 +136,15 @@ rules are:
   3 salad / 4 veg / 1 paneer / 1 dahl / 1 rice / 3 dessert / 2 naan.
 - **Children's menu** — one main + one dessert per child ($30). Selecting two mains (or two
   desserts) is flagged to check.
+- **Working Lunch** — Menu One 3 sandwiches + 1 salad; Menu Two and Menu Three 4 sandwiches.
+  Picking more than allowed is flagged.
+- **Lunchbox** ($48.50pp) — a function may offer a **maximum of two** of the four box menus.
+  The tool recognises each box by its contents and flags a BEO that uses three or more.
+
+**Plated lunch and dinner** are seated set menus, so they aren't dish-counted. Instead they're
+priced as **base + surcharges**: the Two/Three-Course tier price, plus **+$10pp per alternating
+course** and **+$18pp (lunch) / +$22pp (dinner) per additional course**, with the breakdown
+shown on the line.
 
 **Christmas Buffet** is priced like the Dinner Buffet (Menu One $90 / Two $104 / Three $120,
 min 50 guests) but is **seasonal** — valid only 01 Jul–31 Dec 2026. The tool reads the event

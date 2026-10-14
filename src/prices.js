@@ -86,12 +86,12 @@
     { category: "Lunch Plated", name: "Plated Lunch Alternating Service", price: 10, unit: "pp_per_course" },
 
     // ---------- LUNCH — WORKING ----------
-    { category: "Working Lunch", name: "Working Lunch Menu One", price: 44, unit: "pp" },
-    { category: "Working Lunch", name: "Working Lunch Menu Two", price: 49, unit: "pp" },
-    { category: "Working Lunch", name: "Working Lunch Menu Three", price: 62, unit: "pp" },
+    { category: "Working Lunch", name: "Working Lunch Menu One", price: 44, unit: "pp", composition: { set: "workingLunch", limits: { sandwich: 3, salad: 1 } }, note: "Select 3 sandwiches and 1 salad; incl. coffee & tea (max 1 hr)." },
+    { category: "Working Lunch", name: "Working Lunch Menu Two", price: 49, unit: "pp", composition: { set: "workingLunch", limits: { sandwich: 4 } }, note: "Select 4 sandwiches; incl. seasonal fruit platter." },
+    { category: "Working Lunch", name: "Working Lunch Menu Three", price: 62, unit: "pp", composition: { set: "workingLunch", limits: { sandwich: 4 } }, note: "Select 4 sandwiches (premium selection)." },
 
     // ---------- LUNCHBOX ----------
-    { category: "Lunchbox", name: "Lunchbox Package", price: 48.5, unit: "pp", aliases: ["Lunch Box", "Lunchbox Menu One", "Lunchbox Menu Two", "Lunchbox Menu Three", "Lunchbox Menu Four"] },
+    { category: "Lunchbox", name: "Lunchbox Package", price: 48.5, unit: "pp", composition: { set: "lunchbox", options: ["Menu One", "Menu Two", "Menu Three", "Menu Four"], maxOptions: 2 }, note: "$48.50 per person; maximum two menu options per function.", aliases: ["Lunch Box", "Lunchbox Menu One", "Lunchbox Menu Two", "Lunchbox Menu Three", "Lunchbox Menu Four"] },
 
     // ---------- BREAKFAST ----------
     { category: "Breakfast Plated", name: "Plated Breakfast Menu One", price: 56, unit: "pp", minGuests: 30,
@@ -482,6 +482,40 @@
       ],
       dessert: [
         "ice cream sundae", "cherry rocky road"
+      ]
+    },
+    // Working Lunch — sandwich selection (Menu One also picks one salad).
+    workingLunch: {
+      sandwich: [
+        "chicken caesar salad", "tuna, celery, caper", "egg, sweet corn, chive",
+        "barbecue pulled pork", "tuna, cos, tomato, charred corn", "roasted chicken, apricot raisin",
+        "pastrami, swiss cheese", "grilled halloumi, eggplant", "prosciutto, salami, brie",
+        "shaved turkey, chilli coleslaw", "aged cheddar ploughman", "black forest ham, pickle relish",
+        "reuben", "guacamole, vine ripened tomato", "turkey, mango chutney", "smoked salmon, horseradish cream"
+      ],
+      salad: [
+        "quinoa, asparagus, heirloom", "southern style potato salad", "baby cos lettuce, parmesan",
+        "shitake salad"
+      ]
+    },
+    // Lunchbox — each menu is a fixed box; a function may offer at most two.
+    // Signatures are the distinctive items of each of the four boxes.
+    lunchbox: {
+      "Menu One": [
+        "pastrami, swiss cheese, truffle aioli", "quinoa, asparagus, heirloom tomato, feta",
+        "fresh fruit salad, light vanilla syrup", "dark chocolate tart, truffle ganache"
+      ],
+      "Menu Two": [
+        "roasted chicken, apricot raisin chutney, jindi brie", "ras el hanout lamb",
+        "cherry ripple cheese"
+      ],
+      "Menu Three": [
+        "prosciutto, salami, brie, mesclun, sourdough", "roasted pumpkin, pine nuts, raisins",
+        "salad of fresh fruits with passionfruit", "carrot cake, honey roasted walnut"
+      ],
+      "Menu Four": [
+        "california roll", "teriyaki chicken roll", "torched salmon nigiri", "miso glazed tofu",
+        "yuzu strawberry tart"
       ]
     }
   };
