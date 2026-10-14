@@ -473,6 +473,84 @@ var buXmas = engine.checkDocument(engine.parseBeo(
 ok(buXmas.matchedName === "Christmas Buffet Menu One", "matched Christmas Buffet Menu One");
 ok(buXmas.priceStatus === "correct", "Christmas Buffet 3/3/1/1/2 @ $90 correct (got " + buXmas.priceStatus + ")");
 
+section("Lunch Buffet Menu Three composition (custom build)");
+function lunchBEO(dishes, price) {
+  return "Menu\n12:00 - 13:00 Lunch\nLunch Buffet Menu Three\nAssorted bread and butter\n" +
+    dishes.join("\n") + "\n40 guests @ $" + price + " per person\n";
+}
+// Menu Three allows sandwich 1 / cold savoury 1 / salad 1 / hot 3 / dessert 3.
+var lu3 = engine.checkDocument(engine.parseBeo(lunchBEO([
+  "Reuben - silverside beef, sauerkraut, ranch dressing",
+  "Tasmanian smoked salmon, capers, horseradish",
+  "Quinoa, asparagus, heirloom tomato, feta",
+  "Lamb ragu, carrot, peas", "Barramundi, sea herbs, Livornese sauce", "Butter chicken, cashew nuts, rice pilaf",
+  "Apple custard, hazelnut sponge", "Medjool date cake, salted caramel", "Seasonal fruit platter"
+], "88.00"), catalogue), catalogue).items[0];
+ok(lu3.matchedName === "Lunch Buffet Menu Three", "matched Lunch Buffet Menu Three");
+ok(lu3.priceStatus === "correct", "Lunch Menu Three 1/1/1/3/3 @ $88 correct (got " + lu3.priceStatus + ")");
+ok(lu3.notes.join(" ").indexOf("hot 3/3") !== -1, "shows the lunch per-course counts");
+
+// Four hot dishes → exceeds 3 → review.
+var lu3x = engine.checkDocument(engine.parseBeo(lunchBEO([
+  "Reuben - silverside beef", "Tasmanian smoked salmon, capers", "Quinoa, asparagus, heirloom",
+  "Lamb ragu, carrot", "Barramundi, sea herbs", "Butter chicken, rice pilaf", "Angus beef fillet, artichoke",
+  "Apple custard, hazelnut sponge", "Medjool date cake", "Seasonal fruit platter"
+], "88.00"), catalogue), catalogue).items[0];
+ok(lu3x.priceStatus === "review", "Lunch Menu Three with 4 hot dishes flagged (got " + lu3x.priceStatus + ")");
+ok(lu3x.notes.join(" ").indexOf("hot") !== -1 && lu3x.notes.join(" ").indexOf("allows 3") !== -1,
+  "lunch flag names the hot course and allowance");
+
+section("Indian Buffet composition");
+function indianBEO(pkg, dishes, price) {
+  return "Menu\n18:30 - 20:30 Dinner\n" + pkg + "\nPapad and pickles\n" + dishes.join("\n") +
+    "\n60 guests @ $" + price + " per person\n";
+}
+// Package One: entrée 2 / salad 3 / meat-fish 2 / veg 2 / paneer 1 / dahl 1 / rice 1 / dessert 3 / bread 2.
+var inOne = engine.checkDocument(engine.parseBeo(indianBEO("Indian Buffet Package One", [
+  "Onion bhaji", "Vegetarian samosa",
+  "Aloo chana chaat", "Cucumber mint raita", "Kachumbar salad",
+  "Lamb rogan josh, red chillies", "Butter chicken, creamy tomato",
+  "Dum aloo, spiced potatoes", "Dhingri matar, mushroom and pea curry",
+  "Mattar paneer, peas, cottage cheese",
+  "Dal makhani, kidney beans",
+  "Jeera pilaf, cumin rice",
+  "Gulab jamun", "Gajar halwa", "Ras malai",
+  "Plain naan", "Garlic naan"
+], "129.00"), catalogue), catalogue).items[0];
+ok(inOne.matchedName === "Indian Buffet Package One", "matched Indian Buffet Package One");
+ok(inOne.priceStatus === "correct", "Indian Package One full selection @ $129 correct (got " + inOne.priceStatus + ")");
+ok(inOne.notes.join(" ").indexOf("meat/fish 2/2") !== -1, "shows the Indian per-course counts");
+
+// Three meat/fish on Package One → exceeds 2 → review.
+var inOneX = engine.checkDocument(engine.parseBeo(indianBEO("Indian Buffet Package One", [
+  "Onion bhaji", "Vegetarian samosa", "Aloo chana chaat", "Cucumber mint raita", "Kachumbar salad",
+  "Lamb rogan josh", "Butter chicken", "Chicken chettinad, roasted pepper",
+  "Dum aloo", "Dhingri matar", "Mattar paneer", "Dal makhani", "Jeera pilaf",
+  "Gulab jamun", "Gajar halwa", "Ras malai", "Plain naan", "Garlic naan"
+], "129.00"), catalogue), catalogue).items[0];
+ok(inOneX.priceStatus === "review", "Indian Package One with 3 meat/fish flagged (got " + inOneX.priceStatus + ")");
+ok(inOneX.notes.join(" ").indexOf("meat/fish") !== -1 && inOneX.notes.join(" ").indexOf("allows 2") !== -1,
+  "Indian flag names the meat/fish course and allowance");
+
+section("Children's menu — one main + one dessert");
+function childBEO(dishes, qty, price) {
+  return "Menu\n18:30 Dinner\nChildren's Menu\n" + dishes.join("\n") + "\n" + qty + " children @ $" + price + " per person\n";
+}
+var ch1 = engine.checkDocument(engine.parseBeo(childBEO([
+  "Mini beef sliders, cheddar cheese, French fries", "Ice cream sundae"
+], 12, "30.00"), catalogue), catalogue).items[0];
+ok(ch1.matchedName === "Children's Main Course", "matched Children's Main Course (got " + (ch1 && ch1.matchedName) + ")");
+ok(ch1.priceStatus === "correct", "Children's 1 main + 1 dessert @ $30 correct (got " + ch1.priceStatus + ")");
+ok(ch1.notes.join(" ").indexOf("main 1/1") !== -1, "shows main/dessert counts");
+
+// Two mains selected → exceeds 1 → review.
+var ch1x = engine.checkDocument(engine.parseBeo(childBEO([
+  "Mini beef sliders, cheddar cheese", "Chicken nuggets, chips", "Ice cream sundae"
+], 12, "30.00"), catalogue), catalogue).items[0];
+ok(ch1x.priceStatus === "review", "Children's with 2 mains flagged to check (got " + ch1x.priceStatus + ")");
+ok(ch1x.notes.join(" ").indexOf("main") !== -1 && ch1x.notes.join(" ").indexOf("allows 1") !== -1,
+  "children flag names the main course and allowance");
+
 console.log("\n----------------------------------------");
 console.log(passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

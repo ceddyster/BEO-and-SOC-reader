@@ -118,15 +118,24 @@ with no matching price increase are flagged the same way.
 **Beverages on consumption** (drinks billed per bottle/glass) are simply matched to each item's
 list price — no package maths.
 
-**Dinner & Christmas buffets** are checked on price *and* on **how many dishes were selected
-per course**. Each tier allows a set number — Menu One 3 cold / 3 hot / 1 pasta / 1 side / 2
-desserts; Menu Two 4 / 4 / 1 / 1 / 3; Menu Three 5 / 4 / 1 / 2 / 3. The tool reads the dishes
-listed under the buffet line, classifies each into its course (using the menu's own dish
-names, incl. the Christmas enhancements), and shows the counts (e.g. "cold 3/3, hot 3/3,
-pasta 1/1, side 1/1, dessert 2/2"). If a course has **more** dishes than the tier allows, the
-line is flagged *to check* — the price may be right but the extra dishes should be confirmed. A
-bare buffet line with no dishes listed is simply price-checked. (Lunch and Indian buffets are
-price-checked but not yet composition-checked.)
+**Composition checking.** Several menus are checked not just on price but on **how many dishes
+were selected per course**. The tool reads the dishes listed under the menu line, classifies
+each into its course using the menu's own dish names, and shows the counts (e.g. "cold 3/3,
+hot 3/3, pasta 1/1, side 1/1, dessert 2/2"). If a course has **more** dishes than the menu
+allows, the line is flagged *to check* — the price may be right, but the extra dishes should be
+confirmed. A bare line with no dishes listed is simply price-checked. The menus with composition
+rules are:
+
+- **Dinner & Christmas buffets** — Menu One 3 cold / 3 hot / 1 pasta / 1 side / 2 dessert;
+  Menu Two 4 / 4 / 1 / 1 / 3; Menu Three 5 / 4 / 1 / 2 / 3 (incl. the Christmas enhancements).
+- **Lunch Buffet Menu Three** (the custom build) — 1 sandwich / 1 cold savoury / 1 salad /
+  3 hot / 3 dessert. (Menu One and Two are fixed daily set menus with nothing to select, so
+  they're priced but not composition-checked.)
+- **Indian buffet** — Package One 2 entrée / 3 salad / 2 meat-fish / 2 veg / 1 paneer / 1 dahl /
+  1 rice / 3 dessert / 2 naan; Package Two 3 / 4 / 3 / 3 / 1 / 1 / 1 / 3 / 2; Vegetarian 2 entrée /
+  3 salad / 4 veg / 1 paneer / 1 dahl / 1 rice / 3 dessert / 2 naan.
+- **Children's menu** — one main + one dessert per child ($30). Selecting two mains (or two
+  desserts) is flagged to check.
 
 **Christmas Buffet** is priced like the Dinner Buffet (Menu One $90 / Two $104 / Three $120,
 min 50 guests) but is **seasonal** — valid only 01 Jul–31 Dec 2026. The tool reads the event

@@ -250,8 +250,9 @@
     var SECTION_RE = /^(entr[eé]{1,2}e?|main course|mains|entrees?|desserts?|dessert platters|sides?|cold canap\w*|hot canap\w*|canap\w*|cold dishes|hot dishes|pasta|salads?|soup|from the (bakery|pan)|continental selection|sandwich|menu|beverages?|program|setup|dietary requirements?|miscellaneous|technical requirement|health and safety|billing instructions|room set up|linen|table items)\b/i;
 
     // Per-person food/beverage: "215 guests @ $90.00 per person"
+    // Also accepts "N children @ $30.00 per child" for the children's menu.
     lines.forEach(function (line, i) {
-      var pm = softNorm(line).match(/(\d+)\s+guests?\s*@\s*\$?([\d,]+(?:\.\d{1,2})?)\s*per\s+person/);
+      var pm = softNorm(line).match(/(\d+)\s+(?:guests?|children|child|kids?|pax|people)\s*@\s*\$?([\d,]+(?:\.\d{1,2})?)\s*per\s+(?:person|child|guest|head)/);
       if (!pm) return;
       var qty = parseInt(pm[1], 10);
       var price = parseMoney(pm[2]);
@@ -275,7 +276,8 @@
         var mm = findMatch(cand, catalogue, undefined, grp);
         // A "per person" charge names a per-person package, never an individual
         // drink/dish line (a wine/beer/spirit priced per bottle/glass/each).
-        if (mm && !/^pp/.test(mm.item.unit || "")) mm = null;
+        // Per-child menus (unit "child") are per-head packages too.
+        if (mm && !/^(pp|child)/.test(mm.item.unit || "")) mm = null;
         if (!mm) continue;
         if (!best || mm.score > best.score) best = { score: mm.score, name: cand, j: j };
         if (mm.score >= 0.85 && !strong) strong = { score: mm.score, name: cand, j: j }; // closest strong
@@ -524,16 +526,16 @@
         ? analyzePlatedBreakfast(item, match.item, catalogue) : null;
       var cbInfo = (match.item.breakItems && item.contextLines)
         ? analyzeCoffeeBreakItems(item, match.item) : null;
-      var buInfo = (match.item.buffet && item.contextLines)
-        ? analyzeBuffet(item, match.item, catalogue) : null;
+      var compInfo = (match.item.composition && item.contextLines)
+        ? analyzeComposition(item, match.item, catalogue) : null;
       if (bevInfo) {
         explainBeveragePackage(result, item, match.item, base, bevInfo, catalogue);
       } else if (bfInfo) {
         explainPlatedBreakfast(result, item, match.item, base, diff, bfInfo);
       } else if (cbInfo) {
         explainCoffeeBreak(result, item, match.item, base, diff, cbInfo);
-      } else if (buInfo && buInfo.total > 0) {
-        explainBuffet(result, item, match.item, base, diff, buInfo);
+      } else if (compInfo && compInfo.total > 0) {
+        explainComposition(result, item, match.item, base, diff, compInfo);
       } else if (match.item.composable && diff > 0.005) {
         composableExplain(result, item, match.item, base, diff);
       } else if (Math.abs(diff) <= 0.005) {
@@ -869,44 +871,46 @@
     }
   }
 
-  // Dinner / Christmas buffet: count how many dishes the BEO selected in each
-  // course category (cold, hot, pasta, side, dessert) and flag any category
-  // that exceeds what the menu tier allows. Dish phrases are distinctive to one
-  // category, so a BEO that lists its chosen dishes can be counted; a bare line
-  // (just the package name) detects nothing and falls through to the normal
-  // price check.
-  var BUFFET_CATS = ["cold", "hot", "pasta", "side", "dessert"];
-  function analyzeBuffet(item, catItem, catalogue) {
-    var rules = catItem.buffet;
-    var sel = catalogue.buffetSelections;
-    if (!rules || !sel || !item.contextLines || !item.contextLines.length) return null;
+  // Selection-based menus (buffets, Indian, children's): count how many dishes
+  // the BEO listed in each course category and flag any category that exceeds
+  // the menu tier's allowance. Dish phrases are distinctive to one category, so
+  // a BEO that lists its chosen dishes can be counted; a bare line (just the
+  // menu name) detects nothing and falls through to the normal price check.
+  function analyzeComposition(item, catItem, catalogue) {
+    var comp = catItem.composition;
+    var sets = catalogue.compositionSets;
+    if (!comp || !comp.limits || !sets || !sets[comp.set]) return null;
+    if (!item.contextLines || !item.contextLines.length) return null;
+    var sel = sets[comp.set];
+    var limits = comp.limits;
     var text = " " + normalize(item.contextLines.join("  ")) + " ";
-    var counts = {}, flags = [], total = 0;
-    BUFFET_CATS.forEach(function (cat) {
-      var n = 0;
+    var counts = {}, flags = [], total = 0, cats = Object.keys(limits);
+    cats.forEach(function (cat) {
+      var seen = {}, n = 0;
       (sel[cat] || []).forEach(function (kw) {
-        if (text.indexOf(normalize(kw)) !== -1) n++;
+        var k = normalize(kw);
+        if (!seen[k] && text.indexOf(k) !== -1) { seen[k] = 1; n++; }
       });
       counts[cat] = n;
       total += n;
-      if (rules[cat] != null && n > rules[cat]) {
-        flags.push(n + " " + cat + " dish" + (n > 1 ? "es" : "") + " selected but the menu allows " + rules[cat]);
+      if (limits[cat] != null && n > limits[cat]) {
+        flags.push(n + " " + cat + " item" + (n > 1 ? "s" : "") + " selected but the menu allows " + limits[cat]);
       }
     });
-    return { counts: counts, rules: rules, flags: flags, total: total };
+    return { counts: counts, limits: limits, cats: cats, flags: flags, total: total };
   }
 
-  function buffetCountText(info) {
-    return BUFFET_CATS.map(function (c) {
-      return c + " " + info.counts[c] + "/" + info.rules[c];
+  function compositionCountText(info) {
+    return info.cats.map(function (c) {
+      return c + " " + info.counts[c] + "/" + info.limits[c];
     }).join(", ");
   }
 
-  function explainBuffet(result, item, catItem, base, diff, info) {
+  function explainComposition(result, item, catItem, base, diff, info) {
     result.priceDiff = diff;
     result.priceImpact = item.qty != null ? round2(diff * item.qty) : null;
     result._explained = true;
-    var countTxt = buffetCountText(info);
+    var countTxt = compositionCountText(info);
     if (diff < -0.005) {
       result.priceStatus = "undercharged";
       if (result.status !== "math-error") result.status = "undercharged";
@@ -926,10 +930,10 @@
       result.priceStatus = "review";
       if (result.status !== "math-error") result.status = "review";
       result.notes.push("Selections exceed the menu — " + info.flags.join("; ") + " (" + countTxt +
-        "). The price is right for " + catItem.name + ", but confirm the extra dishes were meant to be included.");
+        "). The price is right for " + catItem.name + ", but confirm the extra items were meant to be included.");
     } else {
       result.priceStatus = "correct";
-      result.notes.push("Price and buffet selections OK (" + countTxt + ").");
+      result.notes.push("Price and selections OK (" + countTxt + ").");
     }
   }
 
