@@ -152,6 +152,7 @@
   .chip.match { color: var(--ok); background: var(--ok-bg); }
   .note { font-size: 12px; color: var(--muted); margin-top: 3px; }
   .note.flag { color: var(--bad); }
+  .note.against { color: var(--accent); }
   .itemname { font-weight: 600; }
 
   /* Totals */
@@ -233,6 +234,12 @@
   </details>
 
   <footer class="foot">
+    <p><b>Where each line is checked.</b> Charges under the BEO's <b>Menu</b> section are checked
+    against the food price books (Dinner/Lunch/Breakfast, Buffet/Plated, Coffee Breaks, Canapés,
+    Day Delegate, Crew, Children's, …); charges under the <b>Beverage</b> section — and any
+    drink billed per bottle or glass — against the beverage price books (Beverage Packages,
+    Wine, Beer &amp; Cider, Spirits, Cocktails, Non-Alcoholic). Each row shows which menu it was
+    compared against.</p>
     <p><b>How the price check works.</b> Each charge line is matched by name to the menu
     price book (tier-aware, so a “6 Hour” package only matches the 6-hour price). Matched
     lines are compared penny-for-penny: <code>correct</code>, <code>undercharged</code> or
@@ -532,6 +539,15 @@
     }
   });
 
+  // Tag every item as food or beverage. BEO "Menu" items are checked against
+  // the food price books; BEO "Beverage" items against the beverage price books.
+  var BEVERAGE_CATEGORIES = {
+    "Beverage Package": 1, "Cocktails": 1, "Beer and Cider": 1, "Spirits": 1, "Non-Alcoholic": 1
+  };
+  ITEMS.forEach(function (it) {
+    it.group = (/^wine/i.test(it.category) || BEVERAGE_CATEGORIES[it.category]) ? "beverage" : "food";
+  });
+
   // Charge lines that are NOT menu-priced. The checker will not price-check
   // these against the catalogue; it only verifies their internal maths and
   // whether the BEO and SOC agree. Kept here so the UI can explain them.
@@ -642,10 +658,14 @@
   }
 
   // Return { item, score } for the best catalogue match, or null.
-  function findMatch(name, catalogue, threshold) {
+  // When `group` ("food"|"beverage") is given, a match in that group is
+  // preferred — a BEO Menu item is checked against the food price books and a
+  // Beverage item against the beverage price books — falling back to the overall
+  // best only if nothing in the group clears the threshold.
+  function findMatch(name, catalogue, threshold, group) {
     threshold = threshold === undefined ? 0.7 : threshold;
     var nn = normalize(name);
-    var best = null;
+    var best = null, bestInGroup = null;
     (catalogue.items || []).forEach(function (item) {
       // Some items (e.g. children's meals) must not match unless the document
       // text actually carries an identifying word — stops a generic "Main Course"
@@ -653,11 +673,17 @@
       if (item.mustInclude && !item.mustInclude.some(function (t) {
         return (" " + nn + " ").indexOf(" " + normalize(t) + " ") !== -1;
       })) return;
+      var sc = 0;
       buildMatchNames(item).forEach(function (candidate) {
-        var sc = scoreNames(name, candidate);
-        if (!best || sc > best.score) best = { item: item, score: sc };
+        var s = scoreNames(name, candidate);
+        if (s > sc) sc = s;
       });
+      if (!best || sc > best.score) best = { item: item, score: sc };
+      if (group && item.group === group && (!bestInGroup || sc > bestInGroup.score)) {
+        bestInGroup = { item: item, score: sc };
+      }
     });
+    if (group && bestInGroup && bestInGroup.score >= threshold) return bestInGroup;
     if (best && best.score >= threshold) return best;
     return null;
   }
@@ -746,6 +772,18 @@
       if (!dup) items.push(it);
     }
 
+    // Which BEO section a line sits in: the nearest "Menu" (food) or "Beverage"
+    // (beverage) header above it. Other section headers are ignored, so the
+    // two-column reading order doesn't flip it early.
+    function sectionGroupBefore(idx) {
+      for (var j = idx - 1; j >= 0; j--) {
+        var l = lines[j].trim();
+        if (/^beverages?$/i.test(l) || /beverages?\s+on\s+consumption/i.test(l)) return "beverage";
+        if (/^menu$/i.test(l)) return "food";
+      }
+      return null;
+    }
+
     var re, m;
 
     // Course-section labels and structural headers are never package names.
@@ -759,6 +797,7 @@
       var price = parseMoney(pm[2]);
       var winArr = lines.slice(Math.max(0, i - 40), i);
       var win = winArr.join("  ");
+      var grp = sectionGroupBefore(i); // food / beverage / null
 
       // Match among the heading lines above the price. BEOs are two-column, so
       // reading order can interleave unrelated right-column lines (e.g. a setup
@@ -773,7 +812,7 @@
         if (/^\d+\s+guests?\b/i.test(cand)) continue; // "N guests ..."
         if (/^\d{3,4}\b/.test(cand)) continue;        // program times (1905 ...)
         if (SECTION_RE.test(cand)) continue;          // ENTREE / MAIN COURSE / ...
-        var mm = findMatch(cand, catalogue);
+        var mm = findMatch(cand, catalogue, undefined, grp);
         if (!mm) continue;
         if (!best || mm.score > best.score) best = { score: mm.score, name: cand, j: j };
         if (mm.score >= 0.85 && !strong) strong = { score: mm.score, name: cand, j: j }; // closest strong
@@ -789,9 +828,10 @@
         if (cmx && /\b(served|per person|per guest|per head|pp)\b/i.test(winArr[w])) canapCount = cmx[1];
       }
 
-      var altCourses = 0, kind = "per-person", nameOut;
+      var altCourses = 0, kind = "per-person", nameOut, itemGroup = grp;
       if (canapCount) {
         nameOut = "Cocktail Reception " + canapCount + " Canapes";
+        itemGroup = "food"; // canapés are a food (Canapés menu) even at a drinks reception
       } else if (best) {
         nameOut = best.name;
         for (var k = best.j; k < i; k++) if (/alternating with/i.test(lines[k])) altCourses++;
@@ -799,12 +839,13 @@
         var cm = win.match(/custom[\w' ]*?(?:set menu|dinner|lunch|reception|menu|package)/i);
         nameOut = cm ? cm[0].replace(/\s+/g, " ").trim() : "Custom package";
         kind = "custom";
+        itemGroup = null;
       } else {
         nameOut = "(unidentified per-person item)";
       }
 
       pushUnique({ qty: qty, name: nameOut, unitPrice: price, lineTotal: round2(qty * price),
-        kind: kind, alternatingCourses: altCourses,
+        kind: kind, alternatingCourses: altCourses, group: itemGroup,
         confident: !!best || kind !== "per-person" || /canap/i.test(nameOut), source: "BEO" });
     });
 
@@ -815,7 +856,7 @@
       var nm = cm[1].replace(/\s+/g, " ").trim().replace(/^[>•\-\s]+/, "");
       if (nm.length < 2) return;
       pushUnique({ qty: null, name: nm, unitPrice: parseMoney(cm[2]),
-        beoUnit: cm[3].toLowerCase(), kind: "consumption", source: "BEO" });
+        beoUnit: cm[3].toLowerCase(), kind: "consumption", group: "beverage", source: "BEO" });
     });
 
     // Minimum / event spend: "1 @ $5,400.00 event spend"
@@ -882,7 +923,7 @@
     }
 
     var per = item.beoUnit ? (" per " + item.beoUnit) : "";
-    var match = findMatch(item.name, catalogue);
+    var match = findMatch(item.name, catalogue, undefined, item.group);
     if (match) {
       result.matchedName = match.item.name;
       result.matchScore = round2(match.score);
@@ -1363,8 +1404,9 @@
         var flag = /under by|over by|should be|No menu match|unaccounted|isn't a standard/i.test(n) ? " flag" : "";
         return '<div class="note' + flag + '">' + esc(n) + "</div>";
       }).join("");
+      var against = r.category ? '<div class="note against">Checked against the ' + esc(r.category) + " menu.</div>" : "";
       html += "<tr class='" + rowClass + "'>" +
-        "<td><span class='itemname'>" + esc(r.name) + "</span>" + notes + "</td>" +
+        "<td><span class='itemname'>" + esc(r.name) + "</span>" + against + notes + "</td>" +
         "<td class='num'>" + (r.qty != null ? r.qty : "—") + "</td>" +
         "<td class='num'>" + money(r.unitPrice) + "</td>" +
         "<td class='num'>" + expected + "</td>" +

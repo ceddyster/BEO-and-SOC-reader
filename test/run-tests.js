@@ -207,6 +207,30 @@ var brk = engine.checkDocument(brkItems, catalogue).items.find(function (r) { re
 ok(brk && brk.matchedName === "Coffee Break Two", "35 @ $37 matched to Coffee Break Two, not 'Break 1' (got: " + (brk && brk.matchedName) + ")");
 ok(brk && brk.priceStatus === "correct", "Coffee Break Menu Two @ $37 is correct, not overcharged");
 
+section("Section-aware matching: Menu vs Beverage");
+// Every catalogue item is tagged food or beverage.
+ok(catalogue.items.every(function (i) { return i.group === "food" || i.group === "beverage"; }),
+  "every price-book item is tagged food or beverage");
+ok(catalogue.items.filter(function (i) { return i.category === "Beverage Package"; })[0].group === "beverage",
+  "Beverage Package tagged beverage");
+ok(catalogue.items.filter(function (i) { return /^Wine/.test(i.category); })[0].group === "beverage",
+  "Wine tagged beverage");
+ok(catalogue.items.filter(function (i) { return i.category === "Dinner Buffet"; })[0].group === "food",
+  "Dinner Buffet tagged food");
+
+// A per-person charge under the BEO "Beverage" header is checked against beverages.
+var secBeo = "Menu\n18:30 - 22:00 Dinner Buffet\nDinner Buffet Menu One\nAssorted bread rolls\n215 guests @ $90.00 per person\nBeverage\n18:30 - 22:00 Dinner Buffet\nCrown Reserve Package - 6 Hours\nWoodbrook Vineyards NV Brut Cuvee\n215 guests @ $66.00 per person\n";
+var secItems = engine.parseBeo(secBeo, catalogue);
+var food = secItems.find(function (x) { return x.qty === 215 && /dinner buffet/i.test(x.name); });
+var bev = secItems.find(function (x) { return x.qty === 215 && /crown reserve/i.test(x.name); });
+ok(food && food.group === "food", "Dinner Buffet line tagged as a Menu (food) item");
+ok(bev && bev.group === "beverage", "Crown Reserve line tagged as a Beverage item");
+var secReport = engine.checkDocument(secItems, catalogue);
+ok(secReport.items.find(function (r) { return /dinner buffet/i.test(r.name); }).category === "Dinner Buffet",
+  "food line checked against Dinner Buffet");
+ok(secReport.items.find(function (r) { return /crown reserve/i.test(r.name); }).category === "Beverage Package",
+  "beverage line checked against Beverage Package");
+
 console.log("\n----------------------------------------");
 console.log(passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

@@ -152,6 +152,7 @@
   .chip.match { color: var(--ok); background: var(--ok-bg); }
   .note { font-size: 12px; color: var(--muted); margin-top: 3px; }
   .note.flag { color: var(--bad); }
+  .note.against { color: var(--accent); }
   .itemname { font-weight: 600; }
 
   /* Totals */
@@ -233,6 +234,12 @@
   </details>
 
   <footer class="foot">
+    <p><b>Where each line is checked.</b> Charges under the BEO's <b>Menu</b> section are checked
+    against the food price books (Dinner/Lunch/Breakfast, Buffet/Plated, Coffee Breaks, Canapés,
+    Day Delegate, Crew, Children's, …); charges under the <b>Beverage</b> section — and any
+    drink billed per bottle or glass — against the beverage price books (Beverage Packages,
+    Wine, Beer &amp; Cider, Spirits, Cocktails, Non-Alcoholic). Each row shows which menu it was
+    compared against.</p>
     <p><b>How the price check works.</b> Each charge line is matched by name to the menu
     price book (tier-aware, so a “6 Hour” package only matches the 6-hour price). Matched
     lines are compared penny-for-penny: <code>correct</code>, <code>undercharged</code> or
@@ -533,8 +540,9 @@
         var flag = /under by|over by|should be|No menu match|unaccounted|isn't a standard/i.test(n) ? " flag" : "";
         return '<div class="note' + flag + '">' + esc(n) + "</div>";
       }).join("");
+      var against = r.category ? '<div class="note against">Checked against the ' + esc(r.category) + " menu.</div>" : "";
       html += "<tr class='" + rowClass + "'>" +
-        "<td><span class='itemname'>" + esc(r.name) + "</span>" + notes + "</td>" +
+        "<td><span class='itemname'>" + esc(r.name) + "</span>" + against + notes + "</td>" +
         "<td class='num'>" + (r.qty != null ? r.qty : "—") + "</td>" +
         "<td class='num'>" + money(r.unitPrice) + "</td>" +
         "<td class='num'>" + expected + "</td>" +

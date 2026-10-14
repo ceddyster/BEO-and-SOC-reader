@@ -87,6 +87,23 @@ npm test     # run the engine tests (node test/run-tests.js)
 npm run build  # regenerate dist/index.html
 ```
 
+### What each BEO section is checked against
+
+The tool reads the BEO's structure and checks each charge against the right price book:
+
+- **Menu** section (food) → Dinner Buffet · Dinner Plated · Dinner Indian · Chinese Banquet ·
+  Children's · Christmas Buffet · Lunch Buffet · Lunch Plated · Working Lunch · Lunchbox ·
+  Breakfast Plated / Buffet / Continental / Standup · Coffee Breaks · Crew Packages ·
+  Day Delegate · Canapés
+- **Beverage** section (drinks) → Beverage Package · Cocktails · Beer & Cider ·
+  Wine (Sparkling / White / Red / Dessert & Fortified) · Spirits · Non-Alcoholic
+
+A line under the BEO's **Menu** header is matched against the food price books, and a line
+under the **Beverage** header (or any "@ $X per bottle/glass" drink) against the beverage price
+books. The report shows which menu each line was checked against.
+
+### How names are matched
+
 The matcher is built for BEO wording, which differs from the price-book wording:
 
 - **Filler words are ignored** — "Coffee Break **Menu** Two" matches the Breaks page's

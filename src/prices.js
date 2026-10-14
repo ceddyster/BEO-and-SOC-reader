@@ -281,6 +281,15 @@
     }
   });
 
+  // Tag every item as food or beverage. BEO "Menu" items are checked against
+  // the food price books; BEO "Beverage" items against the beverage price books.
+  var BEVERAGE_CATEGORIES = {
+    "Beverage Package": 1, "Cocktails": 1, "Beer and Cider": 1, "Spirits": 1, "Non-Alcoholic": 1
+  };
+  ITEMS.forEach(function (it) {
+    it.group = (/^wine/i.test(it.category) || BEVERAGE_CATEGORIES[it.category]) ? "beverage" : "food";
+  });
+
   // Charge lines that are NOT menu-priced. The checker will not price-check
   // these against the catalogue; it only verifies their internal maths and
   // whether the BEO and SOC agree. Kept here so the UI can explain them.
