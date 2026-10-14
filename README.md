@@ -102,6 +102,17 @@ A line under the BEO's **Menu** header is matched against the food price books, 
 under the **Beverage** header (or any "@ $X per bottle/glass" drink) against the beverage price
 books. The report shows which menu each line was checked against.
 
+**Beverage packages** are checked two ways: the **package + hours** must match a tier price
+(e.g. Crown Reserve 4 Hour = $62), and the **drinks listed** under it are read to find
+**add-ons**. The standard package is 1 sparkling + 1 white + 1 red + the package's beer set
+("Corona OR Heineken" = one choice); beyond that, each **extra beer/cider** adds **$4.50pp** and
+each **extra wine** adds **$10pp** (Crown Deluxe selection) or **$15pp** (WA Premium selection).
+So a Crown Deluxe 2 Hour at $65 with a second wine and an extra beer should read $79.50pp — the
+tool shows that breakdown and flags the line to confirm if the charge doesn't match.
+
+**Beverages on consumption** (drinks billed per bottle/glass) are simply matched to each item's
+list price — no package maths.
+
 ### How names are matched
 
 The matcher is built for BEO wording, which differs from the price-book wording:

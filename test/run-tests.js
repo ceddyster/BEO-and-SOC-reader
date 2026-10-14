@@ -231,6 +231,45 @@ ok(secReport.items.find(function (r) { return /dinner buffet/i.test(r.name); }).
 ok(secReport.items.find(function (r) { return /crown reserve/i.test(r.name); }).category === "Beverage Package",
   "beverage line checked against Beverage Package");
 
+section("Beverage package add-ons (extra wines / beers)");
+function bevBEO(pkgLine, drinks, price) {
+  return "Beverage\n18:00 - 20:00 Dinner\n" + pkgLine + "\n" + drinks.join("\n") +
+    "\nAssorted soft drinks and orange juice\n100 guests @ $" + price + " per person\n";
+}
+// Crown Deluxe 2hr ($65) + a 2nd wine (+$10) + an extra beer (+$4.50) = $79.50.
+var deluxe = engine.checkDocument(engine.parseBeo(bevBEO(
+  "Crown Deluxe Package - 2 Hours",
+  ["Veuve Tailhan Blanc de Blancs Brut NV", "Vasse Felix Filius Sauvignon Blanc Semillon",
+   "Vasse Felix Filius Chardonnay", "Vasse Felix Filius Shiraz",
+   "Corona", "Hahn Premium Light", "Hahn Super Dry 3.5", "Heineken Zero", "Little Creatures Pale Ale"],
+  "79.50"), catalogue), catalogue).items[0];
+ok(deluxe.matchedName === "Crown Deluxe Package - 2 Hour", "matched Crown Deluxe 2 Hour");
+ok(deluxe.priceStatus === "correct", "Deluxe $79.50 correct with add-ons (got " + deluxe.priceStatus + ")");
+ok(deluxe.notes.join(" ").indexOf("1 extra wine") !== -1 && deluxe.notes.join(" ").indexOf("1 extra beer") !== -1,
+  "breakdown shows 1 extra wine and 1 extra beer");
+
+// Crown Reserve 4hr standard, no extras, $62 → correct.
+var resStd = engine.checkDocument(engine.parseBeo(bevBEO(
+  "Crown Reserve Package - 4 Hours",
+  ["Woodbrook Vineyards NV Brut Cuvee", "Brigade Block Semillon Sauvignon Blanc", "Abilene Shiraz",
+   "Corona", "Hahn Super Dry 3.5", "Heineken Zero"], "62.00"), catalogue), catalogue).items[0];
+ok(resStd.priceStatus === "correct", "Crown Reserve 4hr standard @ $62 correct");
+
+// Crown Reserve 4hr with an extra beer billed at $66.50 → correct with add-on.
+var resAdd = engine.checkDocument(engine.parseBeo(bevBEO(
+  "Crown Reserve Package - 4 Hours",
+  ["Woodbrook Vineyards NV Brut Cuvee", "Brigade Block Semillon Sauvignon Blanc", "Abilene Shiraz",
+   "Corona", "Hahn Super Dry 3.5", "Heineken Zero", "Peroni"], "66.50"), catalogue), catalogue).items[0];
+ok(resAdd.priceStatus === "correct", "Crown Reserve 4hr + 1 beer @ $66.50 correct");
+
+// Same extra beer but billed at base $62 (add-on not charged) → review.
+var resMiss = engine.checkDocument(engine.parseBeo(bevBEO(
+  "Crown Reserve Package - 4 Hours",
+  ["Woodbrook Vineyards NV Brut Cuvee", "Brigade Block Semillon Sauvignon Blanc", "Abilene Shiraz",
+   "Corona", "Hahn Super Dry 3.5", "Heineken Zero", "Peroni"], "62.00"), catalogue), catalogue).items[0];
+ok(resMiss.priceStatus === "review", "extra beer not billed -> review");
+ok(resMiss.notes.join(" ").indexOf("66.50") !== -1, "review note shows expected $66.50");
+
 console.log("\n----------------------------------------");
 console.log(passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

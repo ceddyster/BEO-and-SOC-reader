@@ -300,10 +300,50 @@
     "linen", "deposit", "surcharge", "delivery", "coat check", "cloak"
   ];
 
+  // ---- Beverage-package composition, for add-on surcharge checks ----
+  // Standard inclusions for every hourly package: 1 sparkling + 1 white + 1 red,
+  // plus the beer groups below (one beer per group — "Corona OR Heineken" is a
+  // single choice). Anything beyond that adds a per-person surcharge:
+  //   extra beer or cider          +$4.50pp
+  //   extra wine (Crown Deluxe)    +$10pp
+  //   extra wine (WA Premium)      +$15pp
+  var PACKAGE_INCLUSIONS = {
+    "Crown Reserve Package": {
+      beerGroups: [["Corona", "Heineken"], ["Hahn Super Dry 3.5", "Hahn Premium Light"], ["Heineken Zero"]]
+    },
+    "Crown Deluxe Package": {
+      beerGroups: [["Corona", "Heineken"], ["Hahn Super Dry 3.5"], ["Hahn Premium Light"], ["Heineken Zero"]]
+    },
+    "WA Premium Package": {
+      beerGroups: [["Corona"], ["Little Creatures Pale Ale"], ["Rogers Amber Ale"], ["Heineken"],
+        ["Hahn Super Dry 3.5"], ["Hahn Premium Light"], ["Heineken Zero"]]
+    }
+  };
+  // Which selection list each package wine belongs to (sets the extra-wine price).
+  var WINE_TIER = {
+    "Woodbrook Vineyards NV Brut Cuvee": "reserve",
+    "Brigade Block Semillon Sauvignon Blanc": "reserve",
+    "Abilene Shiraz": "reserve",
+    "Veuve Tailhan Blanc de Blancs Brut NV": "deluxe",
+    "Vasse Felix Filius Sauvignon Blanc Semillon": "deluxe",
+    "Vasse Felix Filius Chardonnay": "deluxe",
+    "Vasse Felix Filius Shiraz": "deluxe",
+    "Vasse Felix Filius Cabernet Sauvignon": "deluxe",
+    "Leeuwin Estate Sparkling Brut": "wapremium",
+    "Leeuwin Estate Art Series Sauvignon Blanc": "wapremium",
+    "Leeuwin Estate Prelude Vineyards Chardonnay": "wapremium",
+    "Leeuwin Estate Art Series Shiraz": "wapremium",
+    "Leeuwin Estate Prelude Vineyards Cabernet Sauvignon": "wapremium"
+  };
+  var PACKAGE_SURCHARGES = { extraBeer: 4.5, extraWine: { reserve: 10, deluxe: 10, wapremium: 15 } };
+
   var API = {
     meta: CATALOGUE_META,
     items: ITEMS,
-    nonMenuHints: NON_MENU_HINTS
+    nonMenuHints: NON_MENU_HINTS,
+    packageInclusions: PACKAGE_INCLUSIONS,
+    wineTier: WINE_TIER,
+    packageSurcharges: PACKAGE_SURCHARGES
   };
 
   if (typeof module !== "undefined" && module.exports) {

@@ -239,6 +239,9 @@
         if (/^\d{3,4}\b/.test(cand)) continue;        // program times (1905 ...)
         if (SECTION_RE.test(cand)) continue;          // ENTREE / MAIN COURSE / ...
         var mm = findMatch(cand, catalogue, undefined, grp);
+        // A "per person" charge names a per-person package, never an individual
+        // drink/dish line (a wine/beer/spirit priced per bottle/glass/each).
+        if (mm && !/^pp/.test(mm.item.unit || "")) mm = null;
         if (!mm) continue;
         if (!best || mm.score > best.score) best = { score: mm.score, name: cand, j: j };
         if (mm.score >= 0.85 && !strong) strong = { score: mm.score, name: cand, j: j }; // closest strong
@@ -270,8 +273,15 @@
         nameOut = "(unidentified per-person item)";
       }
 
+      // For a beverage package, keep the drink lines beneath the heading so the
+      // add-on surcharges (extra wines/beers) can be checked.
+      var contextLines;
+      if (itemGroup === "beverage" && best) {
+        contextLines = lines.slice(best.j + 1, i).map(function (s) { return s.trim(); }).filter(Boolean);
+      }
+
       pushUnique({ qty: qty, name: nameOut, unitPrice: price, lineTotal: round2(qty * price),
-        kind: kind, alternatingCourses: altCourses, group: itemGroup,
+        kind: kind, alternatingCourses: altCourses, group: itemGroup, contextLines: contextLines,
         confident: !!best || kind !== "per-person" || /canap/i.test(nameOut), source: "BEO" });
     });
 
@@ -373,7 +383,11 @@
       result.priceDiff = diff;
       result.priceImpact = (item.qty != null) ? round2(diff * item.qty) : null;
 
-      if (match.item.composable && diff > 0.005) {
+      var bevInfo = (match.item.category === "Beverage Package" && item.contextLines)
+        ? analyzeBeveragePackage(item, match.item, catalogue) : null;
+      if (bevInfo) {
+        explainBeveragePackage(result, item, match.item, base, bevInfo, catalogue);
+      } else if (match.item.composable && diff > 0.005) {
         composableExplain(result, item, match.item, base, diff);
       } else if (Math.abs(diff) <= 0.005) {
         result.priceStatus = "correct";
@@ -488,6 +502,126 @@
     summary.variance = round2(summary.chargedTotal - summary.expectedTotal);
     summary.issues = summary.undercharged + summary.overcharged + summary.mathErrors + summary.unmatched;
     return { items: checked, summary: summary };
+  }
+
+  // A beverage package: classify the drinks listed under it and work out the
+  // add-on surcharge (extra wines/beers beyond the standard inclusions).
+  function analyzeBeveragePackage(item, catItem, catalogue) {
+    var family = catItem.name.replace(/\s*-\s*\d+\s*hours?.*$/i, "").trim();
+    var inc = (catalogue.packageInclusions || {})[family];
+    if (!inc || !item.contextLines || !item.contextLines.length) return null;
+
+    var beers = [], winesByColor = { Sparkling: [], White: [], Red: [] };
+    item.contextLines.forEach(function (line) {
+      if (/soft drink|orange juice|beverage note|^>|per person|per bottle|per glass/i.test(line)) return;
+      var mm = findMatch(line, catalogue, undefined, "beverage");
+      if (!mm) return;
+      var c = mm.item.category;
+      if (c === "Beer and Cider") beers.push(mm.item.name);
+      else if (/Sparkling/.test(c)) winesByColor.Sparkling.push(mm.item.name);
+      else if (/White/.test(c)) winesByColor.White.push(mm.item.name);
+      else if (/Red/.test(c)) winesByColor.Red.push(mm.item.name);
+    });
+
+    // Extra beers: more than one from an "OR" group, or a beer in no group.
+    var groupCounts = inc.beerGroups.map(function () { return 0; }), ungrouped = 0;
+    beers.forEach(function (b) {
+      var gi = -1;
+      inc.beerGroups.forEach(function (g, idx) {
+        if (g.some(function (x) { return normalize(x) === normalize(b); })) gi = idx;
+      });
+      if (gi >= 0) groupCounts[gi]++; else ungrouped++;
+    });
+    var extraBeers = ungrouped;
+    groupCounts.forEach(function (c) { if (c > 1) extraBeers += c - 1; });
+
+    // Extra wines: more than one per colour. Keep the lowest-tier one as
+    // included; the rest are extras priced by their own selection tier.
+    var rank = { reserve: 0, deluxe: 1, wapremium: 2 };
+    var extraWineCount = 0, extraWineSurcharge = 0;
+    ["Sparkling", "White", "Red"].forEach(function (col) {
+      var list = winesByColor[col].map(function (nm) {
+        return { nm: nm, tier: (catalogue.wineTier || {})[nm] || "deluxe" };
+      }).sort(function (a, b) { return (rank[a.tier] || 1) - (rank[b.tier] || 1); });
+      for (var k = 1; k < list.length; k++) {
+        extraWineCount++;
+        extraWineSurcharge += (catalogue.packageSurcharges.extraWine[list[k].tier] || 10);
+      }
+    });
+
+    var beerSurcharge = round2(extraBeers * catalogue.packageSurcharges.extraBeer);
+    return {
+      addon: round2(beerSurcharge + extraWineSurcharge),
+      extraBeers: extraBeers, beerSurcharge: beerSurcharge,
+      extraWineCount: extraWineCount, extraWineSurcharge: round2(extraWineSurcharge),
+      detectedBeers: beers.length,
+      detectedWines: winesByColor.Sparkling.length + winesByColor.White.length + winesByColor.Red.length
+    };
+  }
+
+  // Note when the charged price matches a different hour tier of the same package.
+  function tierMatchNote(catItem, charged, catalogue) {
+    var family = catItem.name.replace(/\s*-\s*\d+\s*hours?.*$/i, "").trim();
+    var hit = (catalogue.items || []).filter(function (x) {
+      return x.category === "Beverage Package" && x.name.indexOf(family) === 0 &&
+        x.name !== catItem.name && Math.abs(x.price - charged) <= 0.005;
+    })[0];
+    return hit ? ("Charged " + money(charged) + " matches " + hit.name + ".") : null;
+  }
+
+  function explainBeveragePackage(result, item, catItem, base, info, catalogue) {
+    var charged = item.unitPrice;
+    var expected = round2(base + info.addon);
+    var diffBase = round2(charged - base);
+    var diffExp = round2(charged - expected);
+    result.priceDiff = diffBase;
+    result.priceImpact = item.qty != null ? round2(diffBase * item.qty) : null;
+    result.packageExpected = expected;
+    result._explained = true;
+
+    var bd = [];
+    if (info.extraBeers) bd.push(info.extraBeers + " extra beer/cider (+" + money(info.beerSurcharge) + "pp)");
+    if (info.extraWineCount) bd.push(info.extraWineCount + " extra wine (+" + money(info.extraWineSurcharge) + "pp)");
+    var addonTxt = bd.join(" and ");
+
+    // Charged exactly matches base + detected add-ons.
+    if (info.addon > 0 && Math.abs(diffExp) <= 0.005) {
+      result.priceStatus = "correct";
+      result.notes.push("Correct with add-ons: " + money(base) + "pp base + " + addonTxt + " = " + money(expected) + "pp.");
+      return;
+    }
+    // Below base — undercharged however you count it.
+    if (diffBase < -0.005) {
+      result.priceStatus = "undercharged";
+      if (result.status !== "math-error") result.status = "undercharged";
+      var tn = tierMatchNote(catItem, charged, catalogue);
+      if (tn) result.notes.push(tn);
+      result.notes.push("Standard " + catItem.name + " is " + money(base) + "pp; charged " + money(charged) +
+        "pp (under by " + money(Math.abs(diffBase)) + " each" +
+        (item.qty != null ? ", " + money(Math.abs(result.priceImpact)) + " across " + item.qty : "") + ").");
+      if (info.addon > 0) result.notes.push("Also detected " + addonTxt + " — with add-ons the price should be about " + money(expected) + "pp. Confirm.");
+      return;
+    }
+    // At/above base with detected extras that don't reconcile — confirm.
+    if (info.addon > 0) {
+      result.priceStatus = "review";
+      if (result.status !== "math-error") result.status = "review";
+      result.notes.push("Standard " + catItem.name + " is " + money(base) + "pp; detected " + addonTxt +
+        " → expected " + money(expected) + "pp. Charged " + money(charged) + "pp (" +
+        (diffExp < 0 ? money(Math.abs(diffExp)) + " under" : money(Math.abs(diffExp)) + " over") +
+        " expected). Confirm the package add-ons.");
+      return;
+    }
+    // No extras detected: compare to base.
+    if (Math.abs(diffBase) <= 0.005) {
+      result.priceStatus = "correct";
+    } else {
+      result.priceStatus = "overcharged";
+      if (result.status !== "math-error") result.status = "overcharged";
+      result.notes.push("Menu price for " + catItem.name + " is " + money(base) + "pp; charged " + money(charged) +
+        "pp (over by " + money(Math.abs(diffBase)) + " each" +
+        (item.qty != null ? ", " + money(Math.abs(result.priceImpact)) + " across " + item.qty : "") + ").");
+    }
   }
 
   // ------------------------------------------------------------- reconcile
