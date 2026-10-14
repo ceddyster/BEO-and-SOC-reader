@@ -248,6 +248,14 @@ ok(deluxe.priceStatus === "correct", "Deluxe $79.50 correct with add-ons (got " 
 ok(deluxe.notes.join(" ").indexOf("1 extra wine") !== -1 && deluxe.notes.join(" ").indexOf("1 extra beer") !== -1,
   "breakdown shows 1 extra wine and 1 extra beer");
 
+// Crown Reserve with BOTH Hahns (standard inclusions, not an OR) → no extra beer.
+var resBothHahn = engine.checkDocument(engine.parseBeo(bevBEO(
+  "Crown Reserve Package - 4 Hours",
+  ["Woodbrook Vineyards NV Brut Cuvee", "Brigade Block Semillon Sauvignon Blanc", "Abilene Shiraz",
+   "Corona", "Hahn Super Dry 3.5", "Hahn Premium Light", "Heineken Zero"], "62.00"), catalogue), catalogue).items[0];
+ok(resBothHahn.priceStatus === "correct",
+  "Crown Reserve with both Hahns @ $62 is correct (both Hahns included, not an extra)");
+
 // Crown Reserve 4hr standard, no extras, $62 → correct.
 var resStd = engine.checkDocument(engine.parseBeo(bevBEO(
   "Crown Reserve Package - 4 Hours",
