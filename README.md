@@ -118,6 +118,12 @@ with no matching price increase are flagged the same way.
 **Beverages on consumption** (drinks billed per bottle/glass) are simply matched to each item's
 list price — no package maths.
 
+**Plated breakfast** is checked on price ($56 Menu One / $60 Menu Two) and on **how many items
+were selected per category**. Menu One allows 1 from the bakery, 1 continental and 1 from the
+pan; Menu Two allows **both** bakery items plus 1 continental and 1 from the pan. If a category
+has more selections than the menu allows (e.g. two bakery items on Menu One), the line is flagged
+"to check".
+
 ### How names are matched
 
 The matcher is built for BEO wording, which differs from the price-book wording:

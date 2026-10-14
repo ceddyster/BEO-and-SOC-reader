@@ -94,8 +94,14 @@
     { category: "Lunchbox", name: "Lunchbox Package", price: 48.5, unit: "pp", aliases: ["Lunch Box", "Lunchbox Menu One", "Lunchbox Menu Two", "Lunchbox Menu Three", "Lunchbox Menu Four"] },
 
     // ---------- BREAKFAST ----------
-    { category: "Breakfast Plated", name: "Plated Breakfast Menu One", price: 56, unit: "pp", minGuests: 30 },
-    { category: "Breakfast Plated", name: "Plated Breakfast Menu Two", price: 60, unit: "pp", minGuests: 30 },
+    { category: "Breakfast Plated", name: "Plated Breakfast Menu One", price: 56, unit: "pp", minGuests: 30,
+      breakfast: { bakery: 1, continental: 1, pan: 1 },
+      note: "Select 1 from the bakery, 1 continental, 1 from the pan; incl. coffee, tea & juice.",
+      aliases: ["Breakfast Plated Menu One", "Plated Breakfast One"] },
+    { category: "Breakfast Plated", name: "Plated Breakfast Menu Two", price: 60, unit: "pp", minGuests: 30,
+      breakfast: { bakery: 2, continental: 1, pan: 1 },
+      note: "Both bakery items, 1 continental, 1 from the pan; incl. coffee, tea & juice.",
+      aliases: ["Breakfast Plated Menu Two", "Plated Breakfast Two"] },
     { category: "Breakfast Buffet", name: "Breakfast Buffet", price: 59.5, unit: "pp", minGuests: 30 },
     { category: "Breakfast Continental", name: "Continental Breakfast", price: 48.5, unit: "pp", minGuests: 30 },
     { category: "Breakfast Standup", name: "Standup Breakfast Egg and Bacon Sliders", price: 30, unit: "pp_per_selection", minGuests: 30 },
@@ -345,13 +351,22 @@
   // wines and any other wine are not valid add-ons and must be flagged.
   var PACKAGE_SURCHARGES = { extraBeer: 4.5, extraWine: { deluxe: 10, wapremium: 15 } };
 
+  // Distinctive keywords that identify each plated-breakfast selection, used to
+  // count how many items a BEO picked per category against the allowed number.
+  var BREAKFAST_SELECTIONS = {
+    bakery: ["croissant", "petite muffin"],
+    continental: ["fresh fruit platter", "bircher"],
+    pan: ["eggs benedict", "focaccia", "croustade", "crushed avocado", "poached egg", "grilled sourdough"]
+  };
+
   var API = {
     meta: CATALOGUE_META,
     items: ITEMS,
     nonMenuHints: NON_MENU_HINTS,
     packageInclusions: PACKAGE_INCLUSIONS,
     wineTier: WINE_TIER,
-    packageSurcharges: PACKAGE_SURCHARGES
+    packageSurcharges: PACKAGE_SURCHARGES,
+    breakfastSelections: BREAKFAST_SELECTIONS
   };
 
   if (typeof module !== "undefined" && module.exports) {

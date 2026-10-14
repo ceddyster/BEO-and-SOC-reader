@@ -273,10 +273,10 @@
         nameOut = "(unidentified per-person item)";
       }
 
-      // For a beverage package, keep the drink lines beneath the heading so the
-      // add-on surcharges (extra wines/beers) can be checked.
+      // Keep the lines beneath the heading so compositions can be checked
+      // (beverage-package add-ons, plated-breakfast selections, etc.).
       var contextLines;
-      if (itemGroup === "beverage" && best) {
+      if (best) {
         contextLines = lines.slice(best.j + 1, i).map(function (s) { return s.trim(); }).filter(Boolean);
       }
 
@@ -385,8 +385,12 @@
 
       var bevInfo = (match.item.category === "Beverage Package" && item.contextLines)
         ? analyzeBeveragePackage(item, match.item, catalogue) : null;
+      var bfInfo = (match.item.breakfast && item.contextLines)
+        ? analyzePlatedBreakfast(item, match.item, catalogue) : null;
       if (bevInfo) {
         explainBeveragePackage(result, item, match.item, base, bevInfo, catalogue);
+      } else if (bfInfo) {
+        explainPlatedBreakfast(result, item, match.item, base, diff, bfInfo);
       } else if (match.item.composable && diff > 0.005) {
         composableExplain(result, item, match.item, base, diff);
       } else if (Math.abs(diff) <= 0.005) {
@@ -640,6 +644,58 @@
       result.notes.push("Menu price for " + catItem.name + " is " + money(base) + "pp; charged " + money(charged) +
         "pp (over by " + money(Math.abs(diffBase)) + " each" +
         (item.qty != null ? ", " + money(Math.abs(result.priceImpact)) + " across " + item.qty : "") + ").");
+    }
+  }
+
+  // Plated breakfast: count how many selections a BEO made per category and
+  // flag any category that exceeds what the menu allows (Menu One = 1 bakery /
+  // 1 continental / 1 pan; Menu Two = 2 bakery / 1 continental / 1 pan).
+  function analyzePlatedBreakfast(item, catItem, catalogue) {
+    var rules = catItem.breakfast;
+    var sel = catalogue.breakfastSelections;
+    if (!rules || !sel || !item.contextLines || !item.contextLines.length) return null;
+    var text = " " + normalize(item.contextLines.join("  ")) + " ";
+    var counts = {}, flags = [];
+    ["bakery", "continental", "pan"].forEach(function (cat) {
+      var n = 0;
+      (sel[cat] || []).forEach(function (kw) {
+        if (text.indexOf(normalize(kw)) !== -1) n++;
+      });
+      counts[cat] = n;
+      if (rules[cat] != null && n > rules[cat]) {
+        flags.push(n + " " + cat + " item" + (n > 1 ? "s" : "") + " selected but the menu allows " + rules[cat]);
+      }
+    });
+    return { counts: counts, rules: rules, flags: flags };
+  }
+
+  function explainPlatedBreakfast(result, item, catItem, base, diff, info) {
+    result.priceDiff = diff;
+    result.priceImpact = item.qty != null ? round2(diff * item.qty) : null;
+    result._explained = true;
+    var countTxt = "bakery " + info.counts.bakery + "/" + info.rules.bakery +
+      ", continental " + info.counts.continental + "/" + info.rules.continental +
+      ", pan " + info.counts.pan + "/" + info.rules.pan;
+
+    if (diff < -0.005) {
+      result.priceStatus = "undercharged";
+      if (result.status !== "math-error") result.status = "undercharged";
+      result.notes.push("Menu price for " + catItem.name + " is " + money(base) + "; charged " + money(item.unitPrice) +
+        " (under by " + money(Math.abs(diff)) + " each" +
+        (item.qty != null ? ", " + money(Math.abs(result.priceImpact)) + " across " + item.qty : "") + ").");
+    } else if (diff > 0.005) {
+      result.priceStatus = "overcharged";
+      if (result.status !== "math-error") result.status = "overcharged";
+      result.notes.push("Menu price for " + catItem.name + " is " + money(base) + "; charged " + money(item.unitPrice) +
+        " (over by " + money(Math.abs(diff)) + " each" +
+        (item.qty != null ? ", " + money(Math.abs(result.priceImpact)) + " across " + item.qty : "") + ").");
+    } else if (info.flags.length) {
+      result.priceStatus = "review";
+      if (result.status !== "math-error") result.status = "review";
+      result.notes.push("Selections exceed the menu — " + info.flags.join("; ") + " (" + countTxt + "). Check the BEO.");
+    } else {
+      result.priceStatus = "correct";
+      result.notes.push("Price and selections OK (" + countTxt + ").");
     }
   }
 

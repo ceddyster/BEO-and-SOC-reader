@@ -309,6 +309,43 @@ var resMiss = engine.checkDocument(engine.parseBeo(bevBEO(
 ok(resMiss.priceStatus === "review", "extra beer not billed -> review");
 ok(resMiss.notes.join(" ").indexOf("66.50") !== -1, "review note shows expected $66.50");
 
+section("Plated breakfast selection rules");
+function bfBEO(menuLine, bakery, cont, pan, price) {
+  return "Menu\n07:00 - 08:00 Breakfast\n" + menuLine + "\nFROM THE BAKERY\n" + bakery.join("\n") +
+    "\nCONTINENTAL SELECTION\n" + cont + "\nFROM THE PAN\n" + pan + "\n50 guests @ $" + price + " per person\n";
+}
+// Menu One: 1 bakery + 1 continental + 1 pan @ $56 → correct.
+var bf1 = engine.checkDocument(engine.parseBeo(bfBEO("Plated Breakfast Menu One",
+  ["Mini butter croissants, continental Danish pastries"], "Seasonal fresh fruit platter",
+  "Eggs benedict, Black Forest ham, wilted spinach, English muffin, chicken chipolata, hollandaise",
+  "56.00"), catalogue), catalogue).items[0];
+ok(bf1.matchedName === "Plated Breakfast Menu One", "matched Plated Breakfast Menu One");
+ok(bf1.priceStatus === "correct", "Menu One 1/1/1 @ $56 correct (got " + bf1.priceStatus + ")");
+
+// Menu One with BOTH bakery items → exceeds the 1 allowed → review.
+var bf1x = engine.checkDocument(engine.parseBeo(bfBEO("Plated Breakfast Menu One",
+  ["Mini butter croissants, continental Danish pastries", "Assorted petite muffins"],
+  "Seasonal fresh fruit platter", "Eggs benedict, Black Forest ham, hollandaise", "56.00"),
+  catalogue), catalogue).items[0];
+ok(bf1x.priceStatus === "review", "Menu One with 2 bakery items flagged to check");
+ok(bf1x.notes.join(" ").indexOf("bakery") !== -1, "flag names the bakery category");
+
+// Menu Two with BOTH bakery items → allowed → correct.
+var bf2 = engine.checkDocument(engine.parseBeo(bfBEO("Plated Breakfast Menu Two",
+  ["Mini butter croissants, continental Danish pastries", "Assorted petite muffins"],
+  "Seasonal fresh fruit platter",
+  "Scrambled eggs, grilled sourdough, bacon rasher, gourmet sausage, flat mushroom", "60.00"),
+  catalogue), catalogue).items[0];
+ok(bf2.matchedName === "Plated Breakfast Menu Two", "matched Plated Breakfast Menu Two");
+ok(bf2.priceStatus === "correct", "Menu Two 2/1/1 @ $60 correct (both bakery allowed)");
+
+// Menu Two but two pan items → exceeds 1 → review.
+var bf2x = engine.checkDocument(engine.parseBeo(bfBEO("Plated Breakfast Menu Two",
+  ["Mini butter croissants", "Assorted petite muffins"], "Seasonal fresh fruit platter",
+  "Eggs benedict, hollandaise. Poached egg, potato rosti, smoked salmon", "60.00"),
+  catalogue), catalogue).items[0];
+ok(bf2x.priceStatus === "review", "Menu Two with 2 pan items flagged to check");
+
 console.log("\n----------------------------------------");
 console.log(passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);
