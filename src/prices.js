@@ -33,9 +33,9 @@
   // category, name (as it typically appears on a BEO/SOC), price, unit, extras
   var ITEMS = [
     // ---------- DINNER — BUFFET ----------
-    { category: "Dinner Buffet", name: "Dinner Buffet Menu One", price: 90, unit: "pp", minGuests: 50, note: "3 cold, 3 hot, 1 pasta, 1 side, 2 desserts; incl. rolls, coffee & tea (max 2 hrs).", aliases: ["Dinner Buffet Menu 1"] },
-    { category: "Dinner Buffet", name: "Dinner Buffet Menu Two", price: 104, unit: "pp", minGuests: 50, note: "4 cold, 4 hot, 1 pasta, 1 side, 3 desserts.", aliases: ["Dinner Buffet Menu 2"] },
-    { category: "Dinner Buffet", name: "Dinner Buffet Menu Three", price: 120, unit: "pp", minGuests: 50, note: "5 cold, 4 hot, 1 pasta, 2 sides, 3 desserts (incl. cheese or fruit platter).", aliases: ["Dinner Buffet Menu 3"] },
+    { category: "Dinner Buffet", name: "Dinner Buffet Menu One", price: 90, unit: "pp", minGuests: 50, buffet: { cold: 3, hot: 3, pasta: 1, side: 1, dessert: 2 }, note: "3 cold, 3 hot, 1 pasta, 1 side, 2 desserts; incl. rolls, coffee & tea (max 2 hrs).", aliases: ["Dinner Buffet Menu 1"] },
+    { category: "Dinner Buffet", name: "Dinner Buffet Menu Two", price: 104, unit: "pp", minGuests: 50, buffet: { cold: 4, hot: 4, pasta: 1, side: 1, dessert: 3 }, note: "4 cold, 4 hot, 1 pasta, 1 side, 3 desserts.", aliases: ["Dinner Buffet Menu 2"] },
+    { category: "Dinner Buffet", name: "Dinner Buffet Menu Three", price: 120, unit: "pp", minGuests: 50, buffet: { cold: 5, hot: 4, pasta: 1, side: 2, dessert: 3 }, note: "5 cold, 4 hot, 1 pasta, 2 sides, 3 desserts (incl. cheese or fruit platter).", aliases: ["Dinner Buffet Menu 3"] },
     { category: "Dinner Buffet", name: "Dinner Buffet Additional Course", price: 16, unit: "pp", note: "Additional course" },
 
     // ---------- DINNER — PLATED ----------
@@ -65,9 +65,9 @@
     { category: "Children", name: "Children's Beverages", price: 12.5, unit: "child", mustInclude: ["child", "children", "childrens", "kid", "kids"] },
 
     // ---------- CHRISTMAS BUFFET (valid to 31 Dec 2026) ----------
-    { category: "Christmas Buffet", name: "Christmas Buffet Menu One", price: 90, unit: "pp", minGuests: 50, validFrom: "2026-07-01", validTo: "2026-12-31", note: "3 cold, 3 hot, 1 pasta, 1 side, 2 desserts; incl. rolls, coffee & tea (max 2 hrs). Christmas menu — valid to 31 Dec 2026.", aliases: ["Buffet Christmas Menu One", "Christmas Menu One"] },
-    { category: "Christmas Buffet", name: "Christmas Buffet Menu Two", price: 104, unit: "pp", minGuests: 50, validFrom: "2026-07-01", validTo: "2026-12-31", note: "4 cold, 4 hot, 1 pasta, 1 side, 3 desserts. Christmas menu — valid to 31 Dec 2026.", aliases: ["Buffet Christmas Menu Two", "Christmas Menu Two"] },
-    { category: "Christmas Buffet", name: "Christmas Buffet Menu Three", price: 120, unit: "pp", minGuests: 50, validFrom: "2026-07-01", validTo: "2026-12-31", note: "5 cold, 4 hot, 1 pasta, 2 sides, 3 desserts (incl. cheese or fruit platter). Christmas menu — valid to 31 Dec 2026.", aliases: ["Buffet Christmas Menu Three", "Christmas Menu Three"] },
+    { category: "Christmas Buffet", name: "Christmas Buffet Menu One", price: 90, unit: "pp", minGuests: 50, validFrom: "2026-07-01", validTo: "2026-12-31", buffet: { cold: 3, hot: 3, pasta: 1, side: 1, dessert: 2 }, note: "3 cold, 3 hot, 1 pasta, 1 side, 2 desserts; incl. rolls, coffee & tea (max 2 hrs). Christmas menu — valid to 31 Dec 2026.", aliases: ["Buffet Christmas Menu One", "Christmas Menu One"] },
+    { category: "Christmas Buffet", name: "Christmas Buffet Menu Two", price: 104, unit: "pp", minGuests: 50, validFrom: "2026-07-01", validTo: "2026-12-31", buffet: { cold: 4, hot: 4, pasta: 1, side: 1, dessert: 3 }, note: "4 cold, 4 hot, 1 pasta, 1 side, 3 desserts. Christmas menu — valid to 31 Dec 2026.", aliases: ["Buffet Christmas Menu Two", "Christmas Menu Two"] },
+    { category: "Christmas Buffet", name: "Christmas Buffet Menu Three", price: 120, unit: "pp", minGuests: 50, validFrom: "2026-07-01", validTo: "2026-12-31", buffet: { cold: 5, hot: 4, pasta: 1, side: 2, dessert: 3 }, note: "5 cold, 4 hot, 1 pasta, 2 sides, 3 desserts (incl. cheese or fruit platter). Christmas menu — valid to 31 Dec 2026.", aliases: ["Buffet Christmas Menu Three", "Christmas Menu Three"] },
     { category: "Christmas Buffet", name: "Christmas Buffet Additional Course", price: 16, unit: "pp", validFrom: "2026-07-01", validTo: "2026-12-31" },
 
     // ---------- LUNCH — BUFFET ----------
@@ -359,6 +359,59 @@
     pan: ["eggs benedict", "focaccia", "croustade", "crushed avocado", "poached egg", "grilled sourdough"]
   };
 
+  // Distinctive dish phrases for the Dinner / Christmas buffets, grouped by the
+  // course category the menu counts (cold, hot, pasta, side, dessert). Used to
+  // count how many dishes a BEO selected per category against the menu's
+  // allowance (Menu One 3/3/1/1/2, Menu Two 4/4/1/1/3, Menu Three 5/4/1/2/3).
+  // Phrases are long enough to be unique to one dish and one category so the
+  // two-column menu layout can't cross-count. Includes the Christmas
+  // enhancements so a festive BEO's extra dishes are counted too.
+  var BUFFET_SELECTIONS = {
+    cold: [
+      "tasmanian smoked salmon", "makimono sushi", "gourmet potato, grain mustard",
+      "cucumber mint raita", "fresh mozzarella", "aloo chana chaat", "kachumber salad",
+      "grilled paneer salad", "southwest style pastrami", "thai beef salad",
+      "roasted pumpkin, avocado", "italian cold meat platter", "fremantle octopus",
+      "miso glazed king prawn", "salad bar",
+      // Christmas enhancements (cold)
+      "smoked salmon, watercress", "seafood salad, mango", "roasted sweet potato salad",
+      "endive, rocket, fig", "charcuterie platter"
+    ],
+    hot: [
+      "miso salmon, bok choy", "lamb ragu", "fritto misto", "stir fried beef bulgogi",
+      "mongolian hoisin", "aloo bhaji", "chinese bbq pork", "pork scotch fillet",
+      "vegetable korma", "chana masala", "lamb rump, piperade", "braised pork belly",
+      "angus beef fillet", "chicken fricassee", "butter chicken", "malaysian percik",
+      "lamb rogan josh", "wa local fish", "matar paneer",
+      // Christmas enhancements (hot)
+      "marmalade glazed ham", "paprika lacquered wa snapper", "mount barker free range chicken",
+      "wa grass fed beef fillet", "charred lamb cutlets", "salmon fillets, king prawns, capers"
+    ],
+    pasta: [
+      "pumpkin ravioli", "ratatouille lasagne", "gnocchi, basil pesto",
+      // Christmas enhancement (pasta)
+      "porcini mushroom ravioli"
+    ],
+    side: [
+      "wok fried rice", "truffled mashed potato", "garlic naan", "stir fried asian greens",
+      "asparagus, root vegetables", "miso glazed eggplant", "bombay gourmet potato",
+      "roasted chat potatoes", "heirloom carrots, brussels sprouts",
+      // Christmas enhancements (sides)
+      "kipfler potato, rosemary", "roasted cauliflower and carrots"
+    ],
+    dessert: [
+      "layered opera gateaux", "mint chocolate mini bombe", "coconut sago mango pudding",
+      "mango lassi chia pudding", "lemongrass flan", "strawberry rhubarb tart",
+      "traditional treacle tart", "crispy matcha dark chocolate mousse", "gajar halwa",
+      "gulab jamun", "lime financier", "key lime curd", "rhubarb elderflower curd",
+      "ras malai", "lychee, coconut panna cotta", "roasted sesame dark chocolate mousse",
+      "gourmet cheeses, figs", "seasonal fruit platter",
+      // Christmas enhancements (dessert)
+      "cherry pavlova", "traditional christmas pudding", "black forest yule log",
+      "vanilla chestnut custard", "orange savarin"
+    ]
+  };
+
   var API = {
     meta: CATALOGUE_META,
     items: ITEMS,
@@ -366,7 +419,8 @@
     packageInclusions: PACKAGE_INCLUSIONS,
     wineTier: WINE_TIER,
     packageSurcharges: PACKAGE_SURCHARGES,
-    breakfastSelections: BREAKFAST_SELECTIONS
+    breakfastSelections: BREAKFAST_SELECTIONS,
+    buffetSelections: BUFFET_SELECTIONS
   };
 
   if (typeof module !== "undefined" && module.exports) {

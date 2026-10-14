@@ -417,6 +417,62 @@ var outOfBook = engine.checkDocument(
 ok(outOfBook.summary.validityNote && outOfBook.summary.validityNote.indexOf("after this price book") !== -1,
   "event after 30 Jun 2027 raises a price-book validity note");
 
+section("Buffet composition (dish counts per course)");
+function buffetBEO(menuLine, dishes, qty, price) {
+  return "Menu\n18:30 - 20:30 Dinner\n" + menuLine + "\nArtisan bread rolls and butter\n" +
+    dishes.join("\n") + "\n" + qty + " guests @ $" + price + " per person\n";
+}
+// Menu One: exactly 3 cold / 3 hot / 1 pasta / 1 side / 2 dessert → correct.
+var buOne = engine.checkDocument(engine.parseBeo(buffetBEO("Dinner Buffet Menu One", [
+  "Tasmanian smoked salmon, capers, horseradish", "Fresh mozzarella, vine tomato, basil", "Thai beef salad, green papaya",
+  "Butter chicken, cashew nuts, rice pilaf", "Lamb rogan josh, garam masala, rice", "Braised pork belly, potato, carrot",
+  "Gnocchi, basil pesto, semi dried tomato",
+  "Truffled mashed potato",
+  "Layered opera gateaux", "Mango lassi chia pudding, saffron"
+], 60, "90.00"), catalogue), catalogue).items[0];
+ok(buOne.matchedName === "Dinner Buffet Menu One", "matched Dinner Buffet Menu One");
+ok(buOne.priceStatus === "correct", "Menu One 3/3/1/1/2 @ $90 correct (got " + buOne.priceStatus + ")");
+ok(buOne.notes.join(" ").indexOf("cold 3/3") !== -1, "shows the per-course counts");
+
+// Menu One but 5 cold dishes selected → exceeds 3 → review (price still right).
+var buOneX = engine.checkDocument(engine.parseBeo(buffetBEO("Dinner Buffet Menu One", [
+  "Tasmanian smoked salmon, capers", "Fresh mozzarella, vine tomato", "Thai beef salad, green papaya",
+  "Kachumber salad, onion, tomato", "Italian cold meat platter, prosciutto, salami",
+  "Butter chicken, rice pilaf", "Lamb rogan josh, rice", "Braised pork belly, carrot",
+  "Gnocchi, basil pesto", "Truffled mashed potato", "Layered opera gateaux", "Ras malai"
+], 60, "90.00"), catalogue), catalogue).items[0];
+ok(buOneX.priceStatus === "review", "Menu One with 5 cold dishes flagged to check (got " + buOneX.priceStatus + ")");
+ok(buOneX.notes.join(" ").indexOf("cold") !== -1 && buOneX.notes.join(" ").indexOf("allows 3") !== -1,
+  "flag names the cold course and the allowance");
+
+// Menu Three allows 5 cold / 4 hot / 1 pasta / 2 side / 3 dessert → the same dishes are fine.
+var buThree = engine.checkDocument(engine.parseBeo(buffetBEO("Dinner Buffet Menu Three", [
+  "Tasmanian smoked salmon", "Fresh mozzarella, basil", "Thai beef salad", "Kachumber salad", "Italian cold meat platter",
+  "Butter chicken", "Lamb rogan josh", "Braised pork belly", "Angus beef fillet, veal jus",
+  "Gnocchi, basil pesto", "Truffled mashed potato", "Wok fried rice",
+  "Layered opera gateaux", "Ras malai", "Seasonal fruit platter"
+], 60, "120.00"), catalogue), catalogue).items[0];
+ok(buThree.matchedName === "Dinner Buffet Menu Three", "matched Dinner Buffet Menu Three");
+ok(buThree.priceStatus === "correct", "Menu Three 5/4/1/2/3 @ $120 correct (got " + buThree.priceStatus + ")");
+
+// A bare buffet line with no dishes listed detects nothing → normal price check (correct).
+var buBare = engine.checkDocument(engine.parseBeo(
+  "Menu\n18:30 - 20:30 Dinner\nDinner Buffet Menu One\n60 guests @ $90.00 per person\n", catalogue),
+  catalogue).items[0];
+ok(buBare.priceStatus === "correct", "bare buffet line (no dishes) still prices correctly");
+ok(buBare.notes.join(" ").indexOf("cold 3/3") === -1 && buBare.notes.join(" ").indexOf("selections OK") === -1,
+  "no composition note when no dishes are listed");
+
+// Christmas Buffet composition is checked too (festive dishes count).
+var buXmas = engine.checkDocument(engine.parseBeo(
+  "EVENT ORDER\nSaturday 12 Dec 2026\nMenu\n18:00 - 20:00 Dinner\nChristmas Buffet Menu One\n" +
+  "Smoked salmon, watercress, radish\nSeafood salad, mango, tomato\nEndive, rocket, fig, pear salad\n" +
+  "Marmalade glazed ham, burnt orange\nCharred lamb cutlets, white beans\nWa grass fed beef fillet, truffle jus\n" +
+  "Porcini mushroom ravioli, parmesan cream\nKipfler potato, rosemary\nCherry pavlova, lemon curd\nBlack forest yule log\n" +
+  "60 guests @ $90.00 per person\n", catalogue), catalogue, "2026-12-12").items[0];
+ok(buXmas.matchedName === "Christmas Buffet Menu One", "matched Christmas Buffet Menu One");
+ok(buXmas.priceStatus === "correct", "Christmas Buffet 3/3/1/1/2 @ $90 correct (got " + buXmas.priceStatus + ")");
+
 console.log("\n----------------------------------------");
 console.log(passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

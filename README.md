@@ -118,6 +118,16 @@ with no matching price increase are flagged the same way.
 **Beverages on consumption** (drinks billed per bottle/glass) are simply matched to each item's
 list price — no package maths.
 
+**Dinner & Christmas buffets** are checked on price *and* on **how many dishes were selected
+per course**. Each tier allows a set number — Menu One 3 cold / 3 hot / 1 pasta / 1 side / 2
+desserts; Menu Two 4 / 4 / 1 / 1 / 3; Menu Three 5 / 4 / 1 / 2 / 3. The tool reads the dishes
+listed under the buffet line, classifies each into its course (using the menu's own dish
+names, incl. the Christmas enhancements), and shows the counts (e.g. "cold 3/3, hot 3/3,
+pasta 1/1, side 1/1, dessert 2/2"). If a course has **more** dishes than the tier allows, the
+line is flagged *to check* — the price may be right but the extra dishes should be confirmed. A
+bare buffet line with no dishes listed is simply price-checked. (Lunch and Indian buffets are
+price-checked but not yet composition-checked.)
+
 **Christmas Buffet** is priced like the Dinner Buffet (Menu One $90 / Two $104 / Three $120,
 min 50 guests) but is **seasonal** — valid only 01 Jul–31 Dec 2026. The tool reads the event
 date from the BEO/SOC and flags a Christmas Buffet booked **after 31 Dec 2026** (and raises a

@@ -524,12 +524,16 @@
         ? analyzePlatedBreakfast(item, match.item, catalogue) : null;
       var cbInfo = (match.item.breakItems && item.contextLines)
         ? analyzeCoffeeBreakItems(item, match.item) : null;
+      var buInfo = (match.item.buffet && item.contextLines)
+        ? analyzeBuffet(item, match.item, catalogue) : null;
       if (bevInfo) {
         explainBeveragePackage(result, item, match.item, base, bevInfo, catalogue);
       } else if (bfInfo) {
         explainPlatedBreakfast(result, item, match.item, base, diff, bfInfo);
       } else if (cbInfo) {
         explainCoffeeBreak(result, item, match.item, base, diff, cbInfo);
+      } else if (buInfo && buInfo.total > 0) {
+        explainBuffet(result, item, match.item, base, diff, buInfo);
       } else if (match.item.composable && diff > 0.005) {
         composableExplain(result, item, match.item, base, diff);
       } else if (Math.abs(diff) <= 0.005) {
@@ -862,6 +866,70 @@
     } else {
       result.priceStatus = "correct";
       result.notes.push("Price and selections OK (" + countTxt + ").");
+    }
+  }
+
+  // Dinner / Christmas buffet: count how many dishes the BEO selected in each
+  // course category (cold, hot, pasta, side, dessert) and flag any category
+  // that exceeds what the menu tier allows. Dish phrases are distinctive to one
+  // category, so a BEO that lists its chosen dishes can be counted; a bare line
+  // (just the package name) detects nothing and falls through to the normal
+  // price check.
+  var BUFFET_CATS = ["cold", "hot", "pasta", "side", "dessert"];
+  function analyzeBuffet(item, catItem, catalogue) {
+    var rules = catItem.buffet;
+    var sel = catalogue.buffetSelections;
+    if (!rules || !sel || !item.contextLines || !item.contextLines.length) return null;
+    var text = " " + normalize(item.contextLines.join("  ")) + " ";
+    var counts = {}, flags = [], total = 0;
+    BUFFET_CATS.forEach(function (cat) {
+      var n = 0;
+      (sel[cat] || []).forEach(function (kw) {
+        if (text.indexOf(normalize(kw)) !== -1) n++;
+      });
+      counts[cat] = n;
+      total += n;
+      if (rules[cat] != null && n > rules[cat]) {
+        flags.push(n + " " + cat + " dish" + (n > 1 ? "es" : "") + " selected but the menu allows " + rules[cat]);
+      }
+    });
+    return { counts: counts, rules: rules, flags: flags, total: total };
+  }
+
+  function buffetCountText(info) {
+    return BUFFET_CATS.map(function (c) {
+      return c + " " + info.counts[c] + "/" + info.rules[c];
+    }).join(", ");
+  }
+
+  function explainBuffet(result, item, catItem, base, diff, info) {
+    result.priceDiff = diff;
+    result.priceImpact = item.qty != null ? round2(diff * item.qty) : null;
+    result._explained = true;
+    var countTxt = buffetCountText(info);
+    if (diff < -0.005) {
+      result.priceStatus = "undercharged";
+      if (result.status !== "math-error") result.status = "undercharged";
+      result.notes.push("Menu price for " + catItem.name + " is " + money(base) + "; charged " + money(item.unitPrice) +
+        " (under by " + money(Math.abs(diff)) + " each" +
+        (item.qty != null ? ", " + money(Math.abs(result.priceImpact)) + " across " + item.qty : "") + ").");
+      if (info.flags.length) {
+        result.notes.push("Also: selections exceed the menu — " + info.flags.join("; ") + " (" + countTxt + ").");
+      }
+    } else if (diff > 0.005) {
+      result.priceStatus = "overcharged";
+      if (result.status !== "math-error") result.status = "overcharged";
+      result.notes.push("Menu price for " + catItem.name + " is " + money(base) + "; charged " + money(item.unitPrice) +
+        " (over by " + money(Math.abs(diff)) + " each" +
+        (item.qty != null ? ", " + money(Math.abs(result.priceImpact)) + " across " + item.qty : "") + ").");
+    } else if (info.flags.length) {
+      result.priceStatus = "review";
+      if (result.status !== "math-error") result.status = "review";
+      result.notes.push("Selections exceed the menu — " + info.flags.join("; ") + " (" + countTxt +
+        "). The price is right for " + catItem.name + ", but confirm the extra dishes were meant to be included.");
+    } else {
+      result.priceStatus = "correct";
+      result.notes.push("Price and buffet selections OK (" + countTxt + ").");
     }
   }
 
