@@ -648,6 +648,42 @@ var crewAlias = engine.checkDocument(engine.parseSocRows([["50", "Chef's selecti
 ok(crewAlias.matchedName === "Crew Set Menu Two Course Dinner", "menu-wording matched Crew Two Course Dinner (got " + (crewAlias && crewAlias.matchedName) + ")");
 ok(crewAlias.priceStatus === "overcharged", "Crew two-course dinner billed $70 (should be $61) -> overcharged");
 
+section("Real BEO — NAB Branch Leadership Forum (multi-section, page-split)");
+var nab = fs.readFileSync(path.join(__dirname, "fixtures", "nab_beo.txt"), "utf8");
+var nabRep = engine.checkDocument(engine.parseBeo(nab, catalogue), catalogue,
+  engine.parseBeoHeader(nab).eventDate);
+var nabItems = nabRep.items;
+function nabBy(re) { return nabItems.filter(function (r) { return re.test(r.matchedName || r.name); }); }
+
+// Two separate Coffee Break One charges (morning tea + afternoon tea) — both kept.
+var nabBreaks = nabItems.filter(function (r) { return r.matchedName === "Coffee Break One"; });
+ok(nabBreaks.length === 2, "both coffee breaks (morning + afternoon) are counted (got " + nabBreaks.length + ")");
+ok(nabBreaks.every(function (r) { return r.priceStatus === "undercharged"; }),
+  "Coffee Break One @ $29 flagged undercharged vs $30 book");
+
+// Lunch Buffet "Daily Menu One" — heading is page-split from its charge but still matched.
+var nabLunch = nabItems.filter(function (r) { return r.matchedName === "Lunch Buffet Menu One"; });
+ok(nabLunch.length === 1 && nabLunch[0].priceStatus === "correct",
+  "Lunch Buffet Daily Menu One @ $62 matched and correct");
+
+// Cocktail reception priced by canapé count.
+var nabCock = nabItems.filter(function (r) { return r.matchedName === "Cocktail Reception One Hour"; });
+ok(nabCock.length === 1 && nabCock[0].priceStatus === "correct",
+  "Cocktail Reception (4 canapés) @ $39 correct");
+
+// Soft-drink minimum spend routed to non-menu, not a wrong package match.
+var nabMin = nabItems.filter(function (r) { return /minimum spend/i.test(r.name); });
+ok(nabMin.length === 1 && nabMin[0].status === "non-menu",
+  "soft-drink minimum spend flagged non-menu, not priced against a package");
+
+// On-consumption wines/beers all matched.
+ok(nabBy(/Leeuwin Estate Sparkling Brut|Corona|Eddystone Point Pinot Noir/).length >= 3,
+  "on-consumption wines & beers matched");
+
+// Nothing left unmatched.
+ok(nabItems.filter(function (r) { return r.status === "unmatched"; }).length === 0,
+  "no unmatched lines in the NAB BEO");
+
 console.log("\n----------------------------------------");
 console.log(passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

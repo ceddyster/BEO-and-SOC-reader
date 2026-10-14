@@ -869,7 +869,7 @@
     s = s.replace(/\bpax\b/g, "").replace(/\bper person\b/g, "").replace(/\bpp\b/g, "");
     // Drop filler words BEOs insert that carry no identity, so e.g.
     // "Coffee Break Menu Two" matches the price-book "Coffee Break Two".
-    s = s.replace(/\b(menu|package|pkg|option|selection|of|the)\b/g, " ");
+    s = s.replace(/\b(menu|package|pkg|option|selection|daily|of|the)\b/g, " ");
     s = s.replace(/[^a-z0-9 ]+/g, " ");
     return s.replace(/\s+/g, " ").trim();
   }
@@ -1028,7 +1028,8 @@
 
     function pushUnique(it) {
       var dup = items.some(function (x) {
-        return x.name === it.name && x.unitPrice === it.unitPrice && x.qty === it.qty && x.kind === it.kind;
+        return x.name === it.name && x.unitPrice === it.unitPrice && x.qty === it.qty &&
+          x.kind === it.kind && (x.anchor || null) === (it.anchor || null);
       });
       if (!dup) items.push(it);
     }
@@ -1059,6 +1060,7 @@
       var price = parseMoney(pm[2]);
       var winArr = lines.slice(Math.max(0, i - 40), i);
       var win = winArr.join("  ");
+      var wideWin = lines.slice(Math.max(0, i - 90), i).join("  "); // page-split context
       var grp = sectionGroupBefore(i); // food / beverage / null
 
       // Match among the heading lines above the price. BEOs are two-column, so
@@ -1067,7 +1069,7 @@
       // wide window, and a preference for the NEAREST strong match so a weak
       // nearby line can't beat the real heading further up.
       var best = null, strong = null;
-      for (var j = i - 1; j >= Math.max(0, i - 60); j--) {
+      for (var j = i - 1; j >= Math.max(0, i - 90); j--) {
         var cand = lines[j].replace(/\s+/g, " ").trim();
         if (cand.length < 3) continue;
         if (/[@$]/.test(cand)) continue;              // charge lines
@@ -1084,6 +1086,16 @@
         if (mm.score >= 0.85 && !strong) strong = { score: mm.score, name: cand, j: j }; // closest strong
       }
       best = strong || best;
+
+      // Nearest line above the charge that marks a minimum-spend / on-consumption
+      // placeholder (e.g. "Soft drinks on consumption (Min)"). These aren't fixed
+      // menu items; if this signal sits closer to the charge than any matched
+      // heading, the charge is that placeholder, not the distant package.
+      var minSpendJ = null;
+      for (var ms = i - 1; ms >= Math.max(0, i - 90) && minSpendJ === null; ms--) {
+        if (/on\s+consumption|minimum[^.]{0,80}spend/i.test(lines[ms])) minSpendJ = ms;
+      }
+      var isMinSpend = minSpendJ !== null && (!best || minSpendJ > best.j);
 
       // Cocktail receptions are priced by number of canapés, not by name/hours.
       // Require a proper "N canapés served / per person" phrase on one line so a
@@ -1105,6 +1117,12 @@
       if (canapCount) {
         nameOut = "Cocktail Reception " + canapCount + " Canapes";
         itemGroup = "food"; // canapés are a food (Canapés menu) even at a drinks reception
+      } else if (isMinSpend) {
+        // A per-person minimum-spend / on-consumption placeholder — not a fixed
+        // menu item; confirm manually (don't price it against a distant package).
+        nameOut = /soft\s*drink/i.test(wideWin) ? "Soft drink minimum spend (per person)" : "Minimum spend (per person)";
+        kind = "non-menu";
+        itemGroup = "beverage";
       } else if (best) {
         nameOut = best.name;
         for (var k = best.j; k < i; k++) if (/alternating with/i.test(lines[k])) altCourses++;
@@ -1135,9 +1153,18 @@
         contextLines = lines.slice(best.j + 1, i).map(function (s) { return s.trim(); }).filter(Boolean);
       }
 
+      // Nearest time range above the charge (e.g. "09:30 - 10:00"), so the same
+      // package served at two different times (morning tea vs afternoon tea) is
+      // counted as two charges rather than collapsed into one.
+      var anchor = null;
+      for (var a = i - 1; a >= Math.max(0, i - 60) && anchor === null; a--) {
+        var tm = lines[a].match(/\d{1,2}:\d{2}\s*[-–—]\s*\d{1,2}:\d{2}/);
+        if (tm) anchor = tm[0];
+      }
+
       pushUnique({ qty: qty, name: nameOut, unitPrice: price, lineTotal: round2(qty * price),
         kind: kind, alternatingCourses: altCourses, group: itemGroup, contextLines: contextLines,
-        serviceHours: serviceHours,
+        serviceHours: serviceHours, anchor: anchor,
         confident: !!best || kind !== "per-person" || /canap/i.test(nameOut), source: "BEO" });
     });
 
