@@ -115,6 +115,11 @@ any wine that isn't one of the package's own selections, is **not** a valid add-
 flags the line "to check" and names the wine, rather than silently pricing it. Extras that appear
 with no matching price increase are flagged the same way.
 
+The **Soft Drink (Only) Package** is its own tier (1hr $16 → 5hr $24, +$2/hour), recognised as a
+soft-drink package in its own right rather than mistaken for a Crown Reserve line. A 6-hour tier
+at **$26** is included (continuing the pattern) even though the 2026 menu only prints up to 5
+hours.
+
 **Beverages on consumption** (drinks billed per bottle/glass) are simply matched to each item's
 list price — no package maths.
 

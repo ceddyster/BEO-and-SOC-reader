@@ -738,6 +738,20 @@ ok(secFixItems.some(function (r) { return r.expectedPrice === 75 && r.priceStatu
 ok(secFixItems.some(function (r) { return r.expectedPrice === 86 && r.priceStatus === "undercharged"; }),
   "Sunday block @ $37.50 flagged undercharged vs $86");
 
+section("Soft Drink Package (not Crown Reserve) + 6-hour tier");
+// A soft-drink package line must map to the soft-drink family, never fall
+// through to Crown Reserve.
+var sd6 = engine.checkDocument(engine.parseBeo(
+  "Beverage\n17:30 - 23:30 Reception\nSoft Drink Package - 6 Hours\nAssorted soft drinks, orange juice and water\n6 guests @ $26.00 per person\n",
+  catalogue), catalogue).items[0];
+ok(sd6.matchedName === "Soft Drink Only Package - 6 Hour",
+  "Soft Drink Package - 6 Hours maps to the soft-drink package (got " + (sd6 && sd6.matchedName) + ")");
+ok(sd6.priceStatus === "correct" && sd6.expectedPrice === 26, "soft-drink 6-hour @ $26 correct");
+
+var sd3 = engine.checkDocument(engine.parseSocRows([["80", "Soft Drink Package - 3 Hours", "$20.00", "", "$1,600.00"]]), catalogue).items[0];
+ok(sd3.matchedName === "Soft Drink Only Package - 3 Hour" && sd3.priceStatus === "correct",
+  "soft-drink 3-hour @ $20 correct (SOC wording)");
+
 console.log("\n----------------------------------------");
 console.log(passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);
