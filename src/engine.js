@@ -61,6 +61,7 @@
   // "hours" -> "hour", punctuation dropped, whitespace collapsed.
   function normalize(s) {
     s = String(s === null || s === undefined ? "" : s).toLowerCase();
+    s = s.replace(/['’]/g, "");   // collapse possessives: "chef's" -> "chefs"
     s = s.replace(/&/g, " and ");
     s = s.replace(/\b(one|two|three|four|five|six|seven|eight|nine|ten|twelve)\b/g,
       function (w) { return NUM_WORDS[w]; });
@@ -68,7 +69,7 @@
     s = s.replace(/\bpax\b/g, "").replace(/\bper person\b/g, "").replace(/\bpp\b/g, "");
     // Drop filler words BEOs insert that carry no identity, so e.g.
     // "Coffee Break Menu Two" matches the price-book "Coffee Break Two".
-    s = s.replace(/\b(menu|package|pkg|option|selection)\b/g, " ");
+    s = s.replace(/\b(menu|package|pkg|option|selection|of|the)\b/g, " ");
     s = s.replace(/[^a-z0-9 ]+/g, " ");
     return s.replace(/\s+/g, " ").trim();
   }
@@ -511,6 +512,10 @@
         if (result.status !== "math-error") result.status = "review";
         result._explained = true;
         result.notes.push("Menu price varies for " + match.item.name + " — confirm against the quote.");
+        if (match.item.minGuests && item.qty != null && item.qty < match.item.minGuests) {
+          result.notes.push("Below the " + match.item.minGuests + "-guest minimum for " + match.item.name +
+            " (" + item.qty + " guests) — confirm.");
+        }
         if (result.menuNote) result.notes.push(result.menuNote);
         return result;
       }

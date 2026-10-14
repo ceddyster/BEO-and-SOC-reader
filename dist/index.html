@@ -380,26 +380,27 @@
     { category: "Coffee Breaks", name: "Individual Coffee", price: 6.5, unit: "each" },
 
     // ---------- CREW PACKAGES ----------
-    { category: "Crew Packages", name: "Crew Hot Breakfast Plate", price: 31, unit: "pp" },
-    { category: "Crew Packages", name: "Crew Danish and Muffins", price: 10, unit: "pp" },
-    { category: "Crew Packages", name: "Crew Set Menu Main Lunch", price: 39, unit: "pp" },
-    { category: "Crew Packages", name: "Crew Set Menu Main Dinner", price: 44, unit: "pp" },
-    { category: "Crew Packages", name: "Crew Set Menu Two Course Lunch", price: 55, unit: "pp" },
-    { category: "Crew Packages", name: "Crew Set Menu Two Course Dinner", price: 61, unit: "pp" },
-    { category: "Crew Packages", name: "Crew Wedges", price: 12, unit: "pp" },
-    { category: "Crew Packages", name: "Crew Pies and Sausage Rolls", price: 17, unit: "pp" },
-    { category: "Crew Packages", name: "Crew Mini Gourmet Quiches", price: 16, unit: "pp" },
-    { category: "Crew Packages", name: "Crew Sandwiches Platter", price: 19.5, unit: "each" },
-    { category: "Crew Packages", name: "Crew Mini Muffins Platter", price: 8, unit: "each" },
-    { category: "Crew Packages", name: "Crew Cheese Platter", price: 24, unit: "each" },
-    { category: "Crew Packages", name: "Crew Fresh Fruit Platter", price: 12.5, unit: "each" },
+    { category: "Crew Packages", name: "Crew Hot Breakfast Plate", price: 31, unit: "pp", note: "Chef's selection; plated functions only, served after function service.", aliases: ["Chefs Selection Hot Breakfast Plate", "Crew Breakfast Plate"] },
+    { category: "Crew Packages", name: "Crew Danish and Muffins", price: 10, unit: "pp", aliases: ["Crew Continental Danish and Muffins", "Mini Continental Danish Pastries and Assorted Petite Muffins"] },
+    { category: "Crew Packages", name: "Crew Set Menu Main Lunch", price: 39, unit: "pp", note: "Chef's selection main course (served after function service).", aliases: ["Crew Set Menu Lunch", "Crew Main Course Lunch", "Chefs Selection Main Course Lunch"] },
+    { category: "Crew Packages", name: "Crew Set Menu Main Dinner", price: 44, unit: "pp", note: "Chef's selection main course (served after function service).", aliases: ["Crew Set Menu Dinner", "Crew Main Course Dinner", "Chefs Selection Main Course Dinner"] },
+    { category: "Crew Packages", name: "Crew Set Menu Two Course Lunch", price: 55, unit: "pp", aliases: ["Crew Two Course Lunch", "Chefs Selection 2 Course Lunch"] },
+    { category: "Crew Packages", name: "Crew Set Menu Two Course Dinner", price: 61, unit: "pp", aliases: ["Crew Two Course Dinner", "Chefs Selection 2 Course Dinner"] },
+    { category: "Crew Packages", name: "Crew Wedges", price: 12, unit: "pp", aliases: ["Crew Wedges with Ketchup Sweet Chilli and Sour Cream"] },
+    { category: "Crew Packages", name: "Crew Pies and Sausage Rolls", price: 17, unit: "pp", note: "Chef's selection, 4 pieces per person.", aliases: ["Crew Pies and Sausage Rolls 4 Pieces"] },
+    { category: "Crew Packages", name: "Crew Mini Gourmet Quiches", price: 16, unit: "pp", aliases: ["Chefs Selection Mini Gourmet Quiches"] },
+    { category: "Crew Packages", name: "Crew Sandwiches Platter", price: 19.5, unit: "each", note: "Per platter — chef's selection of sandwiches.", aliases: ["Crew Sandwich Platter", "Chefs Selection of Sandwiches"] },
+    { category: "Crew Packages", name: "Crew Mini Muffins Platter", price: 8, unit: "each", aliases: ["Crew Assortment of Mini Muffins"] },
+    { category: "Crew Packages", name: "Crew Cheese Platter", price: 24, unit: "each", aliases: ["Crew Cheese Platter with Crackers"] },
+    { category: "Crew Packages", name: "Crew Fresh Fruit Platter", price: 12.5, unit: "each", aliases: ["Crew Sliced Seasonal Fresh Fruit", "Crew Seasonal Fruit Platter"] },
     { category: "Crew Packages", name: "Crew Sushi Platter", price: 12, unit: "each" },
     { category: "Crew Packages", name: "Crew Turkish Bread and Dips", price: 12, unit: "each" },
-    { category: "Crew Packages", name: "Crew Buffet Package", price: 42, unit: "pp", minGuests: 20 },
+    { category: "Crew Packages", name: "Crew Buffet Package", price: 42, unit: "pp", minGuests: 20, note: "Chef's selection of salad, sandwiches, hot dish & dessert; buffet style (max 2 hrs). Min 20 guests." },
 
     // ---------- DAY DELEGATE (price varies — not fixed in the menu) ----------
-    { category: "Day Delegate", name: "Day Delegate Package One", price: null, unit: "pp", minGuests: 30, priceVaries: true, note: "AM/PM tea, lunch, plenary room hire, mints & water, lectern/mic, notepads & pens. Price varies — confirm against the quote.", aliases: ["Day Delegate One", "DDP One"] },
-    { category: "Day Delegate", name: "Day Delegate Package Two", price: null, unit: "pp", minGuests: 30, priceVaries: true, note: "As Package One, with a sandwich added to lunch. Price varies — confirm against the quote.", aliases: ["Day Delegate Two", "DDP Two"] },
+    { category: "Day Delegate", name: "Day Delegate Package One", price: null, unit: "pp", minGuests: 30, priceVaries: true, note: "Includes morning tea, lunch, afternoon tea, main plenary room hire, mints & water, lectern & mic, notepads & pens. Breaks: select one sweet OR savoury item each (max 30 min); lunch is a daily set menu (max 1 hr). Price varies — confirm against the quote.", aliases: ["Day Delegate One", "DDP One", "Day Delegate Package 1"] },
+    { category: "Day Delegate", name: "Day Delegate Package Two", price: null, unit: "pp", minGuests: 30, priceVaries: true, note: "As Package One, plus a sandwich and an extra dessert / fruit platter at lunch. Price varies — confirm against the quote.", aliases: ["Day Delegate Two", "DDP Two", "Day Delegate Package 2"] },
+    { category: "Day Delegate", name: "Day Delegate Arrival Coffee and Tea", price: 8, unit: "pp", mustInclude: ["arrival"], note: "Optional arrival coffee & tea add-on ($8 per person).", aliases: ["Arrival Coffee and Tea", "Arrival Tea and Coffee"] },
 
     // ---------- CANAPÉS / COCKTAIL RECEPTION ----------
     { category: "Canapes", name: "Cocktail Reception One Hour", price: 39, unit: "pp", minGuests: 30, note: "1 hour / select four canapés per person.", aliases: ["Cocktail Reception 4 Canapes", "Cocktail Reception Four Canapes"] },
@@ -860,6 +861,7 @@
   // "hours" -> "hour", punctuation dropped, whitespace collapsed.
   function normalize(s) {
     s = String(s === null || s === undefined ? "" : s).toLowerCase();
+    s = s.replace(/['’]/g, "");   // collapse possessives: "chef's" -> "chefs"
     s = s.replace(/&/g, " and ");
     s = s.replace(/\b(one|two|three|four|five|six|seven|eight|nine|ten|twelve)\b/g,
       function (w) { return NUM_WORDS[w]; });
@@ -867,7 +869,7 @@
     s = s.replace(/\bpax\b/g, "").replace(/\bper person\b/g, "").replace(/\bpp\b/g, "");
     // Drop filler words BEOs insert that carry no identity, so e.g.
     // "Coffee Break Menu Two" matches the price-book "Coffee Break Two".
-    s = s.replace(/\b(menu|package|pkg|option|selection)\b/g, " ");
+    s = s.replace(/\b(menu|package|pkg|option|selection|of|the)\b/g, " ");
     s = s.replace(/[^a-z0-9 ]+/g, " ");
     return s.replace(/\s+/g, " ").trim();
   }
@@ -1310,6 +1312,10 @@
         if (result.status !== "math-error") result.status = "review";
         result._explained = true;
         result.notes.push("Menu price varies for " + match.item.name + " — confirm against the quote.");
+        if (match.item.minGuests && item.qty != null && item.qty < match.item.minGuests) {
+          result.notes.push("Below the " + match.item.minGuests + "-guest minimum for " + match.item.name +
+            " (" + item.qty + " guests) — confirm.");
+        }
         if (result.menuNote) result.notes.push(result.menuNote);
         return result;
       }

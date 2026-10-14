@@ -619,6 +619,35 @@ var plAlt = engine.checkDocument(engine.parseBeo(
   catalogue), catalogue).items[0];
 ok(plAlt.priceStatus === "correct", "Plated Lunch + 1 alternating course @ $109 explained correct (got " + plAlt.priceStatus + ")");
 
+section("Day Delegate (price varies) + arrival coffee add-on");
+var ddp1 = engine.checkDocument(engine.parseSocRows([["80", "Day Delegate Package One", "$95.00", "", "$7,600.00"]]), catalogue).items[0];
+ok(ddp1.matchedName === "Day Delegate Package One", "matched Day Delegate Package One");
+ok(ddp1.priceStatus === "review", "Day Delegate price flagged to confirm (varies by package)");
+ok(ddp1.notes.join(" ").toLowerCase().indexOf("varies") !== -1, "note says the price varies");
+
+var ddpMin = engine.checkDocument(engine.parseSocRows([["20", "Day Delegate Package Two", "$110.00", "", "$2,200.00"]]), catalogue).items[0];
+ok(ddpMin.notes.join(" ").indexOf("30-guest minimum") !== -1, "flags below the 30-guest DDP minimum");
+
+var arr = engine.checkDocument(engine.parseSocRows([["80", "Arrival Coffee and Tea", "$8.00", "", "$640.00"]]), catalogue).items[0];
+ok(arr.matchedName === "Day Delegate Arrival Coffee and Tea", "matched the arrival coffee add-on (got " + (arr && arr.matchedName) + ")");
+ok(arr.priceStatus === "correct", "arrival coffee & tea @ $8 correct");
+
+section("Crew Packages price checks");
+var crewRows = [
+  ["50", "Crew Set Menu Main Dinner", "$44.00", "", "$2,200.00"],
+  ["50", "Crew Buffet Package", "$42.00", "", "$2,100.00"],
+  ["50", "Crew Hot Breakfast Plate", "$31.00", "", "$1,550.00"]
+];
+var crew = engine.checkDocument(engine.parseSocRows(crewRows), catalogue);
+ok(crew.items[0].priceStatus === "correct", "Crew Set Menu Main Dinner @ $44 correct");
+ok(crew.items[1].priceStatus === "correct", "Crew Buffet Package @ $42 correct");
+ok(crew.items[2].priceStatus === "correct", "Crew Hot Breakfast Plate @ $31 correct");
+
+// Menu-wording alias + wrong price → overcharged.
+var crewAlias = engine.checkDocument(engine.parseSocRows([["50", "Chef's selection of 2 course Dinner", "$70.00", "", "$3,500.00"]]), catalogue).items[0];
+ok(crewAlias.matchedName === "Crew Set Menu Two Course Dinner", "menu-wording matched Crew Two Course Dinner (got " + (crewAlias && crewAlias.matchedName) + ")");
+ok(crewAlias.priceStatus === "overcharged", "Crew two-course dinner billed $70 (should be $61) -> overcharged");
+
 console.log("\n----------------------------------------");
 console.log(passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

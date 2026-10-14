@@ -146,6 +146,17 @@ priced as **base + surcharges**: the Two/Three-Course tier price, plus **+$10pp 
 course** and **+$18pp (lunch) / +$22pp (dinner) per additional course**, with the breakdown
 shown on the line.
 
+**Day Delegate packages** are **price-varies** in the menu, so the tool doesn't assert a price —
+it matches the package, lists the inclusions (morning tea, lunch, afternoon tea, plenary room
+hire, mints & water, lectern/mic, notepads & pens) and flags the line to **confirm against the
+quote**, noting the 30-guest minimum when it isn't met. The optional **arrival coffee & tea**
+add-on is price-checked at **$8pp**.
+
+**Crew packages** are a flat per-person price list (hot breakfast, set menus, hot foods,
+platters, crew buffet). Every line is price-checked against the book; there's no composition to
+count because all crew items are *chef's selection*. The matcher also knows the menu's own
+wording (e.g. "Chef's selection of 2 course" → Crew Set Menu Two Course).
+
 **Christmas Buffet** is priced like the Dinner Buffet (Menu One $90 / Two $104 / Three $120,
 min 50 guests) but is **seasonal** — valid only 01 Jul–31 Dec 2026. The tool reads the event
 date from the BEO/SOC and flags a Christmas Buffet booked **after 31 Dec 2026** (and raises a
