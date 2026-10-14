@@ -118,6 +118,12 @@ with no matching price increase are flagged the same way.
 **Beverages on consumption** (drinks billed per bottle/glass) are simply matched to each item's
 list price — no package maths.
 
+**Christmas Buffet** is priced like the Dinner Buffet (Menu One $90 / Two $104 / Three $120,
+min 50 guests) but is **seasonal** — valid only 01 Jul–31 Dec 2026. The tool reads the event
+date from the BEO/SOC and flags a Christmas Buffet booked **after 31 Dec 2026** (and raises a
+notice if the whole event falls outside the price book's dates). It also notes when a menu's
+**guest minimum** isn't met.
+
 **Coffee breaks** are checked by type:
 
 - **Coffee Break One / Two / Three** — price ($30 / $37 / $55) plus the number of sweet/savoury

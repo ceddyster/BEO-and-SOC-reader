@@ -446,11 +446,19 @@
       return;
     }
 
-    var report = E.checkDocument(primary.items, CAT);
+    var eventDate = (beoHeader && beoHeader.eventDate) || E.parseEventDate(state.beoText || state.socText || "");
+    var report = E.checkDocument(primary.items, CAT, eventDate);
     var recon = (beoItems && beoItems.length && socItems && socItems.length)
       ? E.reconcile(beoItems, socItems) : null;
 
     renderBanner(out, report, recon, primary.label);
+    if (report.summary.validityNote) {
+      var vn = document.createElement("div");
+      vn.className = "banner warn";
+      vn.innerHTML = '<div class="big">📅</div><div><h2>Check the price book date</h2><p>' +
+        esc(report.summary.validityNote) + "</p></div>";
+      out.appendChild(vn);
+    }
     if (beoHeader) renderFacts(out, beoHeader, report, primary.label);
     renderCheckTable(out, report, primary.label);
     if (recon) renderRecon(out, recon);
@@ -510,6 +518,7 @@
     var facts = '<div class="facts">';
     if (h.beoNumber) facts += fact("BEO #", h.beoNumber);
     if (h.bookingName) facts += fact("Event", h.bookingName);
+    if (h.eventDate) facts += fact("Date", BEOEngine.fmtDate(h.eventDate));
     if (h.account) facts += fact("Account", h.account);
     if (h.guests) facts += fact("Guests", String(h.guests));
     facts += "</div>";

@@ -65,10 +65,10 @@
     { category: "Children", name: "Children's Beverages", price: 12.5, unit: "child", mustInclude: ["child", "children", "childrens", "kid", "kids"] },
 
     // ---------- CHRISTMAS BUFFET (valid to 31 Dec 2026) ----------
-    { category: "Christmas Buffet", name: "Christmas Buffet Menu One", price: 90, unit: "pp", minGuests: 50, validTo: "2026-12-31" },
-    { category: "Christmas Buffet", name: "Christmas Buffet Menu Two", price: 104, unit: "pp", minGuests: 50, validTo: "2026-12-31" },
-    { category: "Christmas Buffet", name: "Christmas Buffet Menu Three", price: 120, unit: "pp", minGuests: 50, validTo: "2026-12-31" },
-    { category: "Christmas Buffet", name: "Christmas Buffet Additional Course", price: 16, unit: "pp", validTo: "2026-12-31" },
+    { category: "Christmas Buffet", name: "Christmas Buffet Menu One", price: 90, unit: "pp", minGuests: 50, validFrom: "2026-07-01", validTo: "2026-12-31", note: "3 cold, 3 hot, 1 pasta, 1 side, 2 desserts; incl. rolls, coffee & tea (max 2 hrs). Christmas menu — valid to 31 Dec 2026.", aliases: ["Buffet Christmas Menu One", "Christmas Menu One"] },
+    { category: "Christmas Buffet", name: "Christmas Buffet Menu Two", price: 104, unit: "pp", minGuests: 50, validFrom: "2026-07-01", validTo: "2026-12-31", note: "4 cold, 4 hot, 1 pasta, 1 side, 3 desserts. Christmas menu — valid to 31 Dec 2026.", aliases: ["Buffet Christmas Menu Two", "Christmas Menu Two"] },
+    { category: "Christmas Buffet", name: "Christmas Buffet Menu Three", price: 120, unit: "pp", minGuests: 50, validFrom: "2026-07-01", validTo: "2026-12-31", note: "5 cold, 4 hot, 1 pasta, 2 sides, 3 desserts (incl. cheese or fruit platter). Christmas menu — valid to 31 Dec 2026.", aliases: ["Buffet Christmas Menu Three", "Christmas Menu Three"] },
+    { category: "Christmas Buffet", name: "Christmas Buffet Additional Course", price: 16, unit: "pp", validFrom: "2026-07-01", validTo: "2026-12-31" },
 
     // ---------- LUNCH — BUFFET ----------
     { category: "Lunch Buffet", name: "Lunch Buffet Menu One", price: 62, unit: "pp", minGuests: 30, note: "Daily set menu (cold savoury, salad, hot dishes, dessert); incl. rolls, coffee & tea (max 1 hr)." },

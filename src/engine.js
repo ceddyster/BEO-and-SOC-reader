@@ -31,6 +31,29 @@
     return round2(h);
   }
 
+  var MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+  function isoDate(y, mon, d) {
+    if (y < 100) y += 2000;
+    var dt = new Date(Date.UTC(y, mon, d));
+    return isNaN(dt.getTime()) ? null : dt.toISOString().slice(0, 10);
+  }
+  // Pull the event date out of a BEO/SOC (ISO yyyy-mm-dd), or null.
+  function parseEventDate(text) {
+    var t = String(text || "");
+    // "10 Oct 2026" / "Saturday, 10 October 2026"
+    var m = t.match(/\b(\d{1,2})\s+([A-Za-z]{3,9})\.?\s+(20\d{2})\b/);
+    if (m && MONTHS[m[2].slice(0, 3).toLowerCase()] != null) return isoDate(+m[3], MONTHS[m[2].slice(0, 3).toLowerCase()], +m[1]);
+    // "October 10, 2026"
+    m = t.match(/\b([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s+(20\d{2})\b/);
+    if (m && MONTHS[m[1].slice(0, 3).toLowerCase()] != null) return isoDate(+m[3], MONTHS[m[1].slice(0, 3).toLowerCase()], +m[2]);
+    return null;
+  }
+  function fmtDate(iso) {
+    if (!iso) return "";
+    var p = iso.split("-");
+    return p[2] + " " + ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][+p[1] - 1] + " " + p[0];
+  }
+
   var NUM_WORDS = { one: "1", two: "2", three: "3", four: "4", five: "5", six: "6",
     seven: "7", eight: "8", nine: "9", ten: "10", twelve: "12" };
 
@@ -381,12 +404,13 @@
       beoNumber: grab(/BEO#?:?\s*([0-9]{3,})/i),
       account: grab(/Account:\s*([^\n]+)/i),
       bookingName: grab(/Booking Name:\s*([^\n]+)/i),
+      eventDate: parseEventDate(t),
       guests: (function () { var m = t.match(/(\d+)\s+guests?\s*@/); return m ? parseInt(m[1], 10) : null; })()
     };
   }
 
   // ----------------------------------------------------------- price checking
-  function checkItem(item, catalogue) {
+  function checkItem(item, catalogue, eventDate) {
     var result = {
       qty: item.qty, name: item.name, unitPrice: item.unitPrice, lineTotal: item.lineTotal,
       source: item.source, kind: item.kind || null, beoUnit: item.beoUnit || null,
@@ -544,6 +568,23 @@
       result.priceStatus = "no-match";
       result.notes.push("No menu match found — check the item name or add it to the price list.");
     }
+
+    // Seasonal-menu validity and minimum-guest checks for a matched menu item.
+    if (match && match.item) {
+      if (eventDate && match.item.validTo && eventDate > match.item.validTo) {
+        result.notes.push("Seasonal menu: " + match.item.category + " is only valid to " + fmtDate(match.item.validTo) +
+          ", but the event is dated " + fmtDate(eventDate) + " — confirm the correct menu and price apply.");
+        if (result.status === "ok" || result.priceStatus === "correct") { result.status = "review"; result.priceStatus = "review"; }
+      } else if (eventDate && match.item.validFrom && eventDate < match.item.validFrom) {
+        result.notes.push("This menu is valid from " + fmtDate(match.item.validFrom) + "; the event is dated " +
+          fmtDate(eventDate) + " — confirm.");
+        if (result.status === "ok" || result.priceStatus === "correct") { result.status = "review"; result.priceStatus = "review"; }
+      }
+      if (match.item.minGuests && item.qty != null && item.qty < match.item.minGuests) {
+        result.notes.push("Below the " + match.item.minGuests + "-guest minimum for " + match.item.name +
+          " (" + item.qty + " guests) — confirm.");
+      }
+    }
     return result;
   }
 
@@ -591,8 +632,8 @@
     result.notes.push(note);
   }
 
-  function checkDocument(items, catalogue) {
-    var checked = (items || []).map(function (it) { return checkItem(it, catalogue); });
+  function checkDocument(items, catalogue, eventDate) {
+    var checked = (items || []).map(function (it) { return checkItem(it, catalogue, eventDate); });
     var summary = {
       total: checked.length,
       correct: 0, undercharged: 0, overcharged: 0, mathErrors: 0, nonMenu: 0, unmatched: 0, review: 0,
@@ -620,7 +661,17 @@
     });
     summary.variance = round2(summary.chargedTotal - summary.expectedTotal);
     summary.issues = summary.undercharged + summary.overcharged + summary.mathErrors + summary.unmatched;
-    return { items: checked, summary: summary };
+    // Whole-event validity against the price book's own window.
+    if (eventDate && catalogue.meta) {
+      if (catalogue.meta.validTo && eventDate > catalogue.meta.validTo) {
+        summary.validityNote = "Event is dated " + fmtDate(eventDate) + ", after this price book's validity (to " +
+          fmtDate(catalogue.meta.validTo) + "). Confirm you're using the current prices.";
+      } else if (catalogue.meta.validFrom && eventDate < catalogue.meta.validFrom) {
+        summary.validityNote = "Event is dated " + fmtDate(eventDate) + ", before this price book's validity (from " +
+          fmtDate(catalogue.meta.validFrom) + "). Confirm the price book.";
+      }
+    }
+    return { items: checked, summary: summary, eventDate: eventDate || null };
   }
 
   // A beverage package: classify the drinks listed under it and work out the
@@ -911,7 +962,7 @@
     round2: round2, parseMoney: parseMoney, normalize: normalize, softNorm: softNorm,
     scoreNames: scoreNames, findMatch: findMatch, looksNonMenu: looksNonMenu,
     parseSocRows: parseSocRows, parseSocText: parseSocText,
-    parseBeo: parseBeo, parseBeoHeader: parseBeoHeader,
+    parseBeo: parseBeo, parseBeoHeader: parseBeoHeader, parseEventDate: parseEventDate, fmtDate: fmtDate,
     checkItem: checkItem, checkDocument: checkDocument, reconcile: reconcile,
     money: money, unitLabel: unitLabel
   };

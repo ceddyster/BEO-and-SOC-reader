@@ -323,10 +323,10 @@
     { category: "Children", name: "Children's Beverages", price: 12.5, unit: "child", mustInclude: ["child", "children", "childrens", "kid", "kids"] },
 
     // ---------- CHRISTMAS BUFFET (valid to 31 Dec 2026) ----------
-    { category: "Christmas Buffet", name: "Christmas Buffet Menu One", price: 90, unit: "pp", minGuests: 50, validTo: "2026-12-31" },
-    { category: "Christmas Buffet", name: "Christmas Buffet Menu Two", price: 104, unit: "pp", minGuests: 50, validTo: "2026-12-31" },
-    { category: "Christmas Buffet", name: "Christmas Buffet Menu Three", price: 120, unit: "pp", minGuests: 50, validTo: "2026-12-31" },
-    { category: "Christmas Buffet", name: "Christmas Buffet Additional Course", price: 16, unit: "pp", validTo: "2026-12-31" },
+    { category: "Christmas Buffet", name: "Christmas Buffet Menu One", price: 90, unit: "pp", minGuests: 50, validFrom: "2026-07-01", validTo: "2026-12-31", note: "3 cold, 3 hot, 1 pasta, 1 side, 2 desserts; incl. rolls, coffee & tea (max 2 hrs). Christmas menu — valid to 31 Dec 2026.", aliases: ["Buffet Christmas Menu One", "Christmas Menu One"] },
+    { category: "Christmas Buffet", name: "Christmas Buffet Menu Two", price: 104, unit: "pp", minGuests: 50, validFrom: "2026-07-01", validTo: "2026-12-31", note: "4 cold, 4 hot, 1 pasta, 1 side, 3 desserts. Christmas menu — valid to 31 Dec 2026.", aliases: ["Buffet Christmas Menu Two", "Christmas Menu Two"] },
+    { category: "Christmas Buffet", name: "Christmas Buffet Menu Three", price: 120, unit: "pp", minGuests: 50, validFrom: "2026-07-01", validTo: "2026-12-31", note: "5 cold, 4 hot, 1 pasta, 2 sides, 3 desserts (incl. cheese or fruit platter). Christmas menu — valid to 31 Dec 2026.", aliases: ["Buffet Christmas Menu Three", "Christmas Menu Three"] },
+    { category: "Christmas Buffet", name: "Christmas Buffet Additional Course", price: 16, unit: "pp", validFrom: "2026-07-01", validTo: "2026-12-31" },
 
     // ---------- LUNCH — BUFFET ----------
     { category: "Lunch Buffet", name: "Lunch Buffet Menu One", price: 62, unit: "pp", minGuests: 30, note: "Daily set menu (cold savoury, salad, hot dishes, dessert); incl. rolls, coffee & tea (max 1 hr)." },
@@ -666,6 +666,29 @@
     var h = end - start;
     if (h < 0) h += 24; // crosses midnight
     return round2(h);
+  }
+
+  var MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+  function isoDate(y, mon, d) {
+    if (y < 100) y += 2000;
+    var dt = new Date(Date.UTC(y, mon, d));
+    return isNaN(dt.getTime()) ? null : dt.toISOString().slice(0, 10);
+  }
+  // Pull the event date out of a BEO/SOC (ISO yyyy-mm-dd), or null.
+  function parseEventDate(text) {
+    var t = String(text || "");
+    // "10 Oct 2026" / "Saturday, 10 October 2026"
+    var m = t.match(/\b(\d{1,2})\s+([A-Za-z]{3,9})\.?\s+(20\d{2})\b/);
+    if (m && MONTHS[m[2].slice(0, 3).toLowerCase()] != null) return isoDate(+m[3], MONTHS[m[2].slice(0, 3).toLowerCase()], +m[1]);
+    // "October 10, 2026"
+    m = t.match(/\b([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s+(20\d{2})\b/);
+    if (m && MONTHS[m[1].slice(0, 3).toLowerCase()] != null) return isoDate(+m[3], MONTHS[m[1].slice(0, 3).toLowerCase()], +m[2]);
+    return null;
+  }
+  function fmtDate(iso) {
+    if (!iso) return "";
+    var p = iso.split("-");
+    return p[2] + " " + ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][+p[1] - 1] + " " + p[0];
   }
 
   var NUM_WORDS = { one: "1", two: "2", three: "3", four: "4", five: "5", six: "6",
@@ -1018,12 +1041,13 @@
       beoNumber: grab(/BEO#?:?\s*([0-9]{3,})/i),
       account: grab(/Account:\s*([^\n]+)/i),
       bookingName: grab(/Booking Name:\s*([^\n]+)/i),
+      eventDate: parseEventDate(t),
       guests: (function () { var m = t.match(/(\d+)\s+guests?\s*@/); return m ? parseInt(m[1], 10) : null; })()
     };
   }
 
   // ----------------------------------------------------------- price checking
-  function checkItem(item, catalogue) {
+  function checkItem(item, catalogue, eventDate) {
     var result = {
       qty: item.qty, name: item.name, unitPrice: item.unitPrice, lineTotal: item.lineTotal,
       source: item.source, kind: item.kind || null, beoUnit: item.beoUnit || null,
@@ -1181,6 +1205,23 @@
       result.priceStatus = "no-match";
       result.notes.push("No menu match found — check the item name or add it to the price list.");
     }
+
+    // Seasonal-menu validity and minimum-guest checks for a matched menu item.
+    if (match && match.item) {
+      if (eventDate && match.item.validTo && eventDate > match.item.validTo) {
+        result.notes.push("Seasonal menu: " + match.item.category + " is only valid to " + fmtDate(match.item.validTo) +
+          ", but the event is dated " + fmtDate(eventDate) + " — confirm the correct menu and price apply.");
+        if (result.status === "ok" || result.priceStatus === "correct") { result.status = "review"; result.priceStatus = "review"; }
+      } else if (eventDate && match.item.validFrom && eventDate < match.item.validFrom) {
+        result.notes.push("This menu is valid from " + fmtDate(match.item.validFrom) + "; the event is dated " +
+          fmtDate(eventDate) + " — confirm.");
+        if (result.status === "ok" || result.priceStatus === "correct") { result.status = "review"; result.priceStatus = "review"; }
+      }
+      if (match.item.minGuests && item.qty != null && item.qty < match.item.minGuests) {
+        result.notes.push("Below the " + match.item.minGuests + "-guest minimum for " + match.item.name +
+          " (" + item.qty + " guests) — confirm.");
+      }
+    }
     return result;
   }
 
@@ -1228,8 +1269,8 @@
     result.notes.push(note);
   }
 
-  function checkDocument(items, catalogue) {
-    var checked = (items || []).map(function (it) { return checkItem(it, catalogue); });
+  function checkDocument(items, catalogue, eventDate) {
+    var checked = (items || []).map(function (it) { return checkItem(it, catalogue, eventDate); });
     var summary = {
       total: checked.length,
       correct: 0, undercharged: 0, overcharged: 0, mathErrors: 0, nonMenu: 0, unmatched: 0, review: 0,
@@ -1257,7 +1298,17 @@
     });
     summary.variance = round2(summary.chargedTotal - summary.expectedTotal);
     summary.issues = summary.undercharged + summary.overcharged + summary.mathErrors + summary.unmatched;
-    return { items: checked, summary: summary };
+    // Whole-event validity against the price book's own window.
+    if (eventDate && catalogue.meta) {
+      if (catalogue.meta.validTo && eventDate > catalogue.meta.validTo) {
+        summary.validityNote = "Event is dated " + fmtDate(eventDate) + ", after this price book's validity (to " +
+          fmtDate(catalogue.meta.validTo) + "). Confirm you're using the current prices.";
+      } else if (catalogue.meta.validFrom && eventDate < catalogue.meta.validFrom) {
+        summary.validityNote = "Event is dated " + fmtDate(eventDate) + ", before this price book's validity (from " +
+          fmtDate(catalogue.meta.validFrom) + "). Confirm the price book.";
+      }
+    }
+    return { items: checked, summary: summary, eventDate: eventDate || null };
   }
 
   // A beverage package: classify the drinks listed under it and work out the
@@ -1548,7 +1599,7 @@
     round2: round2, parseMoney: parseMoney, normalize: normalize, softNorm: softNorm,
     scoreNames: scoreNames, findMatch: findMatch, looksNonMenu: looksNonMenu,
     parseSocRows: parseSocRows, parseSocText: parseSocText,
-    parseBeo: parseBeo, parseBeoHeader: parseBeoHeader,
+    parseBeo: parseBeo, parseBeoHeader: parseBeoHeader, parseEventDate: parseEventDate, fmtDate: fmtDate,
     checkItem: checkItem, checkDocument: checkDocument, reconcile: reconcile,
     money: money, unitLabel: unitLabel
   };
@@ -1747,11 +1798,19 @@
       return;
     }
 
-    var report = E.checkDocument(primary.items, CAT);
+    var eventDate = (beoHeader && beoHeader.eventDate) || E.parseEventDate(state.beoText || state.socText || "");
+    var report = E.checkDocument(primary.items, CAT, eventDate);
     var recon = (beoItems && beoItems.length && socItems && socItems.length)
       ? E.reconcile(beoItems, socItems) : null;
 
     renderBanner(out, report, recon, primary.label);
+    if (report.summary.validityNote) {
+      var vn = document.createElement("div");
+      vn.className = "banner warn";
+      vn.innerHTML = '<div class="big">📅</div><div><h2>Check the price book date</h2><p>' +
+        esc(report.summary.validityNote) + "</p></div>";
+      out.appendChild(vn);
+    }
     if (beoHeader) renderFacts(out, beoHeader, report, primary.label);
     renderCheckTable(out, report, primary.label);
     if (recon) renderRecon(out, recon);
@@ -1811,6 +1870,7 @@
     var facts = '<div class="facts">';
     if (h.beoNumber) facts += fact("BEO #", h.beoNumber);
     if (h.bookingName) facts += fact("Event", h.bookingName);
+    if (h.eventDate) facts += fact("Date", BEOEngine.fmtDate(h.eventDate));
     if (h.account) facts += fact("Account", h.account);
     if (h.guests) facts += fact("Guests", String(h.guests));
     facts += "</div>";

@@ -387,6 +387,36 @@ var cart1 = engine.checkDocument(engine.parseBeo(
   "Miscellaneous\n2 x Barista Coffee Cart Full Day Hire $640.00\n", catalogue), catalogue).items[0];
 ok(cart1 && cart1.priceStatus === "undercharged", "2 full-day carts billed as $640 (one) -> undercharged");
 
+section("Christmas Buffet — seasonal validity (to 31 Dec 2026)");
+ok(engine.parseEventDate("Saturday 10 Oct 2026") === "2026-10-10", "parses event date '10 Oct 2026'");
+ok(engine.parseEventDate("Monday, 13 February 2027") === "2027-02-13", "parses event date '13 February 2027'");
+function xmasBEO(dateLine, pkg, qty, price) {
+  return "EVENT ORDER\nBEO#: 60001\n" + dateLine + "\nAccount: Test Co\nBooking Name: Xmas Party\nMenu\n18:00 - 20:00 Dinner\n" +
+    pkg + "\nAssorted bread rolls and butter\n" + qty + " guests @ $" + price + " per person\n";
+}
+var xmasItems = engine.parseBeo(xmasBEO("Saturday 12 Dec 2026", "Christmas Buffet Menu One", 60, "90.00"), catalogue);
+var xmasOk = engine.checkDocument(xmasItems, catalogue, "2026-12-12").items[0];
+ok(xmasOk.matchedName === "Christmas Buffet Menu One", "matched Christmas Buffet Menu One");
+ok(xmasOk.priceStatus === "correct", "Christmas Buffet in December is correct");
+
+var xmasLate = engine.checkDocument(
+  engine.parseBeo(xmasBEO("Saturday 13 Feb 2027", "Christmas Buffet Menu One", 60, "90.00"), catalogue),
+  catalogue, "2027-02-13").items[0];
+ok(xmasLate.priceStatus === "review", "Christmas Buffet after 31 Dec 2026 flagged to check");
+ok(xmasLate.notes.join(" ").indexOf("31 Dec 2026") !== -1, "flag names the 31 Dec 2026 cut-off");
+
+section("Minimum guests note + whole-event validity");
+var belowMin = engine.checkDocument(
+  engine.parseBeo(xmasBEO("Saturday 12 Dec 2026", "Christmas Buffet Menu One", 40, "90.00"), catalogue),
+  catalogue, "2026-12-12").items[0];
+ok(belowMin.notes.join(" ").indexOf("50-guest minimum") !== -1, "notes below the 50-guest minimum");
+
+var outOfBook = engine.checkDocument(
+  engine.parseBeo("Menu\n01:00 Dinner\nDinner Buffet Menu One\n60 guests @ $90.00 per person\n", catalogue),
+  catalogue, "2027-08-01");
+ok(outOfBook.summary.validityNote && outOfBook.summary.validityNote.indexOf("after this price book") !== -1,
+  "event after 30 Jun 2027 raises a price-book validity note");
+
 console.log("\n----------------------------------------");
 console.log(passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);
