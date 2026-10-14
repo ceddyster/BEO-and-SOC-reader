@@ -110,6 +110,11 @@ each **extra wine** adds **$10pp** (Crown Deluxe selection) or **$15pp** (WA Pre
 So a Crown Deluxe 2 Hour at $65 with a second wine and an extra beer should read $79.50pp — the
 tool shows that breakdown and flags the line to confirm if the charge doesn't match.
 
+Only **Crown Deluxe** and **WA Premium** wines can be added to a package. A **Reserve** wine, or
+any wine that isn't one of the package's own selections, is **not** a valid add-on — the tool
+flags the line "to check" and names the wine, rather than silently pricing it. Extras that appear
+with no matching price increase are flagged the same way.
+
 **Beverages on consumption** (drinks billed per bottle/glass) are simply matched to each item's
 list price — no package maths.
 

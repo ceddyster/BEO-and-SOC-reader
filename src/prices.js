@@ -341,7 +341,9 @@
     "Leeuwin Estate Art Series Shiraz": "wapremium",
     "Leeuwin Estate Prelude Vineyards Cabernet Sauvignon": "wapremium"
   };
-  var PACKAGE_SURCHARGES = { extraBeer: 4.5, extraWine: { reserve: 10, deluxe: 10, wapremium: 15 } };
+  // Only Crown Deluxe and WA Premium wines can be added to a package. Reserve
+  // wines and any other wine are not valid add-ons and must be flagged.
+  var PACKAGE_SURCHARGES = { extraBeer: 4.5, extraWine: { deluxe: 10, wapremium: 15 } };
 
   var API = {
     meta: CATALOGUE_META,

@@ -291,6 +291,16 @@ var resWine = engine.checkDocument(engine.parseBeo(bevBEO(
 ok(resWine.priceStatus === "correct", "Crown Reserve + 1 Deluxe wine @ $72 correct");
 ok(resWine.notes.join(" ").indexOf("1 extra wine (+$10.00pp)") !== -1, "extra Deluxe wine priced at $10pp");
 
+// A wine that isn't a package selection (general wine-list wine) → flag to check.
+var otherWine = engine.checkDocument(engine.parseBeo(bevBEO(
+  "Crown Reserve Package - 4 Hours",
+  ["Woodbrook Vineyards NV Brut Cuvee", "Brigade Block Semillon Sauvignon Blanc", "Abilene Shiraz",
+   "Shaw and Smith M3 Chardonnay", "Corona", "Hahn Super Dry 3.5", "Hahn Premium Light", "Heineken Zero"],
+  "72.00"), catalogue), catalogue).items[0];
+ok(otherWine.priceStatus === "review", "non-package wine flags the package to check");
+ok(otherWine.notes.join(" ").indexOf("Shaw and Smith M3 Chardonnay") !== -1, "flag names the wine");
+ok(catalogue.packageSurcharges.extraWine.reserve === undefined, "Reserve wines are not a priced add-on option");
+
 // Same extra beer but billed at base $62 (add-on not charged) → review.
 var resMiss = engine.checkDocument(engine.parseBeo(bevBEO(
   "Crown Reserve Package - 4 Hours",

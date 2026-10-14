@@ -599,7 +599,9 @@
     "Leeuwin Estate Art Series Shiraz": "wapremium",
     "Leeuwin Estate Prelude Vineyards Cabernet Sauvignon": "wapremium"
   };
-  var PACKAGE_SURCHARGES = { extraBeer: 4.5, extraWine: { reserve: 10, deluxe: 10, wapremium: 15 } };
+  // Only Crown Deluxe and WA Premium wines can be added to a package. Reserve
+  // wines and any other wine are not valid add-ons and must be flagged.
+  var PACKAGE_SURCHARGES = { extraBeer: 4.5, extraWine: { deluxe: 10, wapremium: 15 } };
 
   var API = {
     meta: CATALOGUE_META,
@@ -1155,17 +1157,25 @@
     var extraBeers = ungrouped;
     groupCounts.forEach(function (c) { if (c > 1) extraBeers += c - 1; });
 
-    // Extra wines: more than one per colour. Keep the lowest-tier one as
-    // included; the rest are extras priced by their own selection tier.
-    var rank = { reserve: 0, deluxe: 1, wapremium: 2 };
-    var extraWineCount = 0, extraWineSurcharge = 0;
+    // Extra wines: more than one per colour. Keep the lowest-tier one as the
+    // included wine; the rest are extras. Only Crown Deluxe (+$10) and WA Premium
+    // (+$15) wines are valid add-ons. A Reserve wine added, or any wine that isn't
+    // a package selection at all, is flagged to be checked (not auto-priced).
+    var rank = { reserve: 0, deluxe: 1, wapremium: 2, other: 3 };
+    var wineSur = catalogue.packageSurcharges.extraWine; // { deluxe:10, wapremium:15 }
+    var extraWineCount = 0, extraWineSurcharge = 0, flagWines = [];
     ["Sparkling", "White", "Red"].forEach(function (col) {
       var list = winesByColor[col].map(function (nm) {
-        return { nm: nm, tier: (catalogue.wineTier || {})[nm] || "deluxe" };
-      }).sort(function (a, b) { return (rank[a.tier] || 1) - (rank[b.tier] || 1); });
-      for (var k = 1; k < list.length; k++) {
-        extraWineCount++;
-        extraWineSurcharge += (catalogue.packageSurcharges.extraWine[list[k].tier] || 10);
+        return { nm: nm, tier: (catalogue.wineTier || {})[nm] || "other" };
+      });
+      // Any wine that isn't one of the package selections isn't a valid add-on.
+      list.forEach(function (w) { if (w.tier === "other") flagWines.push(w.nm + " (not a package wine)"); });
+      list.sort(function (a, b) { return rank[a.tier] - rank[b.tier]; });
+      for (var k = 1; k < list.length; k++) { // first = included, rest = extras
+        var t = list[k].tier;
+        if (t === "deluxe" || t === "wapremium") { extraWineCount++; extraWineSurcharge += wineSur[t]; }
+        else if (t === "reserve") flagWines.push(list[k].nm + " (Reserve wines can't be added to a package)");
+        // "other" wines were already flagged above
       }
     });
 
@@ -1174,6 +1184,7 @@
       addon: round2(beerSurcharge + extraWineSurcharge),
       extraBeers: extraBeers, beerSurcharge: beerSurcharge,
       extraWineCount: extraWineCount, extraWineSurcharge: round2(extraWineSurcharge),
+      flagWines: flagWines,
       detectedBeers: beers.length,
       detectedWines: winesByColor.Sparkling.length + winesByColor.White.length + winesByColor.Red.length
     };
@@ -1203,6 +1214,16 @@
     if (info.extraBeers) bd.push(info.extraBeers + " extra beer/cider (+" + money(info.beerSurcharge) + "pp)");
     if (info.extraWineCount) bd.push(info.extraWineCount + " extra wine (+" + money(info.extraWineSurcharge) + "pp)");
     var addonTxt = bd.join(" and ");
+
+    // Wines that aren't a valid package add-on — always needs a human check.
+    if (info.flagWines && info.flagWines.length) {
+      result.priceStatus = "review";
+      if (result.status !== "math-error") result.status = "review";
+      result.notes.push("Wines to check on " + catItem.name + ": " + info.flagWines.join("; ") +
+        ". Only Crown Deluxe (+$10pp) or WA Premium (+$15pp) wines can be added to a package." +
+        (addonTxt ? " Also detected " + addonTxt + "." : "") + " Confirm the wines and the price.");
+      return;
+    }
 
     // Charged exactly matches base + detected add-ons.
     if (info.addon > 0 && Math.abs(diffExp) <= 0.005) {
