@@ -157,6 +157,13 @@ platters, crew buffet). Every line is price-checked against the book; there's no
 count because all crew items are *chef's selection*. The matcher also knows the menu's own
 wording (e.g. "Chef's selection of 2 course" → Crew Set Menu Two Course).
 
+**Security officers** are charged per officer-hour at a **day-of-week rate**: **Mon–Fri $63**,
+**Saturday $75**, **Sunday $86** per hour. The tool reads the hours and rate from the BEO's
+security line, works out the day from the **event date**, and flags any line that doesn't match
+the right rate (e.g. a Saturday event billed at $63 → undercharged by $12/hour). If the event
+date can't be read, the line is flagged to confirm. (Rates live in `securityRates` in
+`src/prices.js`.)
+
 **Christmas Buffet** is priced like the Dinner Buffet (Menu One $90 / Two $104 / Three $120,
 min 50 guests) but is **seasonal** — valid only 01 Jul–31 Dec 2026. The tool reads the event
 date from the BEO/SOC and flags a Christmas Buffet booked **after 31 Dec 2026** (and raises a

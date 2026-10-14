@@ -521,10 +521,15 @@
     }
   };
 
+  // Security officer hourly rate by day of week (00:00–23:59). Charged per
+  // officer-hour; the day comes from the event date on the BEO/SOC.
+  var SECURITY_RATES = { weekday: 63, saturday: 75, sunday: 86 };
+
   var API = {
     meta: CATALOGUE_META,
     items: ITEMS,
     nonMenuHints: NON_MENU_HINTS,
+    securityRates: SECURITY_RATES,
     packageInclusions: PACKAGE_INCLUSIONS,
     wineTier: WINE_TIER,
     packageSurcharges: PACKAGE_SURCHARGES,

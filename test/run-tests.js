@@ -130,7 +130,8 @@ ok(rKetel && rKetel.priceStatus === "correct", "Ketel One $15.50/glass correct (
 var rSpend = rep2.items.find(function (r) { return /event spend/i.test(r.name); });
 ok(rSpend && rSpend.priceStatus === "not-checked", "minimum event spend treated as non-menu");
 var rSec2 = rep2.items.find(function (r) { return /security/i.test(r.name); });
-ok(rSec2 && rSec2.qty === 6 && rSec2.priceStatus === "not-checked", "Security 6 hrs non-menu");
+ok(rSec2 && rSec2.qty === 6 && rSec2.priceStatus === "review",
+  "Security 6 hrs priced by day-of-week — review when no event date is supplied");
 
 section("Set menu on a SOC (no alternating info) → review, not false overcharge");
 var socSet = engine.parseSocRows([["64", "Dinner Set Menu Two", "$125.00", "", "$8,000.00"]]);
@@ -683,6 +684,37 @@ ok(nabBy(/Leeuwin Estate Sparkling Brut|Corona|Eddystone Point Pinot Noir/).leng
 // Nothing left unmatched.
 ok(nabItems.filter(function (r) { return r.status === "unmatched"; }).length === 0,
   "no unmatched lines in the NAB BEO");
+
+section("Security officer hourly rate by day of week");
+function secBEO(hours, rate) {
+  return "Miscellaneous\n" + hours + " Security officer hours required @ $" + rate + " per hour\n";
+}
+// Thursday (weekday) → $63/hour.
+var secWk = engine.checkDocument(engine.parseBeo(secBEO(5, "63.00"), catalogue), catalogue, "2026-10-15").items[0];
+ok(secWk.matchedName === "Security Officer" && secWk.qty === 5, "parsed 5 security officer hours");
+ok(secWk.priceStatus === "correct", "weekday security @ $63 correct (got " + secWk.priceStatus + ")");
+var secWkOver = engine.checkDocument(engine.parseBeo(secBEO(5, "75.00"), catalogue), catalogue, "2026-10-15").items[0];
+ok(secWkOver.priceStatus === "overcharged" && secWkOver.expectedPrice === 63,
+  "weekday security @ $75 overcharged (expected $63)");
+ok(secWkOver.priceImpact === 60, "weekday overcharge impact $12/hr × 5 = $60 (got " + secWkOver.priceImpact + ")");
+
+// Saturday → $75/hour.
+var secSat = engine.checkDocument(engine.parseBeo(secBEO(8, "75.00"), catalogue), catalogue, "2026-10-17").items[0];
+ok(secSat.priceStatus === "correct", "Saturday security @ $75 correct");
+var secSatUnder = engine.checkDocument(engine.parseBeo(secBEO(8, "63.00"), catalogue), catalogue, "2026-10-17").items[0];
+ok(secSatUnder.priceStatus === "undercharged" && secSatUnder.expectedPrice === 75,
+  "Saturday security @ $63 undercharged (expected $75)");
+
+// Sunday → $86/hour.
+var secSun = engine.checkDocument(engine.parseBeo(secBEO(6, "86.00"), catalogue), catalogue, "2026-10-18").items[0];
+ok(secSun.priceStatus === "correct", "Sunday security @ $86 correct");
+var secSunWrong = engine.checkDocument(engine.parseBeo(secBEO(6, "75.00"), catalogue), catalogue, "2026-10-18").items[0];
+ok(secSunWrong.priceStatus === "undercharged" && secSunWrong.expectedPrice === 86,
+  "Sunday security @ $75 undercharged (expected $86)");
+
+// No event date → review (can't pick the day rate).
+var secNoDate = engine.checkDocument(engine.parseBeo(secBEO(5, "63.00"), catalogue), catalogue, null).items[0];
+ok(secNoDate.priceStatus === "review", "security with unknown event date flagged to confirm");
 
 console.log("\n----------------------------------------");
 console.log(passed + " passed, " + failed + " failed");

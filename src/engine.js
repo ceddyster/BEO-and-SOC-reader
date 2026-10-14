@@ -54,6 +54,16 @@
     return p[2] + " " + ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][+p[1] - 1] + " " + p[0];
   }
 
+  var WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  // Day of week for an ISO date (0 = Sunday .. 6 = Saturday), or null.
+  function dayOfWeek(iso) {
+    if (!iso) return null;
+    var p = iso.split("-");
+    if (p.length !== 3) return null;
+    var d = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2]));
+    return isNaN(d.getTime()) ? null : d.getUTCDay();
+  }
+
   var NUM_WORDS = { one: "1", two: "2", three: "3", four: "4", five: "5", six: "6",
     seven: "7", eight: "8", nine: "9", ten: "10", twelve: "12" };
 
@@ -385,12 +395,14 @@
         lineTotal: parseMoney(m[1]), kind: "non-menu", source: "BEO" });
     }
 
-    // Security officer hours: "5 Security officer hours ... @ $75.00 per hour"
+    // Security officer hours: "5 Security officer hours ... @ $75.00 per hour".
+    // Rate depends on the event's day of week (Mon–Fri / Sat / Sun), so this is
+    // price-checked (kind "security") against the catalogue's security rates.
     re = /(\d+)\s+security officer hours?[\s\S]{0,120}?@\s*\$?([\d,]+(?:\.\d{1,2})?)\s*per\s+hour/g;
     while ((m = re.exec(soft)) !== null) {
       var h = parseInt(m[1], 10), rate = parseMoney(m[2]);
       pushUnique({ qty: h, name: "Security officer hours", unitPrice: rate,
-        lineTotal: round2(h * rate), kind: "non-menu", source: "BEO" });
+        lineTotal: round2(h * rate), kind: "security", beoUnit: "hour", source: "BEO" });
     }
 
     // Attrition / minimum spend: "@ $5,460.00 per event"
@@ -519,6 +531,41 @@
         if (result.status !== "math-error") result.status = result.priceStatus;
         result.notes.push(carts + " cart" + (carts > 1 ? "s" : "") + " × " + money(cartUnit) + " per cart should be " +
           money(cartExp) + "; charged " + money(item.lineTotal) + " (" + (cartD < 0 ? "under" : "over") + " by " + money(Math.abs(cartD)) + ").");
+      }
+      return result;
+    }
+
+    // Security officers — charged per officer-hour at a day-of-week rate
+    // (Mon–Fri / Sat / Sun). The day comes from the event date.
+    if (item.kind === "security") {
+      result.category = "Security";
+      result.matchedName = "Security Officer";
+      var rates = (catalogue.securityRates) || { weekday: 63, saturday: 75, sunday: 86 };
+      var dow = dayOfWeek(eventDate);
+      var secCharged = item.unitPrice;
+      if (dow == null) {
+        if (result.status !== "math-error") result.status = "review";
+        result.priceStatus = "review";
+        result.notes.push("Security officer charged " + money(secCharged) + "/hour — couldn't read the event date to pick the day rate " +
+          "(Mon–Fri $" + rates.weekday + ", Sat $" + rates.saturday + ", Sun $" + rates.sunday + "/hour). Confirm the day.");
+        return result;
+      }
+      var secExp = dow === 0 ? rates.sunday : dow === 6 ? rates.saturday : rates.weekday;
+      var dayLabel = WEEKDAY_NAMES[dow] + (dow === 0 ? "" : dow === 6 ? "" : " (weekday)");
+      result.expectedPrice = secExp;
+      var secD = round2(secCharged - secExp);
+      result.priceDiff = secD;
+      result.priceImpact = item.qty != null ? round2(secD * item.qty) : null;
+      if (Math.abs(secD) <= 0.005) {
+        result.priceStatus = "correct";
+        result.notes.push("Security officer on " + dayLabel + " = $" + secExp + "/hour" +
+          (item.qty != null ? " × " + item.qty + " hour" + (item.qty > 1 ? "s" : "") : "") + ". Correct.");
+      } else {
+        result.priceStatus = secD < 0 ? "undercharged" : "overcharged";
+        if (result.status !== "math-error") result.status = result.priceStatus;
+        result.notes.push("Security officer on " + dayLabel + " should be $" + secExp + "/hour; charged " + money(secCharged) +
+          "/hour (" + (secD < 0 ? "under" : "over") + " by " + money(Math.abs(secD)) + "/hour" +
+          (item.qty != null ? ", " + money(Math.abs(result.priceImpact)) + " across " + item.qty + " hour" + (item.qty > 1 ? "s" : "") : "") + ").");
       }
       return result;
     }
