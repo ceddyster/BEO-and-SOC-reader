@@ -130,8 +130,8 @@ ok(rKetel && rKetel.priceStatus === "correct", "Ketel One $15.50/glass correct (
 var rSpend = rep2.items.find(function (r) { return /event spend/i.test(r.name); });
 ok(rSpend && rSpend.priceStatus === "not-checked", "minimum event spend treated as non-menu");
 var rSec2 = rep2.items.find(function (r) { return /security/i.test(r.name); });
-ok(rSec2 && rSec2.qty === 6 && rSec2.priceStatus === "review",
-  "Security 6 hrs priced by day-of-week — review when no event date is supplied");
+ok(rSec2 && rSec2.qty === 6 && rSec2.priceStatus === "correct" && rSec2.expectedPrice === 75,
+  "Security 6 hrs @ $75 correct via the line's own 'Saturday rate' label (no event date needed)");
 
 section("Set menu on a SOC (no alternating info) → review, not false overcharge");
 var socSet = engine.parseSocRows([["64", "Dinner Set Menu Two", "$125.00", "", "$8,000.00"]]);
@@ -712,9 +712,31 @@ var secSunWrong = engine.checkDocument(engine.parseBeo(secBEO(6, "75.00"), catal
 ok(secSunWrong.priceStatus === "undercharged" && secSunWrong.expectedPrice === 86,
   "Sunday security @ $75 undercharged (expected $86)");
 
-// No event date → review (can't pick the day rate).
+// No event date and no day on the line → review (can't pick the day rate).
 var secNoDate = engine.checkDocument(engine.parseBeo(secBEO(5, "63.00"), catalogue), catalogue, null).items[0];
-ok(secNoDate.priceStatus === "review", "security with unknown event date flagged to confirm");
+ok(secNoDate.priceStatus === "review", "security with unknown day flagged to confirm");
+
+// A day named on the line overrides the event date (event crossing midnight).
+var secDual = engine.checkDocument(engine.parseBeo(
+  "Miscellaneous\n16 Security officer hours - Saturday rate (4 guards) @ $75.00 per hour\n" +
+  "4 Security officer hours - Sunday rate (4 guards 0000-0030) @ $86.00 per hour\n",
+  catalogue), catalogue, "2026-10-17").items;
+var secSatLine = secDual.find(function (r) { return r.qty === 16; });
+var secSunLine = secDual.find(function (r) { return r.qty === 4; });
+ok(secSatLine && secSatLine.priceStatus === "correct" && secSatLine.expectedPrice === 75,
+  "line 'Saturday rate' @ $75 correct");
+ok(secSunLine && secSunLine.priceStatus === "correct" && secSunLine.expectedPrice === 86,
+  "line 'Sunday rate' @ $86 correct even though the event date is Saturday");
+
+// Real cross-midnight BEO: Sunday-rate block billed at $37.50/hour is flagged vs $86.
+var secFix = fs.readFileSync(path.join(__dirname, "fixtures", "security_crossmidnight_beo.txt"), "utf8");
+var secFixItems = engine.checkDocument(engine.parseBeo(secFix, catalogue), catalogue,
+  engine.parseBeoHeader(secFix).eventDate).items.filter(function (r) { return r.matchedName === "Security Officer"; });
+ok(secFixItems.length === 2, "both security blocks parsed from the real BEO (got " + secFixItems.length + ")");
+ok(secFixItems.some(function (r) { return r.expectedPrice === 75 && r.priceStatus === "correct"; }),
+  "Saturday block @ $75 correct");
+ok(secFixItems.some(function (r) { return r.expectedPrice === 86 && r.priceStatus === "undercharged"; }),
+  "Sunday block @ $37.50 flagged undercharged vs $86");
 
 console.log("\n----------------------------------------");
 console.log(passed + " passed, " + failed + " failed");

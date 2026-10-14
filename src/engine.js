@@ -401,8 +401,14 @@
     re = /(\d+)\s+security officer hours?[\s\S]{0,120}?@\s*\$?([\d,]+(?:\.\d{1,2})?)\s*per\s+hour/g;
     while ((m = re.exec(soft)) !== null) {
       var h = parseInt(m[1], 10), rate = parseMoney(m[2]);
+      // A security line often names its own day (e.g. "Saturday rate") because
+      // an event can cross midnight into a higher-rate day; prefer that over the
+      // event date.
+      var secDay = /\bsunday\b/i.test(m[0]) ? "sunday"
+        : /\bsaturday\b/i.test(m[0]) ? "saturday"
+        : /\b(mon|tue|wed|thu|fri|weekday|week\s*day)\w*\b/i.test(m[0]) ? "weekday" : null;
       pushUnique({ qty: h, name: "Security officer hours", unitPrice: rate,
-        lineTotal: round2(h * rate), kind: "security", beoUnit: "hour", source: "BEO" });
+        lineTotal: round2(h * rate), kind: "security", beoUnit: "hour", securityDay: secDay, source: "BEO" });
     }
 
     // Attrition / minimum spend: "@ $5,460.00 per event"
@@ -541,17 +547,24 @@
       result.category = "Security";
       result.matchedName = "Security Officer";
       var rates = (catalogue.securityRates) || { weekday: 63, saturday: 75, sunday: 86 };
-      var dow = dayOfWeek(eventDate);
       var secCharged = item.unitPrice;
-      if (dow == null) {
-        if (result.status !== "math-error") result.status = "review";
-        result.priceStatus = "review";
-        result.notes.push("Security officer charged " + money(secCharged) + "/hour — couldn't read the event date to pick the day rate " +
-          "(Mon–Fri $" + rates.weekday + ", Sat $" + rates.saturday + ", Sun $" + rates.sunday + "/hour). Confirm the day.");
-        return result;
+      var secExp, dayLabel;
+      if (item.securityDay === "sunday") { secExp = rates.sunday; dayLabel = "Sunday"; }
+      else if (item.securityDay === "saturday") { secExp = rates.saturday; dayLabel = "Saturday"; }
+      else if (item.securityDay === "weekday") { secExp = rates.weekday; dayLabel = "a weekday (Mon–Fri)"; }
+      else {
+        // No day on the line — fall back to the event date.
+        var dow = dayOfWeek(eventDate);
+        if (dow == null) {
+          if (result.status !== "math-error") result.status = "review";
+          result.priceStatus = "review";
+          result.notes.push("Security officer charged " + money(secCharged) + "/hour — couldn't tell the day (no day on the line and no event date) to pick the rate " +
+            "(Mon–Fri $" + rates.weekday + ", Sat $" + rates.saturday + ", Sun $" + rates.sunday + "/hour). Confirm the day.");
+          return result;
+        }
+        secExp = dow === 0 ? rates.sunday : dow === 6 ? rates.saturday : rates.weekday;
+        dayLabel = WEEKDAY_NAMES[dow] + (dow === 0 || dow === 6 ? "" : " (weekday)");
       }
-      var secExp = dow === 0 ? rates.sunday : dow === 6 ? rates.saturday : rates.weekday;
-      var dayLabel = WEEKDAY_NAMES[dow] + (dow === 0 ? "" : dow === 6 ? "" : " (weekday)");
       result.expectedPrice = secExp;
       var secD = round2(secCharged - secExp);
       result.priceDiff = secD;
