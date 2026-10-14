@@ -199,12 +199,16 @@
       if (!pm) return;
       var qty = parseInt(pm[1], 10);
       var price = parseMoney(pm[2]);
-      var win = lines.slice(Math.max(0, i - 30), i).join("  ");
+      var winArr = lines.slice(Math.max(0, i - 40), i);
+      var win = winArr.join("  ");
 
-      // Best catalogue match among the heading lines above the price, skipping
-      // charge/time lines and generic course-section labels.
-      var best = null;
-      for (var j = i - 1; j >= Math.max(0, i - 30); j--) {
+      // Match among the heading lines above the price. BEOs are two-column, so
+      // reading order can interleave unrelated right-column lines (e.g. a setup
+      // note "...for Catering Break 1") between a heading and its price — hence a
+      // wide window, and a preference for the NEAREST strong match so a weak
+      // nearby line can't beat the real heading further up.
+      var best = null, strong = null;
+      for (var j = i - 1; j >= Math.max(0, i - 60); j--) {
         var cand = lines[j].replace(/\s+/g, " ").trim();
         if (cand.length < 3) continue;
         if (/[@$]/.test(cand)) continue;              // charge lines
@@ -212,14 +216,24 @@
         if (/^\d{3,4}\b/.test(cand)) continue;        // program times (1905 ...)
         if (SECTION_RE.test(cand)) continue;          // ENTREE / MAIN COURSE / ...
         var mm = findMatch(cand, catalogue);
-        if (mm && (!best || mm.score > best.score)) best = { score: mm.score, name: cand, j: j };
+        if (!mm) continue;
+        if (!best || mm.score > best.score) best = { score: mm.score, name: cand, j: j };
+        if (mm.score >= 0.85 && !strong) strong = { score: mm.score, name: cand, j: j }; // closest strong
+      }
+      best = strong || best;
+
+      // Cocktail receptions are priced by number of canapés, not by name/hours.
+      // Require a proper "N canapés served / per person" phrase on one line so a
+      // stray "...Break 1  Canapes to be preset" can't fake a count.
+      var canapCount = null;
+      for (var w = 0; w < winArr.length; w++) {
+        var cmx = winArr[w].match(/\b(\d+)\s+canap[eé]s?\b/i);
+        if (cmx && /\b(served|per person|per guest|per head|pp)\b/i.test(winArr[w])) canapCount = cmx[1];
       }
 
       var altCourses = 0, kind = "per-person", nameOut;
-      var canap = win.match(/(\d+)\s*canap[eé]/i);
-      if (/cocktail reception|canap[eé]/i.test(win) && canap) {
-        // Cocktail receptions are priced by number of canapés, not by name/hours.
-        nameOut = "Cocktail Reception " + canap[1] + " Canapes";
+      if (canapCount) {
+        nameOut = "Cocktail Reception " + canapCount + " Canapes";
       } else if (best) {
         nameOut = best.name;
         for (var k = best.j; k < i; k++) if (/alternating with/i.test(lines[k])) altCourses++;

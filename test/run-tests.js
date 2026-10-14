@@ -196,6 +196,17 @@ ok(cu && /custom/i.test(cu.name), "custom set menu captured by name (got: " + (c
 ok(cu && cu.priceStatus === "review" && cu.status !== "overcharged", "custom set menu flagged review, not overcharged");
 ok(!customItems.some(function (x) { return /children/i.test(x.name); }), "no spurious children's line produced");
 
+section("Coffee break: real heading wins over a nearby 'Break 1' setup line");
+ok(engine.findMatch("Break 1", catalogue) === null, "'Break 1' alone does not match a coffee break");
+ok(engine.findMatch("Catering Break 1", catalogue) === null, "'Catering Break 1' does not match a coffee break");
+// Two-column interleaving: the real heading sits above a block of setup lines
+// that includes "Break 1", then the price.
+var breakBeo = "20:00 - 20:20 VIP Catering Break 2\nCoffee Break Menu Two\nAssorted cookies\nSWEET ITEMS\nScones, strawberry preserve, whipped cream\nSAVOURY ITEMS\nSerrano ham, Manchego cheese, caramelised onion toastie\nFreshly brewed coffee and selection of teas\nROOM SET UP\nPlease refer to floorplan on file\n10 Cocktail tables - White Marble\nClusters of glasses set per table\nBottles of soft drink PRESET in ice buckets for Catering\nBreak 1\nCanapes to be PRESET on station at rear of room\n35 guests @ $37.00 per person\n";
+var brkItems = engine.parseBeo(breakBeo, catalogue);
+var brk = engine.checkDocument(brkItems, catalogue).items.find(function (r) { return r.qty === 35; });
+ok(brk && brk.matchedName === "Coffee Break Two", "35 @ $37 matched to Coffee Break Two, not 'Break 1' (got: " + (brk && brk.matchedName) + ")");
+ok(brk && brk.priceStatus === "correct", "Coffee Break Menu Two @ $37 is correct, not overcharged");
+
 console.log("\n----------------------------------------");
 console.log(passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);
