@@ -112,9 +112,9 @@
     { category: "Breakfast Standup", name: "Standup Breakfast Croque Monsieur", price: 30, unit: "pp_per_selection" },
 
     // ---------- COFFEE BREAKS ----------
-    { category: "Coffee Breaks", name: "Coffee Break One", price: 30, unit: "pp", mustInclude: ["coffee"], note: "Select one item from sweet or savoury; incl. coffee, tea & assorted cookies (max 1 hr)." },
-    { category: "Coffee Breaks", name: "Coffee Break Two", price: 37, unit: "pp", mustInclude: ["coffee"], note: "Select two items from sweet or savoury; incl. coffee, tea & assorted cookies (max 1 hr)." },
-    { category: "Coffee Breaks", name: "Coffee Break Three", price: 55, unit: "pp", mustInclude: ["coffee"], note: "Select four items from sweet or savoury; incl. coffee, tea & assorted cookies (max 1 hr)." },
+    { category: "Coffee Breaks", name: "Coffee Break One", price: 30, unit: "pp", mustInclude: ["coffee"], breakItems: 1, note: "Select one item from sweet or savoury; incl. coffee, tea & assorted cookies (max 1 hr)." },
+    { category: "Coffee Breaks", name: "Coffee Break Two", price: 37, unit: "pp", mustInclude: ["coffee"], breakItems: 2, note: "Select two items from sweet or savoury; incl. coffee, tea & assorted cookies (max 1 hr)." },
+    { category: "Coffee Breaks", name: "Coffee Break Three", price: 55, unit: "pp", mustInclude: ["coffee"], breakItems: 4, note: "Select four items from sweet or savoury; incl. coffee, tea & assorted cookies (max 1 hr)." },
     { category: "Coffee Breaks", name: "Tea and Coffee Four Hour", price: 22, unit: "pp", note: "Freshly brewed coffee & selection of teas, 4-hour maximum." },
     { category: "Coffee Breaks", name: "Tea and Coffee Eight Hour", price: 28, unit: "pp", note: "Freshly brewed coffee & selection of teas, 8-hour maximum." },
     { category: "Coffee Breaks", name: "Barista Coffee Cart Half Day", price: 495, unit: "flat" },

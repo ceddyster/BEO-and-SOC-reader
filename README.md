@@ -118,6 +118,15 @@ with no matching price increase are flagged the same way.
 **Beverages on consumption** (drinks billed per bottle/glass) are simply matched to each item's
 list price — no package maths.
 
+**Coffee breaks** are checked by type:
+
+- **Coffee Break One / Two / Three** — price ($30 / $37 / $55) plus the number of sweet/savoury
+  items selected on the BEO (max **1 / 2 / 4**). More than allowed flags "to check".
+- **Tea and Coffee** (its own section) — priced by service duration: **$22pp up to 4 hrs**,
+  **$28pp over 4 and up to 8 hrs**, read from the time range on the BEO.
+- **Barista Coffee Cart** — priced **per cart**: expected = number of carts × $495 (half day) or
+  $640 (full day), so two half-day carts should read $990.
+
 **Plated breakfast** is checked on price ($56 Menu One / $60 Menu Two) and on **how many items
 were selected per category**. Menu One allows 1 from the bakery, 1 continental and 1 from the
 pan; Menu Two allows **both** bakery items plus 1 continental and 1 from the pan. If a category

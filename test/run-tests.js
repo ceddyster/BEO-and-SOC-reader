@@ -346,6 +346,47 @@ var bf2x = engine.checkDocument(engine.parseBeo(bfBEO("Plated Breakfast Menu Two
   catalogue), catalogue).items[0];
 ok(bf2x.priceStatus === "review", "Menu Two with 2 pan items flagged to check");
 
+section("Coffee break selection count");
+var cbTwoOk = engine.checkDocument(engine.parseBeo(
+  "Menu\n20:00 - 20:20 VIP Catering Break\nCoffee Break Menu Two\nAssorted cookies\n~~~~~\nSWEET ITEMS\nSultana scones, strawberry preserve, whipped cream\n~~~~~\nSAVOURY ITEMS\nChicken curry pie, tomato relish\n35 guests @ $37.00 per person\n",
+  catalogue), catalogue).items[0];
+ok(cbTwoOk.matchedName === "Coffee Break Two", "matched Coffee Break Two");
+ok(cbTwoOk.priceStatus === "correct", "Coffee Break Two with 2 items @ $37 correct (got " + cbTwoOk.priceStatus + ")");
+
+var cbTwoOver = engine.checkDocument(engine.parseBeo(
+  "Menu\n20:00 - 20:20 Break\nCoffee Break Menu Two\nAssorted cookies\nSWEET ITEMS\nSultana scones\nCarrot cake\nSAVOURY ITEMS\nChicken curry pie\n35 guests @ $37.00 per person\n",
+  catalogue), catalogue).items[0];
+ok(cbTwoOver.priceStatus === "review", "Coffee Break Two with 3 items flagged to check");
+
+section("Tea and Coffee priced by duration");
+var tc4 = engine.checkDocument(engine.parseBeo(
+  "Menu\n08:00 - 12:00 Tea and Coffee\nTea and Coffee\nFreshly brewed coffee and selection of teas\n50 guests @ $22.00 per person\n",
+  catalogue), catalogue).items[0];
+ok(tc4 && tc4.priceStatus === "correct", "Tea & Coffee 4 hrs @ $22 correct (got " + (tc4 && tc4.priceStatus) + ")");
+var tc8 = engine.checkDocument(engine.parseBeo(
+  "Menu\n08:00 - 16:00 Tea and Coffee\nTea and Coffee\nFreshly brewed coffee and selection of teas\n50 guests @ $28.00 per person\n",
+  catalogue), catalogue).items[0];
+ok(tc8 && tc8.priceStatus === "correct", "Tea & Coffee 8 hrs @ $28 correct");
+var tc9 = engine.checkDocument(engine.parseBeo(
+  "Menu\n08:00 - 17:00 Tea and Coffee\nTea and Coffee\n50 guests @ $28.00 per person\n",
+  catalogue), catalogue).items[0];
+ok(tc9 && tc9.priceStatus === "review", "Tea & Coffee 9 hrs (over 8-hr max) flagged to check");
+var tc8b = engine.checkDocument(engine.parseBeo(
+  "Menu\n08:00 - 15:00 Tea and Coffee\nTea and Coffee\n50 guests @ $22.00 per person\n",
+  catalogue), catalogue).items[0];
+ok(tc8b && tc8b.priceStatus === "undercharged", "Tea & Coffee 7 hrs charged $22 (should be $28) -> undercharged");
+ok(tc8b && tc8b.expectedPrice === 28, "7 hrs expects $28");
+
+section("Barista coffee cart (priced per cart)");
+var cart2 = engine.checkDocument(engine.parseBeo(
+  "Miscellaneous\nBarista Coffee Cart\n2 x Half Day Cart Hire $990.00\n", catalogue), catalogue).items[0];
+ok(cart2 && /Half Day/.test(cart2.matchedName || cart2.name), "recognises a half-day barista cart");
+ok(cart2 && cart2.qty === 2, "reads 2 carts (got " + (cart2 && cart2.qty) + ")");
+ok(cart2 && cart2.priceStatus === "correct", "2 × $495 = $990 correct");
+var cart1 = engine.checkDocument(engine.parseBeo(
+  "Miscellaneous\n2 x Barista Coffee Cart Full Day Hire $640.00\n", catalogue), catalogue).items[0];
+ok(cart1 && cart1.priceStatus === "undercharged", "2 full-day carts billed as $640 (one) -> undercharged");
+
 console.log("\n----------------------------------------");
 console.log(passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

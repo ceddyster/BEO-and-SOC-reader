@@ -20,6 +20,17 @@
     return m ? parseFloat(m[0]) : null;
   }
 
+  // Hours between the first "HH:MM - HH:MM" time range in a string (null if none).
+  function hoursFromText(s) {
+    var m = String(s || "").match(/(\d{1,2}):(\d{2})\s*[-–—]\s*(\d{1,2}):(\d{2})/);
+    if (!m) return null;
+    var start = parseInt(m[1], 10) + parseInt(m[2], 10) / 60;
+    var end = parseInt(m[3], 10) + parseInt(m[4], 10) / 60;
+    var h = end - start;
+    if (h < 0) h += 24; // crosses midnight
+    return round2(h);
+  }
+
   var NUM_WORDS = { one: "1", two: "2", three: "3", four: "4", five: "5", six: "6",
     seven: "7", eight: "8", nine: "9", ten: "10", twelve: "12" };
 
@@ -257,13 +268,31 @@
         if (cmx && /\b(served|per person|per guest|per head|pp)\b/i.test(winArr[w])) canapCount = cmx[1];
       }
 
-      var altCourses = 0, kind = "per-person", nameOut, itemGroup = grp;
+      // A standalone "Tea and Coffee" section, priced by service duration.
+      // (Excludes the "freshly brewed coffee and selection of teas" inclusion line.)
+      var teaCoffee = winArr.some(function (l) {
+        var t = l.replace(/\s+/g, " ").trim();
+        return /\btea\s*(?:&|and)\s*coffee\b/i.test(t) && !/freshly brewed/i.test(t) && t.length < 60;
+      });
+
+      var altCourses = 0, kind = "per-person", nameOut, itemGroup = grp, serviceHours;
       if (canapCount) {
         nameOut = "Cocktail Reception " + canapCount + " Canapes";
         itemGroup = "food"; // canapés are a food (Canapés menu) even at a drinks reception
       } else if (best) {
         nameOut = best.name;
         for (var k = best.j; k < i; k++) if (/alternating with/i.test(lines[k])) altCourses++;
+      } else if (teaCoffee) {
+        nameOut = "Tea and Coffee";
+        kind = "tea-coffee";
+        itemGroup = "food";
+        // Duration from the time range on (or nearest to) the Tea and Coffee line.
+        for (var tw = winArr.length - 1; tw >= 0 && serviceHours == null; tw--) {
+          if (/tea\s*(?:&|and)\s*coffee/i.test(winArr[tw])) serviceHours = hoursFromText(winArr[tw]);
+        }
+        if (serviceHours == null) {
+          for (var tw2 = winArr.length - 1; tw2 >= 0 && serviceHours == null; tw2--) serviceHours = hoursFromText(winArr[tw2]);
+        }
       } else if (/\bcustom\b/i.test(win)) {
         var cm = win.match(/custom[\w' ]*?(?:set menu|dinner|lunch|reception|menu|package)/i);
         nameOut = cm ? cm[0].replace(/\s+/g, " ").trim() : "Custom package";
@@ -282,6 +311,7 @@
 
       pushUnique({ qty: qty, name: nameOut, unitPrice: price, lineTotal: round2(qty * price),
         kind: kind, alternatingCourses: altCourses, group: itemGroup, contextLines: contextLines,
+        serviceHours: serviceHours,
         confident: !!best || kind !== "per-person" || /canap/i.test(nameOut), source: "BEO" });
     });
 
@@ -324,6 +354,22 @@
         lineTotal: parseMoney(m[1]), kind: "non-menu", source: "BEO" });
     }
 
+    // Barista coffee cart — a flat fee PER CART ($495 half day / $640 full day),
+    // so the charge should reflect the number of carts.
+    lines.forEach(function (line, idx) {
+      if (!/\b(barista|coffee cart|cart hire)\b/i.test(line)) return;
+      var ctx = lines.slice(Math.max(0, idx - 2), idx + 3).join("  ");
+      var full = /full day|eight hour|8\s*hour/i.test(ctx);
+      var half = /half day|four hour|4\s*hour/i.test(ctx);
+      if (!full && !half) return;
+      var qm = ctx.match(/(\d+)\s*(?:x\b|carts?\b)/i) || ctx.match(/\bx\s*(\d+)\b/i);
+      var carts = qm ? parseInt(qm[1], 10) : 1;
+      var pmx = ctx.match(/\$([\d,]+(?:\.\d{1,2})?)/);
+      pushUnique({ qty: carts, name: "Barista Coffee Cart " + (full ? "Full Day" : "Half Day"),
+        unitPrice: full ? 640 : 495, lineTotal: pmx ? parseMoney(pmx[1]) : null,
+        kind: "cart", group: "food", source: "BEO" });
+    });
+
     return items;
   }
 
@@ -348,7 +394,8 @@
     };
 
     // Internal maths check (qty x unit price == line total) — only when we have both.
-    if (item.lineTotal != null && item.unitPrice != null && item.qty != null) {
+    // (Carts handle this themselves against the per-cart menu price.)
+    if (item.kind !== "cart" && item.lineTotal != null && item.unitPrice != null && item.qty != null) {
       var expectedTotal = round2(item.qty * item.unitPrice);
       if (Math.abs(expectedTotal - item.lineTotal) > 0.005) {
         result.status = "math-error";
@@ -356,6 +403,70 @@
         result.notes.push("Line total should be " + money(expectedTotal) +
           " (" + item.qty + " × " + money(item.unitPrice) + "), but reads " + money(item.lineTotal) + ".");
       }
+    }
+
+    // Tea and Coffee: priced by service duration (<=4 hrs $22, >4-8 hrs $28).
+    if (item.kind === "tea-coffee") {
+      result.category = "Coffee Breaks";
+      result.matchedName = "Tea and Coffee";
+      var tcCharged = item.unitPrice, h = item.serviceHours;
+      if (h == null) {
+        if (result.status !== "math-error") result.status = "review";
+        result.priceStatus = "review";
+        result.notes.push("Tea and Coffee — couldn't read the service duration. It's $22pp up to 4 hrs, or $28pp over 4 and up to 8 hrs; charged " + money(tcCharged) + ". Confirm the duration.");
+        return result;
+      }
+      if (h > 8.01) {
+        if (result.status !== "math-error") result.status = "review";
+        result.priceStatus = "review";
+        result.notes.push("Tea and Coffee service is " + h.toFixed(1) + " hrs, over the 8-hour maximum — confirm.");
+        return result;
+      }
+      var tcExp = h <= 4.01 ? 22 : 28;
+      var tcTier = h <= 4.01 ? "up to 4 hrs" : "over 4, up to 8 hrs";
+      result.expectedPrice = tcExp;
+      var tcD = round2(tcCharged - tcExp);
+      result.priceDiff = tcD;
+      result.priceImpact = item.qty != null ? round2(tcD * item.qty) : null;
+      if (Math.abs(tcD) <= 0.005) {
+        result.priceStatus = "correct";
+        result.notes.push("Tea and Coffee " + h.toFixed(1) + " hrs (" + tcTier + ") = " + money(tcExp) + "pp. Correct.");
+      } else {
+        result.priceStatus = tcD < 0 ? "undercharged" : "overcharged";
+        if (result.status !== "math-error") result.status = result.priceStatus;
+        result.notes.push("Tea and Coffee " + h.toFixed(1) + " hrs (" + tcTier + ") should be " + money(tcExp) +
+          "pp; charged " + money(tcCharged) + " (" + (tcD < 0 ? "under" : "over") + " by " + money(Math.abs(tcD)) +
+          " each" + (item.qty != null ? ", " + money(Math.abs(result.priceImpact)) + " across " + item.qty : "") + ").");
+      }
+      return result;
+    }
+
+    // Barista coffee cart — flat fee per cart, charge should be carts × cart price.
+    if (item.kind === "cart") {
+      result.category = "Coffee Breaks";
+      result.matchedName = item.name;
+      var cartUnit = item.unitPrice, carts = item.qty || 1;
+      var cartExp = round2(carts * cartUnit);
+      result.expectedPrice = cartUnit;
+      if (item.lineTotal == null) {
+        if (result.status !== "math-error") result.status = "review";
+        result.priceStatus = "review";
+        result.notes.push(carts + " × " + item.name + " at " + money(cartUnit) + " per cart = " + money(cartExp) +
+          ". Couldn't read the charged total — confirm it reflects " + carts + " cart" + (carts > 1 ? "s" : "") + ".");
+        return result;
+      }
+      var cartD = round2(item.lineTotal - cartExp);
+      result.priceDiff = cartD;
+      if (Math.abs(cartD) <= 0.005) {
+        result.priceStatus = "correct";
+        result.notes.push(carts + " cart" + (carts > 1 ? "s" : "") + " × " + money(cartUnit) + " = " + money(cartExp) + ". Correct.");
+      } else {
+        result.priceStatus = cartD < 0 ? "undercharged" : "overcharged";
+        if (result.status !== "math-error") result.status = result.priceStatus;
+        result.notes.push(carts + " cart" + (carts > 1 ? "s" : "") + " × " + money(cartUnit) + " per cart should be " +
+          money(cartExp) + "; charged " + money(item.lineTotal) + " (" + (cartD < 0 ? "under" : "over") + " by " + money(Math.abs(cartD)) + ").");
+      }
+      return result;
     }
 
     var per = item.beoUnit ? (" per " + item.beoUnit) : "";
@@ -387,10 +498,14 @@
         ? analyzeBeveragePackage(item, match.item, catalogue) : null;
       var bfInfo = (match.item.breakfast && item.contextLines)
         ? analyzePlatedBreakfast(item, match.item, catalogue) : null;
+      var cbInfo = (match.item.breakItems && item.contextLines)
+        ? analyzeCoffeeBreakItems(item, match.item) : null;
       if (bevInfo) {
         explainBeveragePackage(result, item, match.item, base, bevInfo, catalogue);
       } else if (bfInfo) {
         explainPlatedBreakfast(result, item, match.item, base, diff, bfInfo);
+      } else if (cbInfo) {
+        explainCoffeeBreak(result, item, match.item, base, diff, cbInfo);
       } else if (match.item.composable && diff > 0.005) {
         composableExplain(result, item, match.item, base, diff);
       } else if (Math.abs(diff) <= 0.005) {
@@ -696,6 +811,56 @@
     } else {
       result.priceStatus = "correct";
       result.notes.push("Price and selections OK (" + countTxt + ").");
+    }
+  }
+
+  // Coffee break package: count the sweet/savoury items the BEO selected and
+  // flag if more were chosen than the package allows (One 1, Two 2, Three 4).
+  function analyzeCoffeeBreakItems(item, catItem) {
+    var allowed = catItem.breakItems;
+    // Operational / room-setup content (which can interleave from the BEO's other
+    // column) ends the food-selection list.
+    var stopRe = /\b(room|linen|napkin|tablecloth|table|tables|chair|chairs|floor ?plan|preset|station|stage|dance floor|cluster|clusters|glasses|ice bucket|lectern|microphone|security|please refer|set ?up|allocated|centrepiece|cabaret|trestle|banquet|av desk|whiteboard|projector|screen|signage|pinboard|water and mint|chef notes?)\b/i;
+    var inSel = false, count = 0;
+    (item.contextLines || []).forEach(function (l) {
+      var t = l.replace(/\s+/g, " ").trim();
+      if (!t) return;
+      if (/^(sweet|savoury|savory)\b.*\b(items?|selections?)\b/i.test(t)) { inSel = true; return; }
+      if (/^(from the|continental|menu$|beverages?$|program|dietary|miscellaneous|technical)/i.test(t)) { inSel = false; return; }
+      if (stopRe.test(t)) { inSel = false; return; }
+      if (!inSel) return;
+      if (/^~+$/.test(t) || /^[>*]/.test(t)) return;               // separators / notes
+      if (/assorted cookies|freshly brewed|selection of teas/i.test(t)) return; // always included
+      count++;
+    });
+    return { count: count, allowed: allowed, flag: count > allowed };
+  }
+
+  function explainCoffeeBreak(result, item, catItem, base, diff, info) {
+    result.priceDiff = diff;
+    result.priceImpact = item.qty != null ? round2(diff * item.qty) : null;
+    result._explained = true;
+    var allowTxt = catItem.name + " allows " + info.allowed + " item" + (info.allowed > 1 ? "s" : "");
+    if (diff < -0.005) {
+      result.priceStatus = "undercharged";
+      if (result.status !== "math-error") result.status = "undercharged";
+      result.notes.push("Menu price for " + catItem.name + " is " + money(base) + "; charged " + money(item.unitPrice) +
+        " (under by " + money(Math.abs(diff)) + " each" +
+        (item.qty != null ? ", " + money(Math.abs(result.priceImpact)) + " across " + item.qty : "") + ").");
+    } else if (diff > 0.005) {
+      result.priceStatus = "overcharged";
+      if (result.status !== "math-error") result.status = "overcharged";
+      result.notes.push("Menu price for " + catItem.name + " is " + money(base) + "; charged " + money(item.unitPrice) +
+        " (over by " + money(Math.abs(diff)) + " each" +
+        (item.qty != null ? ", " + money(Math.abs(result.priceImpact)) + " across " + item.qty : "") + ").");
+    } else if (info.flag) {
+      result.priceStatus = "review";
+      if (result.status !== "math-error") result.status = "review";
+      result.notes.push("BEO appears to list about " + info.count + " sweet/savoury item(s), but " + allowTxt +
+        ". Check the selections.");
+    } else {
+      result.priceStatus = "correct";
+      result.notes.push("Price OK — " + allowTxt + (info.count ? " (about " + info.count + " listed)" : "") + ".");
     }
   }
 
