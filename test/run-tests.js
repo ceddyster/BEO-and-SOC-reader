@@ -270,6 +270,27 @@ var resAdd = engine.checkDocument(engine.parseBeo(bevBEO(
    "Corona", "Hahn Super Dry 3.5", "Heineken Zero", "Peroni"], "66.50"), catalogue), catalogue).items[0];
 ok(resAdd.priceStatus === "correct", "Crown Reserve 4hr + 1 beer @ $66.50 correct");
 
+// WA Premium 2hr ($85) + a second white (WA Premium selection, +$15) = $100.
+var waExtra = engine.checkDocument(engine.parseBeo(bevBEO(
+  "WA Premium Package - 2 Hours",
+  ["Leeuwin Estate Sparkling Brut", "Leeuwin Estate Art Series Sauvignon Blanc",
+   "Leeuwin Estate Prelude Vineyards Chardonnay", "Leeuwin Estate Art Series Shiraz",
+   "Corona", "Little Creatures Pale Ale", "Rogers Amber Ale", "Heineken",
+   "Hahn Super Dry 3.5", "Hahn Premium Light", "Heineken Zero"], "100.00"), catalogue), catalogue).items[0];
+ok(waExtra.matchedName === "WA Premium Package - 2 Hour", "matched WA Premium 2 Hour");
+ok(waExtra.priceStatus === "correct", "WA Premium + 2nd white @ $100 correct");
+ok(waExtra.notes.join(" ").indexOf("+$15.00pp") !== -1, "extra WA Premium wine priced at $15pp");
+
+// Crown Reserve 4hr ($62) + a Crown Deluxe wine (+$10) = $72 — needs the Reserve
+// base wines to be recognised so the added wine counts as the second.
+var resWine = engine.checkDocument(engine.parseBeo(bevBEO(
+  "Crown Reserve Package - 4 Hours",
+  ["Woodbrook Vineyards NV Brut Cuvee", "Brigade Block Semillon Sauvignon Blanc", "Abilene Shiraz",
+   "Vasse Felix Filius Chardonnay", "Corona", "Hahn Super Dry 3.5", "Hahn Premium Light", "Heineken Zero"],
+  "72.00"), catalogue), catalogue).items[0];
+ok(resWine.priceStatus === "correct", "Crown Reserve + 1 Deluxe wine @ $72 correct");
+ok(resWine.notes.join(" ").indexOf("1 extra wine (+$10.00pp)") !== -1, "extra Deluxe wine priced at $10pp");
+
 // Same extra beer but billed at base $62 (add-on not charged) → review.
 var resMiss = engine.checkDocument(engine.parseBeo(bevBEO(
   "Crown Reserve Package - 4 Hours",

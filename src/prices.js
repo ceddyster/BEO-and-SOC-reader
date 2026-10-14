@@ -232,6 +232,11 @@
     { category: "Wine — Dessert & Fortified", name: "De Bortoli Noble One Botrytis Semillon", price: 70, unit: "bottle" },
     { category: "Wine — Dessert & Fortified", name: "T'Gallant Juliet Moscato", price: 65, unit: "bottle" },
     { category: "Wine — Dessert & Fortified", name: "Penfolds Grandfather Fine Old Tawny", price: 200, unit: "bottle" },
+    // Crown Reserve package selection wines — included in the package, not sold by
+    // the bottle (no list price). Present so the package checker can recognise them.
+    { category: "Wine — Sparkling", name: "Woodbrook Vineyards NV Brut Cuvee", price: null, unit: "bottle", priceVaries: true, note: "Crown Reserve package selection (no bottle price)." },
+    { category: "Wine — White", name: "Brigade Block Semillon Sauvignon Blanc", price: null, unit: "bottle", priceVaries: true, note: "Crown Reserve package selection (no bottle price)." },
+    { category: "Wine — Red", name: "Abilene Shiraz", price: null, unit: "bottle", priceVaries: true, note: "Crown Reserve package selection (no bottle price)." },
 
     // ---------- SPIRITS (per glass) ----------
     { category: "Spirits", name: "Ketel One Vodka", price: 15.5, unit: "glass" },
