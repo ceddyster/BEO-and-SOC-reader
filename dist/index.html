@@ -210,9 +210,11 @@
     border-bottom: 1px solid var(--border); background: var(--surface); }
   .bv-title { font-family: var(--display); font-weight: 700; font-size: 14px; }
   .bv-head .src-check { margin-left: auto; }
-  .bv-pages { max-height: 72vh; overflow: auto; padding: 14px; background: var(--surface-2); }
-  .bv-page { position: relative; margin: 0 auto 14px; box-shadow: 0 1px 6px rgba(0,0,0,.25); }
-  .bv-page:last-child { margin-bottom: 0; }
+  .bv-pages { max-height: 76vh; overflow: auto; padding: 14px; background: var(--surface-2); position: relative; }
+  /* Pages stack flush so the BEO reads as one continuous document. */
+  .bv-doc { margin: 0 auto; width: max-content; max-width: 100%; box-shadow: 0 1px 8px rgba(0,0,0,.28); }
+  .bv-page { position: relative; margin: 0; }
+  .bv-page + .bv-page { border-top: 1px dashed var(--border); }
   .bv-page canvas { display: block; }
   .bv-hl { position: absolute; left: 0; right: 0; background: rgba(255,208,0,.35);
     border-top: 2px solid rgba(230,160,0,.95); border-bottom: 2px solid rgba(230,160,0,.95);
@@ -2208,6 +2210,7 @@
           state.beoText = meta.map(function (l) { return l.str; }).join("\n");
           state.pdf = pdf;
           state.pageCache = {};
+          state.pageScale = null;
           state.beoName = file.name;
           markLoaded("dropBeo", "beoName", file.name);
           setStatus("BEO loaded (" + pdf.numPages + " pages). " + (state.socRows ? "Ready." : "Add the SOC or press Check charges."));
@@ -2326,7 +2329,8 @@
     var recon = (beoItems && beoItems.length && socItems && socItems.length)
       ? E.reconcile(beoItems, socItems) : null;
 
-    renderReportInto(out, report, recon, primary.label, beoHeader, 0);
+    var singleSpan = state.pdf ? [1, state.pdf.numPages] : null;
+    renderReportInto(out, report, recon, primary.label, beoHeader, 0, singleSpan);
 
     buildSummaryText(report, recon, primary.label, beoHeader);
     $("copyBtn").hidden = false;
@@ -2337,7 +2341,7 @@
   // reconciliation, totals) to a container. lineOffset maps an item's source
   // line index back to the whole-PDF line metadata (used for a distribution,
   // where each BEO's text is a slice of the full PDF).
-  function renderReportInto(container, report, recon, label, header, lineOffset) {
+  function renderReportInto(container, report, recon, label, header, lineOffset, pageSpan) {
     renderBanner(container, report, recon, label);
     if (report.summary.validityNote) {
       var vn = document.createElement("div");
@@ -2347,7 +2351,7 @@
       container.appendChild(vn);
     }
     if (header) renderFacts(container, header, report, label);
-    renderCheckTable(container, report, label, lineOffset || 0);
+    renderCheckTable(container, report, label, lineOffset || 0, pageSpan || null);
     if (recon) renderRecon(container, recon);
     renderTotals(container, report);
   }
@@ -2355,13 +2359,21 @@
   // A multi-BEO distribution: an overview of every BEO, then each BEO's full
   // report in a collapsible section.
   function renderDistribution(out, segs) {
-    var checked = segs.map(function (seg) {
+    var meta = state.beoLineMeta || [];
+    var checked = segs.map(function (seg, i) {
       var header = E.parseBeoHeader(seg.text);
       var items = E.parseBeo(seg.text, CAT);
       var report = E.checkDocument(items, CAT, header.eventDate);
-      var reconBad = 0;
-      var hard = report.summary.issues + reconBad;
-      return { seg: seg, header: header, report: report, hard: hard };
+      var hard = report.summary.issues;
+      // This BEO's page range within the whole distribution PDF.
+      var endLine = (i + 1 < segs.length) ? segs[i + 1].startLine : meta.length;
+      var span = null;
+      for (var k = seg.startLine; k < endLine && k < meta.length; k++) {
+        if (!meta[k]) continue;
+        if (!span) span = [meta[k].page, meta[k].page];
+        else { span[0] = Math.min(span[0], meta[k].page); span[1] = Math.max(span[1], meta[k].page); }
+      }
+      return { seg: seg, header: header, report: report, hard: hard, span: span };
     });
     var withIssues = checked.filter(function (c) { return c.hard > 0; }).length;
     var toConfirm = checked.filter(function (c) { return c.hard === 0 && c.report.summary.review > 0; }).length;
@@ -2436,7 +2448,7 @@
       d.appendChild(sm);
       var body = document.createElement("div");
       body.className = "beo-body";
-      renderReportInto(body, c.report, null, "BEO", c.header, c.seg.startLine || 0);
+      renderReportInto(body, c.report, null, "BEO", c.header, c.seg.startLine || 0, c.span);
       d.appendChild(body);
       out.appendChild(d);
       detailsEls[idx] = d;
@@ -2512,11 +2524,23 @@
   }
   function fact(k, v) { return "<div><dt>" + esc(k) + "</dt><dd>" + esc(v) + "</dd></div>"; }
 
-  function renderCheckTable(out, report, label, lineOffset) {
+  function renderCheckTable(out, report, label, lineOffset, pageSpan) {
     lineOffset = lineOffset || 0;
     var pdfReady = !!(state.pdf && state.beoLineMeta && state.beoLineMeta.length);
+    var fromP = pageSpan ? pageSpan[0] : 1;
+    var toP = pageSpan ? pageSpan[1] : (state.pdf ? state.pdf.numPages : 1);
     var sec = block("Charge check", "vs 2026 menu prices · source: " + label +
       (pdfReady ? " · click a line to see it on the BEO" : ""));
+    if (pdfReady) {
+      var btn = document.createElement("button");
+      btn.className = "btn"; btn.type = "button";
+      btn.textContent = "📄 View full BEO";
+      btn.style.marginLeft = "auto"; btn.style.padding = "4px 10px"; btn.style.fontSize = "12.5px";
+      btn.addEventListener("click", function () {
+        openBeoRange(fromP, toP, [], null, "BEO — full" + (pageSpan ? " (pages " + fromP + "–" + toP + ")" : ""));
+      });
+      sec.querySelector("h2").appendChild(btn);
+    }
     var html = '<div class="tscroll"><table><thead><tr>' +
       "<th>Item</th><th class='num'>Qty</th><th class='num'>Charged</th>" +
       "<th class='num'>Menu price</th><th class='num'>Line total</th><th>Status</th>" +
@@ -2576,7 +2600,7 @@
         tr.classList.add("src-open");
         var charge = parseInt(tr.getAttribute("data-srcline"), 10);
         var head = tr.getAttribute("data-headline");
-        showBeoLocation(head === "" ? null : parseInt(head, 10), charge, tr);
+        showBeoLocation(head === "" ? null : parseInt(head, 10), charge, tr, fromP, toP);
       });
     });
 
@@ -2601,85 +2625,103 @@
     });
   }
 
-  // Render one BEO page to a fresh canvas, scaled to fit the viewer width.
-  function renderBeoPage(pageNum) {
+  // Render one BEO page to a canvas (cached), scaled to one chosen width so the
+  // pages stack into a single continuous document.
+  function getBeoPage(pageNum) {
+    state.pageCache = state.pageCache || {};
+    if (state.pageCache[pageNum]) return Promise.resolve(state.pageCache[pageNum]);
     return state.pdf.getPage(pageNum).then(function (page) {
       var base = page.getViewport({ scale: 1 });
-      var avail = Math.max(280, ($("bvPages").clientWidth || 700) - 28);
-      var scale = Math.min(2, Math.max(0.5, avail / base.width));
-      var viewport = page.getViewport({ scale: scale });
+      if (!state.pageScale) {
+        var avail = Math.max(300, ($("bvPages").clientWidth || (document.querySelector(".wrap") || {}).clientWidth || 760) - 28);
+        state.pageScale = Math.min(2, Math.max(0.5, avail / base.width));
+      }
+      var viewport = page.getViewport({ scale: state.pageScale });
       var canvas = document.createElement("canvas");
       canvas.width = Math.ceil(viewport.width);
       canvas.height = Math.ceil(viewport.height);
       var ctx = canvas.getContext("2d");
       return page.render({ canvasContext: ctx, viewport: viewport }).promise.then(function () {
-        return { canvas: canvas, viewport: viewport };
+        state.pageCache[pageNum] = { canvas: canvas, viewport: viewport };
+        return state.pageCache[pageNum];
       });
     });
   }
 
-  // Locate a check line on the actual rendered BEO and highlight it.
-  function showBeoLocation(headLine, chargeLine, rowEl) {
-    if (!state.pdf || !state.beoLineMeta) return;
-    var meta = state.beoLineMeta;
-    var charge = (chargeLine != null) ? meta[chargeLine] : null;
-    var head = (headLine != null) ? meta[headLine] : null;
-    if (!charge && !head) return;
-    var targets = [];                 // {page, metas:[...]}
-    function addTarget(m) {
-      if (!m) return;
-      var t = targets.filter(function (x) { return x.page === m.page; })[0];
-      if (!t) { t = { page: m.page, metas: [] }; targets.push(t); }
-      if (t.metas.indexOf(m) === -1) t.metas.push(m);
-    }
-    addTarget(head); addTarget(charge);
-
+  // Open the BEO viewer on a page range, rendered as ONE continuous document,
+  // optionally highlighting some lines and scrolling to the first of them.
+  function openBeoRange(fromPage, toPage, highlightMetas, rowEl, title) {
+    if (!state.pdf) return;
+    fromPage = fromPage || 1;
+    toPage = toPage || state.pdf.numPages;
     var viewer = $("beoViewer"), pagesEl = $("bvPages");
     viewer.hidden = false;
-    $("bvTitle").textContent = "BEO — page " + targets.map(function (t) { return t.page; }).join(" & ");
+    $("bvTitle").textContent = title || ("BEO — pages " + fromPage + "–" + toPage);
     var rev = $("bvReviewed");
-    rev.checked = !!(rowEl && rowEl.classList.contains("reviewed"));
-    rev.onchange = function () { if (rowEl) rowEl.classList.toggle("reviewed", rev.checked); };
+    if (rowEl) {
+      rev.parentElement.style.display = "";
+      rev.checked = rowEl.classList.contains("reviewed");
+      rev.onchange = function () { rowEl.classList.toggle("reviewed", rev.checked); };
+    } else {
+      rev.parentElement.style.display = "none";
+      rev.onchange = null;
+    }
     pagesEl.innerHTML = '<div class="note" style="padding:8px">Rendering the BEO…</div>';
     viewer.scrollIntoView({ behavior: "smooth", block: "start" });
 
-    var seq = Promise.resolve();
-    var built = [];
-    targets.forEach(function (t) {
+    var seq = Promise.resolve(), built = [];
+    var _loop = function (pn) {
       seq = seq.then(function () {
-        return renderBeoPage(t.page).then(function (rec) {
+        return getBeoPage(pn).then(function (rec) {
           var wrap = document.createElement("div");
           wrap.className = "bv-page";
           wrap.style.width = rec.canvas.width + "px";
           wrap.appendChild(rec.canvas);
           var primaryHl = null;
-          t.metas.forEach(function (m) {
-            var pt = rec.viewport.convertToViewportPoint(m.x, m.y); // baseline, top-left origin
-            var hpx = (m.h || 10) * (rec.viewport.scale || 1);
+          (highlightMetas || []).forEach(function (m) {
+            if (!m || m.page !== pn) return;
+            var pt = rec.viewport.convertToViewportPoint(m.x, m.y);
+            var hpx = (m.h || 10) * (state.pageScale || 1);
             var hl = document.createElement("div");
             hl.className = "bv-hl";
             hl.style.top = Math.max(0, pt[1] - hpx * 1.2) + "px";
             hl.style.height = (hpx * 1.6) + "px";
             wrap.appendChild(hl);
-            if (m === charge || (!charge && m === head)) primaryHl = hl;
+            if (!primaryHl) primaryHl = hl;
           });
           built.push({ wrap: wrap, hl: primaryHl });
         });
       });
-    });
+    };
+    for (var pn = fromPage; pn <= toPage; pn++) _loop(pn);
+
     seq.then(function () {
       pagesEl.innerHTML = "";
-      built.forEach(function (b) { pagesEl.appendChild(b.wrap); });
-      // Scroll the viewer to the primary highlight.
-      var focus = built.filter(function (b) { return b.hl; })[0] || built[0];
+      var doc = document.createElement("div");
+      doc.className = "bv-doc";
+      built.forEach(function (b) { doc.appendChild(b.wrap); });
+      pagesEl.appendChild(doc);
+      var focus = built.filter(function (b) { return b.hl; })[0];
       if (focus) {
-        var top = focus.wrap.offsetTop + (focus.hl ? parseFloat(focus.hl.style.top) : 0) - 60;
-        pagesEl.scrollTop = Math.max(0, top);
+        pagesEl.scrollTop = Math.max(0, focus.wrap.offsetTop + parseFloat(focus.hl.style.top) - 60);
+      } else {
+        pagesEl.scrollTop = 0;
       }
     }).catch(function (err) {
-      pagesEl.innerHTML = '<div class="note flag" style="padding:8px">Could not render the BEO page: ' +
+      pagesEl.innerHTML = '<div class="note flag" style="padding:8px">Could not render the BEO: ' +
         esc(err && err.message || String(err)) + "</div>";
     });
+  }
+
+  // Locate a check line on the rendered BEO — shows the whole BEO as one
+  // continuous page, highlighting the heading and the charge.
+  function showBeoLocation(headLine, chargeLine, rowEl, fromPage, toPage) {
+    if (!state.pdf || !state.beoLineMeta) return;
+    var meta = state.beoLineMeta;
+    var metas = [];
+    if (headLine != null && meta[headLine]) metas.push(meta[headLine]);
+    if (chargeLine != null && meta[chargeLine]) metas.push(meta[chargeLine]);
+    openBeoRange(fromPage, toPage, metas, rowEl, null);
   }
 
   function renderRecon(out, recon) {
