@@ -317,6 +317,10 @@
         // drink/dish line (a wine/beer/spirit priced per bottle/glass/each).
         // Per-child menus (unit "child") are per-head packages too.
         if (mm && !/^(pp|child)/.test(mm.item.unit || "")) mm = null;
+        // Stay in the charge's own section: a Beverage charge must not borrow a
+        // food heading (or vice versa), so a line like "Crown Reserve Package -
+        // 6.5 Hours" that has no exact tier can't bleed up to a crew meal.
+        if (mm && grp && mm.item.group && mm.item.group !== grp) mm = null;
         if (!mm) continue;
         if (!best || mm.score > best.score) best = { score: mm.score, name: cand, j: j };
         if (mm.score >= 0.85 && !strong) strong = { score: mm.score, name: cand, j: j }; // closest strong
@@ -349,7 +353,7 @@
         return /\btea\s*(?:&|and)\s*coffee\b/i.test(t) && !/freshly brewed/i.test(t) && t.length < 60;
       });
 
-      var altCourses = 0, kind = "per-person", nameOut, itemGroup = grp, serviceHours;
+      var altCourses = 0, kind = "per-person", nameOut, itemGroup = grp, serviceHours, bpm;
       if (canapCount) {
         nameOut = "Cocktail Reception " + canapCount + " Canapes";
         itemGroup = "food"; // canapés are a food (Canapés menu) even at a drinks reception
@@ -378,6 +382,13 @@
         nameOut = cm ? cm[0].replace(/\s+/g, " ").trim() : "Custom package";
         kind = "custom";
         itemGroup = null;
+      } else if ((bpm = win.match(/(crown reserve|crown deluxe|wa premium|soft drink(?:\s*only)?)\s*(?:beverage\s*)?package\s*[-–—]?\s*([\d.]+)\s*hours?/i))) {
+        // A beverage package whose duration isn't a standard whole-hour tier
+        // (e.g. "Crown Reserve Package - 6.5 Hours") — recognised as that
+        // package, flagged to confirm rather than mis-priced or left unknown.
+        nameOut = bpm[1].replace(/\b\w/g, function (c) { return c.toUpperCase(); }) + " Package - " + bpm[2] + " Hours";
+        kind = "bev-nonstandard";
+        itemGroup = "beverage";
       } else {
         nameOut = "(unidentified per-person item)";
       }
@@ -667,6 +678,18 @@
           "/hour (" + (secD < 0 ? "under" : "over") + " by " + money(Math.abs(secD)) + "/hour" +
           (item.qty != null ? ", " + money(Math.abs(result.priceImpact)) + " across " + item.qty + " hour" + (item.qty > 1 ? "s" : "") : "") + ").");
       }
+      return result;
+    }
+
+    // Beverage package with a non-standard duration (e.g. 6.5 hours) — the menu
+    // only lists whole-hour tiers, so confirm the rate against the quote.
+    if (item.kind === "bev-nonstandard") {
+      result.category = "Beverage Package";
+      result.matchedName = item.name;
+      if (result.status !== "math-error") result.status = "review";
+      result.priceStatus = "review";
+      result.notes.push(item.name + " charged " + money(item.unitPrice) +
+        "pp — the menu only lists whole-hour tiers (e.g. 6 Hour), so this duration isn't a standard rate. Confirm against the quote.");
       return result;
     }
 

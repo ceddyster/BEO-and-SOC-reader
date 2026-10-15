@@ -661,6 +661,20 @@ var crewLun = engine.checkDocument(engine.parseBeo(
 ok(crewLun.matchedName === "Crew Set Menu Main Lunch" && crewLun.priceStatus === "correct",
   "crew main at 12:00 (Staff Lunch) → Lunch rate $39 correct (got " + (crewLun && crewLun.matchedName) + ")");
 
+section("A beverage charge never borrows a food heading (no phantom line)");
+// A non-standard-tier beverage package ("6.5 Hours") sits below a crew meal;
+// its charge must not bleed up to the crew heading and double-count it.
+var mixBeo = "Menu\n20:00 - 21:00 Crew Catering\nCrew Catering - Set Menu\nChef's selection of main course\n12 guests @ $44.00 per person\n" +
+  "Beverage\n19:00 - 01:00 Dinner\nCrown Reserve Package - 6.5 Hours\nWoodbrook Vineyards NV Brut Cuvee\n707 guests @ $64.00 per person\n";
+var mix = engine.checkDocument(engine.parseBeo(mixBeo, catalogue), catalogue).items;
+ok(mix.filter(function (r) { return /main course/i.test(r.name); }).length === 1,
+  "crew meal counted once, not twice");
+var bevNS = mix.find(function (r) { return /6\.5 Hours/.test(r.name); });
+ok(bevNS && bevNS.matchedName === "Crown Reserve Package - 6.5 Hours" && bevNS.priceStatus === "review",
+  "non-standard 6.5-hour beverage package flagged to confirm (got " + (bevNS && bevNS.matchedName) + ")");
+ok(!mix.some(function (r) { return /Crew Set Menu/.test(r.matchedName || "") && r.unitPrice === 64; }),
+  "no phantom crew charge at $64");
+
 section("Real BEO — NAB Branch Leadership Forum (multi-section, page-split)");
 var nab = fs.readFileSync(path.join(__dirname, "fixtures", "nab_beo.txt"), "utf8");
 var nabRep = engine.checkDocument(engine.parseBeo(nab, catalogue), catalogue,
