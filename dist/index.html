@@ -2778,43 +2778,63 @@
     viewer.scrollIntoView({ behavior: "smooth", block: "start" });
 
     var seq = Promise.resolve(), clips = [];
+    function copyCanvas(src) {
+      try {
+        var c = document.createElement("canvas"); c.width = src.width; c.height = src.height;
+        var cx = c.getContext("2d"); if (cx) { cx.drawImage(src, 0, 0); return c; }
+      } catch (e) { /* no 2d context (e.g. test env) */ }
+      return src;
+    }
+    // Only the pages that actually hold the heading / charge — a middle page
+    // between them is dropped entirely.
+    var metaPages = [];
+    metas.forEach(function (m) { if (metaPages.indexOf(m.page) === -1) metaPages.push(m.page); });
+    metaPages.sort(function (a, b) { return a - b; });
     var _one = function (pn) {
       seq = seq.then(function () {
         return getBeoPage(pn).then(function (rec) {
           var onPage = metas.filter(function (m) { return m.page === pn; });
-          var baselines = onPage.map(function (m) { return rec.viewport.convertToViewportPoint(m.x, m.y)[1]; });
-          var hpx = ((onPage[0] || metas[0]).h || 10) * (state.pageScale || 1);
-          var pad = Math.max(28, hpx * 2.5);
-          var minB = baselines.length ? Math.min.apply(null, baselines) : 0;
-          var maxB = baselines.length ? Math.max.apply(null, baselines) : rec.canvas.height;
-          var top, bottom;
-          if (pA === pB) { top = minB - pad; bottom = maxB + pad + hpx; }
-          else if (pn === pA) { top = minB - pad; bottom = rec.canvas.height; }
-          else if (pn === pB) { top = 0; bottom = maxB + pad + hpx; }
-          else { top = 0; bottom = rec.canvas.height; }
-          top = Math.max(0, top); bottom = Math.min(rec.canvas.height, bottom);
-          var clip = document.createElement("div");
-          clip.className = "bv-clip";
-          clip.style.width = rec.canvas.width + "px";
-          clip.style.height = Math.max(20, bottom - top) + "px";
-          var inner = document.createElement("div");
-          inner.className = "bv-clip-inner";
-          inner.style.top = (-top) + "px";
-          inner.appendChild(rec.canvas);
-          onPage.forEach(function (m) {
+          if (!onPage.length) return;
+          var hpx = (onPage[0].h || 10) * (state.pageScale || 1);
+          // A tight band around each line (a little above, a few lines below to
+          // catch its own notes), merged when two bands touch.
+          var bands = onPage.map(function (m) {
             var b = rec.viewport.convertToViewportPoint(m.x, m.y)[1];
-            var hl = document.createElement("div");
-            hl.className = "bv-hl";
-            hl.style.top = Math.max(0, b - hpx * 1.2) + "px";
-            hl.style.height = (hpx * 1.6) + "px";
-            inner.appendChild(hl);
+            return { top: b - hpx * 2, bottom: b + hpx * 4.2, metas: [m] };
+          }).sort(function (a, b) { return a.top - b.top; });
+          var merged = [bands[0]];
+          for (var k = 1; k < bands.length; k++) {
+            var last = merged[merged.length - 1];
+            if (bands[k].top <= last.bottom + hpx * 2) {
+              last.bottom = Math.max(last.bottom, bands[k].bottom);
+              last.metas = last.metas.concat(bands[k].metas);
+            } else merged.push(bands[k]);
+          }
+          merged.forEach(function (band, bi) {
+            var top = Math.max(0, band.top), bottom = Math.min(rec.canvas.height, band.bottom);
+            var clip = document.createElement("div");
+            clip.className = "bv-clip";
+            clip.style.width = rec.canvas.width + "px";
+            clip.style.height = Math.max(20, bottom - top) + "px";
+            var inner = document.createElement("div");
+            inner.className = "bv-clip-inner";
+            inner.style.top = (-top) + "px";
+            inner.appendChild(bi === 0 ? rec.canvas : copyCanvas(rec.canvas));
+            band.metas.forEach(function (m) {
+              var b = rec.viewport.convertToViewportPoint(m.x, m.y)[1];
+              var hl = document.createElement("div");
+              hl.className = "bv-hl";
+              hl.style.top = Math.max(0, b - hpx * 1.2) + "px";
+              hl.style.height = (hpx * 1.6) + "px";
+              inner.appendChild(hl);
+            });
+            clip.appendChild(inner);
+            clips.push(clip);
           });
-          clip.appendChild(inner);
-          clips.push(clip);
         });
       });
     };
-    for (var pn = pA; pn <= pB; pn++) _one(pn);
+    metaPages.forEach(_one);
 
     seq.then(function () {
       pagesEl.innerHTML = "";
