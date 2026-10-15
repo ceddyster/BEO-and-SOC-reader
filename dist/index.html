@@ -1237,8 +1237,35 @@
         return /\btea\s*(?:&|and)\s*coffee\b/i.test(t) && !/freshly brewed/i.test(t) && t.length < 60;
       });
 
+      // Crew platters can be a multi-item selection sharing ONE per-person
+      // charge — e.g. "Chef's selection of sandwiches" + "Sliced seasonal fresh
+      // fruit" billed together at "$28.00 per person". The menu prices each
+      // platter separately, so gather every platter line in this charge's block
+      // (back to the block's time anchor / previous charge) and, when more than
+      // one is chosen, check the charge against the SUM of the selected platters.
+      var platters = [];
+      if (grp === "food") {
+        for (var pj = i - 1; pj >= Math.max(0, i - 40); pj--) {
+          var pcand = lines[pj].replace(/\s+/g, " ").trim();
+          if (!pcand) continue;
+          if (/[@$]/.test(pcand)) break;                                   // previous charge line
+          if (/^\d+\s+(?:guests?|children|child|kids?|pax|people)\b/i.test(pcand)) break;
+          if (/\d{1,2}:\d{2}\s*[-–—]\s*\d{1,2}:\d{2}/.test(pcand)) break;   // time range = block start
+          if (SECTION_RE.test(pcand)) break;
+          var pmm = findMatch(pcand, catalogue, 0.85, "food");
+          if (pmm && pmm.item.category === "Crew Packages" && pmm.item.unit === "each") {
+            platters.unshift({ name: pcand, item: pmm.item, j: pj });
+          }
+        }
+      }
+
       var altCourses = 0, kind = "per-person", nameOut, itemGroup = grp, serviceHours, bpm;
-      if (canapCount) {
+      if (platters.length >= 2) {
+        // Multi-item platter selection — priced as the sum of the chosen platters.
+        nameOut = platters.map(function (p) { return p.name; }).join(" + ");
+        kind = "platter-selection";
+        itemGroup = "food";
+      } else if (canapCount) {
         nameOut = "Cocktail Reception " + canapCount + " Canapes";
         itemGroup = "food"; // canapés are a food (Canapés menu) even at a drinks reception
       } else if (isMinSpend) {
@@ -1303,11 +1330,14 @@
         mealTime = sh >= 16 ? "dinner" : (sh >= 11 ? "lunch" : null);
       }
 
+      var headJ = platters.length >= 2 ? platters[0].j
+        : (isMinSpend ? minSpendJ : (best ? best.j : null));
       pushUnique({ qty: qty, name: nameOut, unitPrice: price, lineTotal: round2(qty * price),
         kind: kind, alternatingCourses: altCourses, group: itemGroup, contextLines: contextLines,
+        platterItems: platters.length >= 2 ? platters.map(function (p) { return p.item; }) : null,
         serviceHours: serviceHours, anchor: anchor, mealTime: mealTime,
-        sourceExcerpt: excerptBlock(isMinSpend ? minSpendJ : (best ? best.j : i - 10), i),
-        sourceLine: i, headLine: (isMinSpend ? minSpendJ : (best ? best.j : null)),
+        sourceExcerpt: excerptBlock(headJ != null ? headJ : i - 10, i),
+        sourceLine: i, headLine: headJ,
         confident: !!best || kind !== "per-person" || /canap/i.test(nameOut), source: "BEO" });
     });
 
@@ -1574,6 +1604,34 @@
       result.priceStatus = "review";
       result.notes.push(item.name + " charged " + money(item.unitPrice) +
         "pp — the menu only lists whole-hour tiers (e.g. 6 Hour), so this duration isn't a standard rate. Confirm against the quote.");
+      return result;
+    }
+
+    // Multi-item crew-platter selection sharing one per-person charge — the
+    // expected rate is the sum of the chosen platters' menu prices.
+    if (item.kind === "platter-selection" && item.platterItems && item.platterItems.length) {
+      var psum = 0, pparts = [];
+      item.platterItems.forEach(function (p) { psum += (p.price || 0); pparts.push(p.name + " " + money(p.price)); });
+      psum = round2(psum);
+      result.category = "Crew Packages";
+      result.matchedName = item.platterItems.map(function (p) { return p.name; }).join(" + ");
+      result.expectedPrice = psum;
+      result.unit = "pp";
+      var pdiff = round2(item.unitPrice - psum);
+      result.priceDiff = pdiff;
+      result.priceImpact = item.qty != null ? round2(pdiff * item.qty) : null;
+      result._explained = true;
+      if (Math.abs(pdiff) <= 0.005) {
+        result.priceStatus = "correct";
+        result.notes.push("Platter selection — " + pparts.join(" + ") + " = " + money(psum) + " per person. Correct.");
+      } else {
+        result.priceStatus = pdiff < 0 ? "undercharged" : "overcharged";
+        if (result.status !== "math-error") result.status = result.priceStatus;
+        result.notes.push("Platter selection — " + pparts.join(" + ") + " = " + money(psum) +
+          " per person; charged " + money(item.unitPrice) + "pp (" + (pdiff < 0 ? "under" : "over") +
+          " by " + money(Math.abs(pdiff)) + "pp" +
+          (item.qty != null ? ", " + money(Math.abs(result.priceImpact)) + " across " + item.qty + " guests" : "") + ").");
+      }
       return result;
     }
 

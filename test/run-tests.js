@@ -698,6 +698,19 @@ var buffR = engine.checkDocument(engine.parseBeo(buffBeo, catalogue), catalogue)
 ok(buffR && buffR.matchedName === "Dinner Buffet Menu Three" && buffR.priceStatus === "correct",
   "buffet package wins over a nearer platter-named dish (got " + (buffR && buffR.matchedName) + ")");
 
+section("A platter selection shares one charge across multiple platters");
+// Two platters chosen under one "N guests @ $X per person" line are checked
+// against the SUM of the selected platters, not just the nearest one.
+var selBeo = "Menu\n18:00 - 19:00 Crew Catering - Volunteers\nCrew Catering - Platters\nChef's selection of sandwiches\nSliced seasonal fresh fruit\n25 guests @ $28.00 per person\n";
+var selR = engine.checkDocument(engine.parseBeo(selBeo, catalogue), catalogue).items[0];
+ok(selR && selR.kind === "platter-selection", "detects a multi-platter selection (got " + (selR && selR.kind) + ")");
+ok(selR && selR.expectedPrice === 32, "expected rate is the sum $19.50 + $12.50 = $32 (got " + (selR && selR.expectedPrice) + ")");
+ok(selR && selR.priceStatus === "undercharged" && selR.priceDiff === -4,
+  "charged $28 flagged undercharged by $4pp (got " + (selR && selR.priceStatus) + "/" + (selR && selR.priceDiff) + ")");
+ok(selR && /Crew Sandwiches Platter/.test(selR.matchedName) && /Crew Fresh Fruit Platter/.test(selR.matchedName),
+  "names both matched platters");
+ok(selR && selR.priceImpact === -100, "total impact -$100 across 25 guests (got " + (selR && selR.priceImpact) + ")");
+
 section("Real BEO — NAB Branch Leadership Forum (multi-section, page-split)");
 var nab = fs.readFileSync(path.join(__dirname, "fixtures", "nab_beo.txt"), "utf8");
 var nabRep = engine.checkDocument(engine.parseBeo(nab, catalogue), catalogue,
