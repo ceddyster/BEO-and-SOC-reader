@@ -452,9 +452,44 @@
       beoNumber: grab(/BEO#?:?\s*([0-9]{3,})/i),
       account: grab(/Account:\s*([^\n]+)/i),
       bookingName: grab(/Booking Name:\s*([^\n]+)/i),
+      eventName: grab(/BEO Name:\s*([^\n]+)/i),
       eventDate: parseEventDate(t),
       guests: (function () { var m = t.match(/(\d+)\s+guests?\s*@/); return m ? parseInt(m[1], 10) : null; })()
     };
+  }
+
+  // A "BEO distribution" is one PDF holding many BEOs back to back. Each BEO's
+  // pages carry a repeated "EVENT ORDER / BEO#: <n> / Page: <k> of <total>"
+  // header; a new BEO begins at "Page: 1 of N" (or wherever the BEO number
+  // changes). Split the extracted text into one text block per BEO so each can
+  // be parsed and checked on its own. A single BEO returns one segment.
+  function splitBeoDistribution(text) {
+    var lines = String(text || "").split(/\r?\n/);
+    var starts = [];
+    for (var i = 0; i < lines.length; i++) {
+      var mb = lines[i].match(/^BEO#?:\s*(\d+)/i);
+      if (!mb) continue;
+      var mp = (lines[i + 1] || "").match(/^Page:\s*(\d+)\s*of\s*(\d+)/i);
+      var pageNum = mp ? parseInt(mp[1], 10) : 1;
+      var prev = starts[starts.length - 1];
+      if (pageNum === 1 || !prev || prev.beoNumber !== mb[1]) {
+        // Begin the segment at the "EVENT ORDER" banner line just above when present.
+        var startIdx = (i > 0 && /^EVENT ORDER$/i.test(lines[i - 1].trim())) ? i - 1 : i;
+        if (!prev || prev.idx !== startIdx) {
+          starts.push({ idx: startIdx, beoNumber: mb[1], pages: mp ? parseInt(mp[2], 10) : 1 });
+        }
+      }
+    }
+    if (starts.length <= 1) {
+      return [{ beoNumber: starts[0] ? starts[0].beoNumber : null, pages: starts[0] ? starts[0].pages : null, text: String(text || "") }];
+    }
+    var segs = [];
+    for (var s = 0; s < starts.length; s++) {
+      var from = starts[s].idx;
+      var to = (s + 1 < starts.length) ? starts[s + 1].idx : lines.length;
+      segs.push({ beoNumber: starts[s].beoNumber, pages: starts[s].pages, text: lines.slice(from, to).join("\n") });
+    }
+    return segs;
   }
 
   // ----------------------------------------------------------- price checking
@@ -1157,6 +1192,7 @@
     scoreNames: scoreNames, findMatch: findMatch, looksNonMenu: looksNonMenu,
     parseSocRows: parseSocRows, parseSocText: parseSocText,
     parseBeo: parseBeo, parseBeoHeader: parseBeoHeader, parseEventDate: parseEventDate, fmtDate: fmtDate,
+    splitBeoDistribution: splitBeoDistribution,
     checkItem: checkItem, checkDocument: checkDocument, reconcile: reconcile,
     money: money, unitLabel: unitLabel
   };

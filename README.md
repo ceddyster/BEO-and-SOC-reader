@@ -32,6 +32,16 @@ Open **`index.html`** in any modern browser (Chrome, Edge, Firefox, Safari). The
 You can check just one document or both. An internet connection is needed the first time so
 the page can load the PDF and Word readers.
 
+### BEO distributions (many BEOs in one PDF)
+
+If you drop a **weekly BEO distribution** — a single PDF containing many BEOs back to back —
+the tool detects it, **splits it into the individual BEOs** (on each `EVENT ORDER / BEO#: /
+Page: 1 of N` boundary) and checks every one on **its own event date**. You get an overview up
+top (how many BEOs, how many have charges to check) and a table of every BEO; click any row, or
+expand a section below, for that BEO's full line-by-line check. **Copy summary** gives a
+one-line-per-BEO rundown with the specific issues listed under each. A single BEO behaves exactly
+as before.
+
 ### Worked example (the IGCC event)
 
 For the Italian Golf Challenge Cup BEO/SOC, the tool confirms **Dinner Buffet Menu One** at

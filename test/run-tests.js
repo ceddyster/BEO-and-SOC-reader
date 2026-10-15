@@ -752,6 +752,31 @@ var sd3 = engine.checkDocument(engine.parseSocRows([["80", "Soft Drink Package -
 ok(sd3.matchedName === "Soft Drink Only Package - 3 Hour" && sd3.priceStatus === "correct",
   "soft-drink 3-hour @ $20 correct (SOC wording)");
 
+section("BEO distribution — split one PDF into many BEOs");
+var distText = [
+  "EVENT ORDER", "BEO#: 1001", "Page: 1 of 2", "Saturday 24 Oct 2026", "Booking Name: Alpha Lunch",
+  "Menu", "12:00 - 13:00 Lunch", "Coffee Break Menu One", "Assorted cookies", "80 guests @ $29.00 per person",
+  "EVENT ORDER", "BEO#: 1001", "Page: 2 of 2", "Signing of this event order indicates that you agree",
+  "EVENT ORDER", "BEO#: 1002", "Page: 1 of 1", "Sunday 25 Oct 2026", "Booking Name: Bravo Gala",
+  "Miscellaneous", "4 Security officer hours - Sunday rate (2 guards) @ $86.00 per hour",
+  "EVENT ORDER", "BEO#: 1003", "Page: 1 of 1", "Monday 26 Oct 2026", "Booking Name: Charlie Dinner",
+  "Menu", "18:30 - 20:30 Dinner", "Dinner Buffet Menu One", "Bread rolls", "50 guests @ $90.00 per person"
+].join("\n");
+var dsegs = engine.splitBeoDistribution(distText);
+ok(dsegs.length === 3, "splits into 3 BEOs (got " + dsegs.length + ")");
+ok(dsegs.map(function (s) { return s.beoNumber; }).join(",") === "1001,1002,1003", "BEO numbers in order");
+// Each segment checks on its own, using its own date/day.
+var d1 = engine.checkDocument(engine.parseBeo(dsegs[0].text, catalogue), catalogue, engine.parseBeoHeader(dsegs[0].text).eventDate).items[0];
+ok(d1.matchedName === "Coffee Break One" && d1.priceStatus === "undercharged", "BEO 1001: Coffee Break One $29 flagged");
+var d2 = engine.checkDocument(engine.parseBeo(dsegs[1].text, catalogue), catalogue, engine.parseBeoHeader(dsegs[1].text).eventDate).items[0];
+ok(d2.matchedName === "Security Officer" && d2.priceStatus === "correct" && d2.expectedPrice === 86,
+  "BEO 1002: Sunday security @ $86 correct (per the line's own day)");
+var d3 = engine.checkDocument(engine.parseBeo(dsegs[2].text, catalogue), catalogue, engine.parseBeoHeader(dsegs[2].text).eventDate).items[0];
+ok(d3.matchedName === "Dinner Buffet Menu One" && d3.priceStatus === "correct", "BEO 1003: Dinner Buffet correct");
+// A multi-page single BEO is one segment, not many.
+var single = engine.splitBeoDistribution(fs.readFileSync(path.join(__dirname, "fixtures", "nab_beo.txt"), "utf8"));
+ok(single.length === 1, "a single (multi-page) BEO is one segment (got " + single.length + ")");
+
 console.log("\n----------------------------------------");
 console.log(passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

@@ -173,6 +173,19 @@
   .cat-head { font-family: var(--display); font-size: 12px; text-transform: uppercase; letter-spacing: .05em;
     color: var(--accent); margin: 14px 0 4px; }
 
+  /* Distribution: one collapsible section per BEO */
+  details.beo-detail { margin-top: 12px; border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--surface); box-shadow: var(--shadow); overflow: hidden; }
+  details.beo-detail > summary { cursor: pointer; padding: 13px 16px; font-size: 14px; list-style: none;
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  details.beo-detail > summary::-webkit-details-marker { display: none; }
+  details.beo-detail > summary::before { content: "▸"; color: var(--muted); font-size: 12px; }
+  details.beo-detail[open] > summary::before { content: "▾"; }
+  details.beo-detail > summary:hover { background: var(--surface-2); }
+  .beo-badge { margin-left: auto; font-weight: 700; font-size: 13px; }
+  .beo-body { padding: 0 16px 16px; }
+  .beo-body .banner { margin-top: 12px; }
+
   footer.foot { margin-top: 30px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--border);
     padding-top: 16px; }
   footer.foot code { font-family: var(--mono); background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
@@ -198,13 +211,14 @@
   <p class="lede">Drop in an event order (<b>BEO</b>, PDF) and/or a statement of charges
   (<b>SOC</b>, Word). The tool reads the charges, checks every per-person and package
   price against the 2026 menu price book, and — when you load both — confirms the BEO and
-  SOC agree. Files are read in your browser; nothing is uploaded.</p>
+  SOC agree. Drop a <b>BEO distribution</b> (one PDF with many BEOs) and it splits them apart
+  and checks each one. Files are read in your browser; nothing is uploaded.</p>
 
   <div class="drops">
     <label class="drop" id="dropBeo">
       <span class="doticon">📄</span>
       <span class="kind">BEO — Event Order</span>
-      <span class="hint">PDF · drag &amp; drop or click</span>
+      <span class="hint">PDF · single or a distribution · drag &amp; drop or click</span>
       <span class="fname" id="beoName" hidden></span>
       <input type="file" id="beoInput" accept=".pdf,application/pdf">
     </label>
@@ -1258,9 +1272,44 @@
       beoNumber: grab(/BEO#?:?\s*([0-9]{3,})/i),
       account: grab(/Account:\s*([^\n]+)/i),
       bookingName: grab(/Booking Name:\s*([^\n]+)/i),
+      eventName: grab(/BEO Name:\s*([^\n]+)/i),
       eventDate: parseEventDate(t),
       guests: (function () { var m = t.match(/(\d+)\s+guests?\s*@/); return m ? parseInt(m[1], 10) : null; })()
     };
+  }
+
+  // A "BEO distribution" is one PDF holding many BEOs back to back. Each BEO's
+  // pages carry a repeated "EVENT ORDER / BEO#: <n> / Page: <k> of <total>"
+  // header; a new BEO begins at "Page: 1 of N" (or wherever the BEO number
+  // changes). Split the extracted text into one text block per BEO so each can
+  // be parsed and checked on its own. A single BEO returns one segment.
+  function splitBeoDistribution(text) {
+    var lines = String(text || "").split(/\r?\n/);
+    var starts = [];
+    for (var i = 0; i < lines.length; i++) {
+      var mb = lines[i].match(/^BEO#?:\s*(\d+)/i);
+      if (!mb) continue;
+      var mp = (lines[i + 1] || "").match(/^Page:\s*(\d+)\s*of\s*(\d+)/i);
+      var pageNum = mp ? parseInt(mp[1], 10) : 1;
+      var prev = starts[starts.length - 1];
+      if (pageNum === 1 || !prev || prev.beoNumber !== mb[1]) {
+        // Begin the segment at the "EVENT ORDER" banner line just above when present.
+        var startIdx = (i > 0 && /^EVENT ORDER$/i.test(lines[i - 1].trim())) ? i - 1 : i;
+        if (!prev || prev.idx !== startIdx) {
+          starts.push({ idx: startIdx, beoNumber: mb[1], pages: mp ? parseInt(mp[2], 10) : 1 });
+        }
+      }
+    }
+    if (starts.length <= 1) {
+      return [{ beoNumber: starts[0] ? starts[0].beoNumber : null, pages: starts[0] ? starts[0].pages : null, text: String(text || "") }];
+    }
+    var segs = [];
+    for (var s = 0; s < starts.length; s++) {
+      var from = starts[s].idx;
+      var to = (s + 1 < starts.length) ? starts[s + 1].idx : lines.length;
+      segs.push({ beoNumber: starts[s].beoNumber, pages: starts[s].pages, text: lines.slice(from, to).join("\n") });
+    }
+    return segs;
   }
 
   // ----------------------------------------------------------- price checking
@@ -1963,6 +2012,7 @@
     scoreNames: scoreNames, findMatch: findMatch, looksNonMenu: looksNonMenu,
     parseSocRows: parseSocRows, parseSocText: parseSocText,
     parseBeo: parseBeo, parseBeoHeader: parseBeoHeader, parseEventDate: parseEventDate, fmtDate: fmtDate,
+    splitBeoDistribution: splitBeoDistribution,
     checkItem: checkItem, checkDocument: checkDocument, reconcile: reconcile,
     money: money, unitLabel: unitLabel
   };
@@ -2145,6 +2195,16 @@
     setStatus("");
     var out = $("results"); out.innerHTML = ""; out.hidden = false;
 
+    // A multi-BEO distribution (one PDF with many BEOs) is split and each BEO
+    // is checked on its own.
+    var segs = state.beoText ? E.splitBeoDistribution(state.beoText) : [];
+    if (segs.length > 1) {
+      renderDistribution(out, segs);
+      $("copyBtn").hidden = false;
+      out.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+
     var beoItems = state.beoText ? E.parseBeo(state.beoText, CAT) : null;
     var beoHeader = state.beoText ? E.parseBeoHeader(state.beoText) : null;
     var socItems = state.socRows ? E.parseSocRows(state.socRows)
@@ -2166,22 +2226,130 @@
     var recon = (beoItems && beoItems.length && socItems && socItems.length)
       ? E.reconcile(beoItems, socItems) : null;
 
-    renderBanner(out, report, recon, primary.label);
+    renderReportInto(out, report, recon, primary.label, beoHeader);
+
+    buildSummaryText(report, recon, primary.label, beoHeader);
+    $("copyBtn").hidden = false;
+    out.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  // Append a full single-document report (banner, event facts, check table,
+  // reconciliation, totals) to a container.
+  function renderReportInto(container, report, recon, label, header) {
+    renderBanner(container, report, recon, label);
     if (report.summary.validityNote) {
       var vn = document.createElement("div");
       vn.className = "banner warn";
       vn.innerHTML = '<div class="big">📅</div><div><h2>Check the price book date</h2><p>' +
         esc(report.summary.validityNote) + "</p></div>";
-      out.appendChild(vn);
+      container.appendChild(vn);
     }
-    if (beoHeader) renderFacts(out, beoHeader, report, primary.label);
-    renderCheckTable(out, report, primary.label);
-    if (recon) renderRecon(out, recon);
-    renderTotals(out, report);
+    if (header) renderFacts(container, header, report, label);
+    renderCheckTable(container, report, label);
+    if (recon) renderRecon(container, recon);
+    renderTotals(container, report);
+  }
 
-    buildSummaryText(report, recon, primary.label, beoHeader);
-    $("copyBtn").hidden = false;
-    out.scrollIntoView({ behavior: "smooth", block: "start" });
+  // A multi-BEO distribution: an overview of every BEO, then each BEO's full
+  // report in a collapsible section.
+  function renderDistribution(out, segs) {
+    var checked = segs.map(function (seg) {
+      var header = E.parseBeoHeader(seg.text);
+      var items = E.parseBeo(seg.text, CAT);
+      var report = E.checkDocument(items, CAT, header.eventDate);
+      var reconBad = 0;
+      var hard = report.summary.issues + reconBad;
+      return { seg: seg, header: header, report: report, hard: hard };
+    });
+    var withIssues = checked.filter(function (c) { return c.hard > 0; }).length;
+    var toConfirm = checked.filter(function (c) { return c.hard === 0 && c.report.summary.review > 0; }).length;
+    var clean = checked.length - withIssues - toConfirm;
+
+    // Overview banner.
+    var div = document.createElement("div");
+    var cls = withIssues > 0 ? "bad" : (toConfirm > 0 ? "warn" : "ok");
+    var icon = withIssues > 0 ? "⚠️" : (toConfirm > 0 ? "🔎" : "✅");
+    div.className = "banner " + cls;
+    div.innerHTML = '<div class="big">' + icon + "</div><div>" +
+      "<h2>" + segs.length + " BEOs in this distribution</h2>" +
+      "<p>" + (withIssues ? withIssues + " with charges to check · " : "") +
+      (toConfirm ? toConfirm + " to confirm · " : "") + clean + " look correct. " +
+      "Open any BEO below for the full line-by-line check.</p>" +
+      '<div class="pill-row">' +
+      (withIssues ? pill("under", withIssues + " to check") : "") +
+      (toConfirm ? pill("over", toConfirm + " to confirm") : "") +
+      pill("ok", clean + " clean") + "</div></div>";
+    out.appendChild(div);
+
+    // Overview table.
+    var sec = block("BEOs", "21–27 Oct distribution · each checked on its own date");
+    var html = '<div class="tscroll"><table><thead><tr>' +
+      "<th>BEO #</th><th>Event</th><th>Date</th><th class='num'>Lines</th><th>Status</th>" +
+      "</tr></thead><tbody>";
+    checked.forEach(function (c, idx) {
+      var s = c.report.summary;
+      var statusText, chipCls;
+      if (c.hard > 0) {
+        chipCls = "undercharged";
+        var bits = [];
+        if (s.undercharged) bits.push(s.undercharged + " under");
+        if (s.overcharged) bits.push(s.overcharged + " over");
+        if (s.mathErrors) bits.push(s.mathErrors + " maths");
+        if (s.unmatched) bits.push(s.unmatched + " unmatched");
+        statusText = bits.join(", ") || "check";
+      } else if (s.review > 0) {
+        chipCls = "review"; statusText = s.review + " to confirm";
+      } else {
+        chipCls = "correct"; statusText = s.total ? "OK" : "no charges";
+      }
+      html += "<tr style='cursor:pointer' data-beo='" + idx + "'>" +
+        "<td>" + esc(c.seg.beoNumber || "?") + "</td>" +
+        "<td>" + esc(c.header.eventName || c.header.bookingName || "—") + "</td>" +
+        "<td>" + esc(c.header.eventDate ? BEOEngine.fmtDate(c.header.eventDate) : "—") + "</td>" +
+        "<td class='num'>" + s.total + "</td>" +
+        "<td><span class='chip " + chipCls + "'>" + esc(statusText) + "</span></td></tr>";
+    });
+    html += "</tbody></table></div>";
+    sec.querySelector(".body").innerHTML = html;
+    out.appendChild(sec);
+
+    // Per-BEO detail (collapsible). Issues first, then to-confirm, then clean.
+    var order = checked.map(function (c, i) { return i; }).sort(function (a, b) {
+      var ca = checked[a], cb = checked[b];
+      var rank = function (c) { return c.hard > 0 ? 0 : (c.report.summary.review > 0 ? 1 : 2); };
+      return rank(ca) - rank(cb);
+    });
+    var detailsEls = [];
+    order.forEach(function (idx) {
+      var c = checked[idx];
+      var d = document.createElement("details");
+      d.className = "beo-detail";
+      d.dataset.beo = idx;
+      var sName = c.header.eventName || c.header.bookingName || "—";
+      var badge = c.hard > 0 ? "⚠️ " + c.hard : (c.report.summary.review > 0 ? "🔎 " + c.report.summary.review : "✅");
+      var sm = document.createElement("summary");
+      sm.innerHTML = "<b>" + esc(c.seg.beoNumber || "?") + "</b> · " + esc(sName) +
+        " · " + esc(c.header.eventDate ? BEOEngine.fmtDate(c.header.eventDate) : "—") +
+        " <span class='beo-badge'>" + badge + "</span>";
+      d.appendChild(sm);
+      var body = document.createElement("div");
+      body.className = "beo-body";
+      renderReportInto(body, c.report, null, "BEO", c.header);
+      d.appendChild(body);
+      out.appendChild(d);
+      detailsEls[idx] = d;
+    });
+
+    // Clicking an overview row opens and scrolls to that BEO.
+    sec.querySelectorAll("tr[data-beo]").forEach(function (tr) {
+      tr.addEventListener("click", function () {
+        var idx = tr.getAttribute("data-beo");
+        var d = detailsEls[idx];
+        if (d) { d.open = true; d.scrollIntoView({ behavior: "smooth", block: "start" }); }
+      });
+    });
+
+    buildDistributionSummaryText(checked);
   }
 
   function renderBanner(out, report, recon, label) {
@@ -2358,6 +2526,30 @@
         L.push("  - " + nm + ": " + r.diffs.join("; "));
       });
     }
+    lastSummaryText = L.join("\n");
+  }
+
+  // Copy-summary text for a whole distribution: one line per BEO, with the
+  // specific issues listed under the BEOs that have them.
+  function buildDistributionSummaryText(checked) {
+    var L = [];
+    var withIssues = checked.filter(function (c) { return c.hard > 0; }).length;
+    L.push("BEO Distribution Charge Check — Crown Events & Conferences Perth");
+    L.push(checked.length + " BEOs · " + withIssues + " with charges to check");
+    L.push("");
+    checked.forEach(function (c) {
+      var s = c.report.summary;
+      var name = c.header.eventName || c.header.bookingName || "—";
+      var date = c.header.eventDate ? BEOEngine.fmtDate(c.header.eventDate) : "—";
+      var tag = c.hard > 0 ? "CHECK" : (s.review > 0 ? "confirm" : "OK");
+      L.push("BEO " + (c.seg.beoNumber || "?") + " · " + name + " · " + date + " — [" + tag + "]");
+      c.report.items.forEach(function (r) {
+        if (r.priceStatus === "undercharged") L.push("   - UNDER: " + r.name + " " + money(r.unitPrice) + " (menu " + money(r.expectedPrice) + ")");
+        else if (r.priceStatus === "overcharged") L.push("   - OVER: " + r.name + " " + money(r.unitPrice) + " (menu " + money(r.expectedPrice) + ")");
+        else if (r.status === "math-error") L.push("   - MATHS: " + r.name + " total " + money(r.lineTotal));
+        else if (r.priceStatus === "no-match") L.push("   - UNMATCHED: " + r.name + " " + money(r.unitPrice));
+      });
+    });
     lastSummaryText = L.join("\n");
   }
 
