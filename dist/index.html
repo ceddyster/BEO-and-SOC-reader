@@ -216,6 +216,11 @@
   .bv-page { position: relative; margin: 0; }
   .bv-page + .bv-page { border-top: 1px dashed var(--border); }
   .bv-page canvas { display: block; }
+  /* Focused clip: just the band around the item, page breaks stitched out */
+  .bv-clip { position: relative; overflow: hidden; }
+  .bv-clip + .bv-clip { border-top: 2px dashed var(--accent); }
+  .bv-clip-inner { position: absolute; left: 0; }
+  .bv-head #bvToggle { margin-left: auto; }
   .bv-hl { position: absolute; left: 0; right: 0; background: rgba(255,208,0,.35);
     border-top: 2px solid rgba(230,160,0,.95); border-bottom: 2px solid rgba(230,160,0,.95);
     pointer-events: none; }
@@ -279,6 +284,7 @@
   <div id="beoViewer" hidden>
     <div class="bv-head">
       <span class="bv-title" id="bvTitle">BEO</span>
+      <button class="btn" id="bvToggle" type="button" hidden style="padding:4px 10px;font-size:12.5px">Show full page(s)</button>
       <label class="src-check"><input type="checkbox" id="bvReviewed"> Reviewed</label>
       <button class="icon-btn" id="bvClose" title="Close" aria-label="Close">✕</button>
     </div>
@@ -2685,6 +2691,7 @@
     toPage = toPage || state.pdf.numPages;
     var viewer = $("beoViewer"), pagesEl = $("bvPages");
     viewer.hidden = false;
+    $("bvToggle").hidden = true;
     $("bvTitle").textContent = title || ("BEO — pages " + fromPage + "–" + toPage);
     var rev = $("bvReviewed");
     if (rowEl) {
@@ -2742,15 +2749,84 @@
     });
   }
 
-  // Locate a check line on the rendered BEO — shows the whole BEO as one
-  // continuous page, highlighting the heading and the charge.
+  // Locate a check line on the rendered BEO — a FOCUSED CLIP: just the band
+  // from the item's heading down to its charge, with any page break between
+  // them stitched out (bottom of one page joined to the top of the next), so
+  // you see only that item's beverage/menu section. "Show full page(s)"
+  // switches to the whole page(s).
   function showBeoLocation(headLine, chargeLine, rowEl, fromPage, toPage) {
     if (!state.pdf || !state.beoLineMeta) return;
     var meta = state.beoLineMeta;
-    var metas = [];
-    if (headLine != null && meta[headLine]) metas.push(meta[headLine]);
-    if (chargeLine != null && meta[chargeLine]) metas.push(meta[chargeLine]);
-    openBeoRange(fromPage, toPage, metas, rowEl, null);
+    var head = (headLine != null) ? meta[headLine] : null;
+    var charge = (chargeLine != null) ? meta[chargeLine] : null;
+    var metas = []; if (head) metas.push(head); if (charge) metas.push(charge);
+    if (!metas.length) { openBeoRange(fromPage, toPage, [], rowEl, null); return; }
+
+    var start = metas[0], end = metas[metas.length - 1];
+    var pA = Math.min(start.page, end.page), pB = Math.max(start.page, end.page);
+    var viewer = $("beoViewer"), pagesEl = $("bvPages");
+    viewer.hidden = false;
+    $("bvTitle").textContent = "BEO — item in context" + (pA !== pB ? " (p." + pA + " → p." + pB + ", joined)" : " (p." + pA + ")");
+    var rev = $("bvReviewed");
+    rev.parentElement.style.display = "";
+    rev.checked = !!(rowEl && rowEl.classList.contains("reviewed"));
+    rev.onchange = function () { if (rowEl) rowEl.classList.toggle("reviewed", rev.checked); };
+    var toggle = $("bvToggle");
+    toggle.hidden = false;
+    toggle.onclick = function () { openBeoRange(pA, pB, metas, rowEl, "BEO — full page" + (pA !== pB ? "s " + pA + "–" + pB : " " + pA)); };
+    pagesEl.innerHTML = '<div class="note" style="padding:8px">Rendering the BEO…</div>';
+    viewer.scrollIntoView({ behavior: "smooth", block: "start" });
+
+    var seq = Promise.resolve(), clips = [];
+    var _one = function (pn) {
+      seq = seq.then(function () {
+        return getBeoPage(pn).then(function (rec) {
+          var onPage = metas.filter(function (m) { return m.page === pn; });
+          var baselines = onPage.map(function (m) { return rec.viewport.convertToViewportPoint(m.x, m.y)[1]; });
+          var hpx = ((onPage[0] || metas[0]).h || 10) * (state.pageScale || 1);
+          var pad = Math.max(28, hpx * 2.5);
+          var minB = baselines.length ? Math.min.apply(null, baselines) : 0;
+          var maxB = baselines.length ? Math.max.apply(null, baselines) : rec.canvas.height;
+          var top, bottom;
+          if (pA === pB) { top = minB - pad; bottom = maxB + pad + hpx; }
+          else if (pn === pA) { top = minB - pad; bottom = rec.canvas.height; }
+          else if (pn === pB) { top = 0; bottom = maxB + pad + hpx; }
+          else { top = 0; bottom = rec.canvas.height; }
+          top = Math.max(0, top); bottom = Math.min(rec.canvas.height, bottom);
+          var clip = document.createElement("div");
+          clip.className = "bv-clip";
+          clip.style.width = rec.canvas.width + "px";
+          clip.style.height = Math.max(20, bottom - top) + "px";
+          var inner = document.createElement("div");
+          inner.className = "bv-clip-inner";
+          inner.style.top = (-top) + "px";
+          inner.appendChild(rec.canvas);
+          onPage.forEach(function (m) {
+            var b = rec.viewport.convertToViewportPoint(m.x, m.y)[1];
+            var hl = document.createElement("div");
+            hl.className = "bv-hl";
+            hl.style.top = Math.max(0, b - hpx * 1.2) + "px";
+            hl.style.height = (hpx * 1.6) + "px";
+            inner.appendChild(hl);
+          });
+          clip.appendChild(inner);
+          clips.push(clip);
+        });
+      });
+    };
+    for (var pn = pA; pn <= pB; pn++) _one(pn);
+
+    seq.then(function () {
+      pagesEl.innerHTML = "";
+      var doc = document.createElement("div");
+      doc.className = "bv-doc";
+      clips.forEach(function (c) { doc.appendChild(c); });
+      pagesEl.appendChild(doc);
+      pagesEl.scrollTop = 0;
+    }).catch(function (err) {
+      pagesEl.innerHTML = '<div class="note flag" style="padding:8px">Could not render the BEO: ' +
+        esc(err && err.message || String(err)) + "</div>";
+    });
   }
 
   function renderRecon(out, recon) {
