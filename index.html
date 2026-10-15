@@ -484,7 +484,18 @@
     right.sort(function (a, b) { return b.y - a.y; });
     main.forEach(function (l) { l.col = "main"; });     // left column (Menu/Beverage + charges)
     right.forEach(function (l) { l.col = "right"; });   // right column (program/setup/notes)
-    return main.concat(right).filter(function (l) { return l.str.length; });
+    var out = main.concat(right).filter(function (l) { return l.str.length; });
+    // Hoist this page's header (EVENT ORDER / BEO#: / Page: / Created:) to the
+    // front. The "BEO#:/Page:" banner sits in the right column, so without this
+    // the left column (the Menu, incl. a buffet heading) would be emitted before
+    // the page's own header — and a distribution split on the BEO#: line would
+    // then slice that page's menu into the PREVIOUS BEO.
+    var hdr = [], rest = [];
+    out.forEach(function (l) {
+      if (/^EVENT ORDER$|^BEO#?:\s*\d|^Page:\s*\d+\s*of\s*\d+|^Created:/i.test(l.str)) hdr.push(l);
+      else rest.push(l);
+    });
+    return hdr.concat(rest);
   }
 
   // ---- SOC (Word) ----
