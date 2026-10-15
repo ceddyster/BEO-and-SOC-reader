@@ -402,6 +402,7 @@
         kind: kind, alternatingCourses: altCourses, group: itemGroup, contextLines: contextLines,
         serviceHours: serviceHours, anchor: anchor,
         sourceExcerpt: excerptBlock(isMinSpend ? minSpendJ : (best ? best.j : i - 10), i),
+        sourceLine: i, headLine: (isMinSpend ? minSpendJ : (best ? best.j : null)),
         confident: !!best || kind !== "per-person" || /canap/i.test(nameOut), source: "BEO" });
     });
 
@@ -413,7 +414,7 @@
       if (nm.length < 2) return;
       pushUnique({ qty: null, name: nm, unitPrice: parseMoney(cm[2]),
         beoUnit: cm[3].toLowerCase(), kind: "consumption", group: "beverage",
-        sourceExcerpt: excerpt(idx, idx), source: "BEO" });
+        sourceExcerpt: excerpt(idx, idx), sourceLine: idx, headLine: idx, source: "BEO" });
     });
 
     // Minimum / event spend: "1 @ $5,400.00 event spend"
@@ -421,7 +422,8 @@
     while ((m = re.exec(soft)) !== null) {
       var esJ = lineIndexOf(/event spend/i);
       pushUnique({ qty: 1, name: "Minimum event spend", unitPrice: parseMoney(m[1]),
-        lineTotal: parseMoney(m[1]), kind: "non-menu", sourceExcerpt: excerpt(esJ - 2, esJ), source: "BEO" });
+        lineTotal: parseMoney(m[1]), kind: "non-menu", sourceExcerpt: excerpt(esJ - 2, esJ),
+        sourceLine: esJ, headLine: esJ - 2, source: "BEO" });
     }
 
     // Security officer hours: "5 Security officer hours ... @ $75.00 per hour".
@@ -439,7 +441,7 @@
       var secJ = lineIndexOf(/\d+\s+security officer hours?/i);
       pushUnique({ qty: h, name: "Security officer hours", unitPrice: rate,
         lineTotal: round2(h * rate), kind: "security", beoUnit: "hour", securityDay: secDay,
-        sourceExcerpt: excerpt(secJ - 1, secJ + 2), source: "BEO" });
+        sourceExcerpt: excerpt(secJ - 1, secJ + 2), sourceLine: secJ, headLine: secJ, source: "BEO" });
     }
 
     // Attrition / minimum spend: "@ $5,460.00 per event"
@@ -447,7 +449,8 @@
     while ((m = re.exec(soft)) !== null) {
       var atJ = lineIndexOf(/attrition/i);
       pushUnique({ qty: 1, name: "Attrition to meet minimum spend", unitPrice: parseMoney(m[1]),
-        lineTotal: parseMoney(m[1]), kind: "non-menu", sourceExcerpt: excerpt(atJ, atJ + 2), source: "BEO" });
+        lineTotal: parseMoney(m[1]), kind: "non-menu", sourceExcerpt: excerpt(atJ, atJ + 2),
+        sourceLine: atJ, headLine: atJ, source: "BEO" });
     }
 
     // Audio visual quote: "... $3,589.65 per quote"
@@ -455,7 +458,8 @@
     while ((m = re.exec(soft)) !== null) {
       var avJ = lineIndexOf(/per\s+quote|audio visual|encore/i);
       pushUnique({ qty: 1, name: "Audio visual", unitPrice: parseMoney(m[1]),
-        lineTotal: parseMoney(m[1]), kind: "non-menu", sourceExcerpt: excerpt(avJ - 1, avJ + 1), source: "BEO" });
+        lineTotal: parseMoney(m[1]), kind: "non-menu", sourceExcerpt: excerpt(avJ - 1, avJ + 1),
+        sourceLine: avJ, headLine: avJ, source: "BEO" });
     }
 
     // Barista coffee cart — a flat fee PER CART ($495 half day / $640 full day),
@@ -471,7 +475,8 @@
       var pmx = ctx.match(/\$([\d,]+(?:\.\d{1,2})?)/);
       pushUnique({ qty: carts, name: "Barista Coffee Cart " + (full ? "Full Day" : "Half Day"),
         unitPrice: full ? 640 : 495, lineTotal: pmx ? parseMoney(pmx[1]) : null,
-        kind: "cart", group: "food", sourceExcerpt: excerpt(idx - 2, idx + 2), source: "BEO" });
+        kind: "cart", group: "food", sourceExcerpt: excerpt(idx - 2, idx + 2),
+        sourceLine: idx, headLine: idx, source: "BEO" });
     });
 
     return items;
@@ -514,13 +519,13 @@
       }
     }
     if (starts.length <= 1) {
-      return [{ beoNumber: starts[0] ? starts[0].beoNumber : null, pages: starts[0] ? starts[0].pages : null, text: String(text || "") }];
+      return [{ beoNumber: starts[0] ? starts[0].beoNumber : null, pages: starts[0] ? starts[0].pages : null, startLine: starts[0] ? starts[0].idx : 0, text: String(text || "") }];
     }
     var segs = [];
     for (var s = 0; s < starts.length; s++) {
       var from = starts[s].idx;
       var to = (s + 1 < starts.length) ? starts[s + 1].idx : lines.length;
-      segs.push({ beoNumber: starts[s].beoNumber, pages: starts[s].pages, text: lines.slice(from, to).join("\n") });
+      segs.push({ beoNumber: starts[s].beoNumber, pages: starts[s].pages, startLine: from, text: lines.slice(from, to).join("\n") });
     }
     return segs;
   }
@@ -531,7 +536,10 @@
       qty: item.qty, name: item.name, unitPrice: item.unitPrice, lineTotal: item.lineTotal,
       source: item.source, kind: item.kind || null, beoUnit: item.beoUnit || null,
       alternatingCourses: item.alternatingCourses || 0,
-      sourceExcerpt: item.sourceExcerpt || null, status: "ok", notes: []
+      sourceExcerpt: item.sourceExcerpt || null,
+      sourceLine: (item.sourceLine != null ? item.sourceLine : null),
+      headLine: (item.headLine != null ? item.headLine : null),
+      status: "ok", notes: []
     };
 
     // Internal maths check (qty x unit price == line total) — only when we have both.

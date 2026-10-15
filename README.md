@@ -29,11 +29,13 @@ Open **`index.html`** in any modern browser (Chrome, Edge, Firefox, Safari). The
    comparison (when both are loaded), and totals. **Copy summary** puts a plain-text version
    on your clipboard to paste into an email or note.
 
-**Click any line in the charge check** to drop down the exact section of the BEO it came from
-— the menu heading, the dishes/inclusions listed under it, and the `N guests @ $X` charge —
-so you can eyeball an `unmatched`, `non-menu` or crew line against the source. Tick **Reviewed**
-in that panel to check the line off (it greys out and strikes through). This works for every
-line, in single BEOs and inside each BEO of a distribution.
+**Click any line in the charge check** to see it on the **actual BEO**: the tool renders the
+real PDF page(s) that line came from and highlights it — the menu heading page and the
+`N guests @ $X` charge page — so you can eyeball an `unmatched`, `non-menu` or crew line against
+the source document, not a text copy. Tick **Reviewed** on that panel to check the line off (the
+row greys out and strikes through). Works for every line, in single BEOs and inside each BEO of a
+distribution. (If only a SOC is loaded — no BEO PDF to render — the line instead drops down a
+plain-text excerpt.)
 
 You can check just one document or both. An internet connection is needed the first time so
 the page can load the PDF and Word readers.

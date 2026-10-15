@@ -203,6 +203,21 @@
   .src-panel pre { margin: 0; font-family: var(--mono); font-size: 12.5px; white-space: pre-wrap;
     word-break: break-word; color: var(--fg); line-height: 1.5; }
 
+  /* Rendered-BEO viewer: shows the actual page with the line highlighted */
+  #beoViewer { margin-top: 20px; border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--surface); box-shadow: var(--shadow); overflow: hidden; }
+  .bv-head { display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+    border-bottom: 1px solid var(--border); background: var(--surface); }
+  .bv-title { font-family: var(--display); font-weight: 700; font-size: 14px; }
+  .bv-head .src-check { margin-left: auto; }
+  .bv-pages { max-height: 72vh; overflow: auto; padding: 14px; background: var(--surface-2); }
+  .bv-page { position: relative; margin: 0 auto 14px; box-shadow: 0 1px 6px rgba(0,0,0,.25); }
+  .bv-page:last-child { margin-bottom: 0; }
+  .bv-page canvas { display: block; }
+  .bv-hl { position: absolute; left: 0; right: 0; background: rgba(255,208,0,.35);
+    border-top: 2px solid rgba(230,160,0,.95); border-bottom: 2px solid rgba(230,160,0,.95);
+    pointer-events: none; }
+
   footer.foot { margin-top: 30px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--border);
     padding-top: 16px; }
   footer.foot code { font-family: var(--mono); background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
@@ -258,6 +273,15 @@
   <div id="status" role="status" aria-live="polite"></div>
 
   <div id="results" hidden></div>
+
+  <div id="beoViewer" hidden>
+    <div class="bv-head">
+      <span class="bv-title" id="bvTitle">BEO</span>
+      <label class="src-check"><input type="checkbox" id="bvReviewed"> Reviewed</label>
+      <button class="icon-btn" id="bvClose" title="Close" aria-label="Close">✕</button>
+    </div>
+    <div class="bv-pages" id="bvPages"></div>
+  </div>
 
   <details class="prices">
     <summary>View the 2026 menu price book this checks against</summary>
@@ -1239,6 +1263,7 @@
         kind: kind, alternatingCourses: altCourses, group: itemGroup, contextLines: contextLines,
         serviceHours: serviceHours, anchor: anchor,
         sourceExcerpt: excerptBlock(isMinSpend ? minSpendJ : (best ? best.j : i - 10), i),
+        sourceLine: i, headLine: (isMinSpend ? minSpendJ : (best ? best.j : null)),
         confident: !!best || kind !== "per-person" || /canap/i.test(nameOut), source: "BEO" });
     });
 
@@ -1250,7 +1275,7 @@
       if (nm.length < 2) return;
       pushUnique({ qty: null, name: nm, unitPrice: parseMoney(cm[2]),
         beoUnit: cm[3].toLowerCase(), kind: "consumption", group: "beverage",
-        sourceExcerpt: excerpt(idx, idx), source: "BEO" });
+        sourceExcerpt: excerpt(idx, idx), sourceLine: idx, headLine: idx, source: "BEO" });
     });
 
     // Minimum / event spend: "1 @ $5,400.00 event spend"
@@ -1258,7 +1283,8 @@
     while ((m = re.exec(soft)) !== null) {
       var esJ = lineIndexOf(/event spend/i);
       pushUnique({ qty: 1, name: "Minimum event spend", unitPrice: parseMoney(m[1]),
-        lineTotal: parseMoney(m[1]), kind: "non-menu", sourceExcerpt: excerpt(esJ - 2, esJ), source: "BEO" });
+        lineTotal: parseMoney(m[1]), kind: "non-menu", sourceExcerpt: excerpt(esJ - 2, esJ),
+        sourceLine: esJ, headLine: esJ - 2, source: "BEO" });
     }
 
     // Security officer hours: "5 Security officer hours ... @ $75.00 per hour".
@@ -1276,7 +1302,7 @@
       var secJ = lineIndexOf(/\d+\s+security officer hours?/i);
       pushUnique({ qty: h, name: "Security officer hours", unitPrice: rate,
         lineTotal: round2(h * rate), kind: "security", beoUnit: "hour", securityDay: secDay,
-        sourceExcerpt: excerpt(secJ - 1, secJ + 2), source: "BEO" });
+        sourceExcerpt: excerpt(secJ - 1, secJ + 2), sourceLine: secJ, headLine: secJ, source: "BEO" });
     }
 
     // Attrition / minimum spend: "@ $5,460.00 per event"
@@ -1284,7 +1310,8 @@
     while ((m = re.exec(soft)) !== null) {
       var atJ = lineIndexOf(/attrition/i);
       pushUnique({ qty: 1, name: "Attrition to meet minimum spend", unitPrice: parseMoney(m[1]),
-        lineTotal: parseMoney(m[1]), kind: "non-menu", sourceExcerpt: excerpt(atJ, atJ + 2), source: "BEO" });
+        lineTotal: parseMoney(m[1]), kind: "non-menu", sourceExcerpt: excerpt(atJ, atJ + 2),
+        sourceLine: atJ, headLine: atJ, source: "BEO" });
     }
 
     // Audio visual quote: "... $3,589.65 per quote"
@@ -1292,7 +1319,8 @@
     while ((m = re.exec(soft)) !== null) {
       var avJ = lineIndexOf(/per\s+quote|audio visual|encore/i);
       pushUnique({ qty: 1, name: "Audio visual", unitPrice: parseMoney(m[1]),
-        lineTotal: parseMoney(m[1]), kind: "non-menu", sourceExcerpt: excerpt(avJ - 1, avJ + 1), source: "BEO" });
+        lineTotal: parseMoney(m[1]), kind: "non-menu", sourceExcerpt: excerpt(avJ - 1, avJ + 1),
+        sourceLine: avJ, headLine: avJ, source: "BEO" });
     }
 
     // Barista coffee cart — a flat fee PER CART ($495 half day / $640 full day),
@@ -1308,7 +1336,8 @@
       var pmx = ctx.match(/\$([\d,]+(?:\.\d{1,2})?)/);
       pushUnique({ qty: carts, name: "Barista Coffee Cart " + (full ? "Full Day" : "Half Day"),
         unitPrice: full ? 640 : 495, lineTotal: pmx ? parseMoney(pmx[1]) : null,
-        kind: "cart", group: "food", sourceExcerpt: excerpt(idx - 2, idx + 2), source: "BEO" });
+        kind: "cart", group: "food", sourceExcerpt: excerpt(idx - 2, idx + 2),
+        sourceLine: idx, headLine: idx, source: "BEO" });
     });
 
     return items;
@@ -1351,13 +1380,13 @@
       }
     }
     if (starts.length <= 1) {
-      return [{ beoNumber: starts[0] ? starts[0].beoNumber : null, pages: starts[0] ? starts[0].pages : null, text: String(text || "") }];
+      return [{ beoNumber: starts[0] ? starts[0].beoNumber : null, pages: starts[0] ? starts[0].pages : null, startLine: starts[0] ? starts[0].idx : 0, text: String(text || "") }];
     }
     var segs = [];
     for (var s = 0; s < starts.length; s++) {
       var from = starts[s].idx;
       var to = (s + 1 < starts.length) ? starts[s + 1].idx : lines.length;
-      segs.push({ beoNumber: starts[s].beoNumber, pages: starts[s].pages, text: lines.slice(from, to).join("\n") });
+      segs.push({ beoNumber: starts[s].beoNumber, pages: starts[s].pages, startLine: from, text: lines.slice(from, to).join("\n") });
     }
     return segs;
   }
@@ -1368,7 +1397,10 @@
       qty: item.qty, name: item.name, unitPrice: item.unitPrice, lineTotal: item.lineTotal,
       source: item.source, kind: item.kind || null, beoUnit: item.beoUnit || null,
       alternatingCourses: item.alternatingCourses || 0,
-      sourceExcerpt: item.sourceExcerpt || null, status: "ok", notes: []
+      sourceExcerpt: item.sourceExcerpt || null,
+      sourceLine: (item.sourceLine != null ? item.sourceLine : null),
+      headLine: (item.headLine != null ? item.headLine : null),
+      status: "ok", notes: []
     };
 
     // Internal maths check (qty x unit price == line total) — only when we have both.
@@ -2123,6 +2155,7 @@
   $("runBtn").addEventListener("click", run);
   $("resetBtn").addEventListener("click", reset);
   $("copyBtn").addEventListener("click", copySummary);
+  $("bvClose").addEventListener("click", function () { $("beoViewer").hidden = true; });
 
   function wireDrop(dropId, inputId, handler) {
     var drop = $(dropId), input = $(inputId);
@@ -2160,14 +2193,21 @@
             seq = seq.then(function () {
               return pdf.getPage(p).then(function (page) {
                 return page.getTextContent().then(function (tc) {
-                  pages[p] = reflow(tc.items);
+                  pages[p] = reflow(tc.items, p);
                 });
               });
             });
           })(p);
         }
         return seq.then(function () {
-          state.beoText = pages.join("\n");
+          // Flatten all pages' line metadata in order; the joined text aligns
+          // 1:1 with the engine's line indices, so a line index maps to a page + y.
+          var meta = [];
+          for (var pp = 1; pp <= pdf.numPages; pp++) meta = meta.concat(pages[pp] || []);
+          state.beoLineMeta = meta;
+          state.beoText = meta.map(function (l) { return l.str; }).join("\n");
+          state.pdf = pdf;
+          state.pageCache = {};
           state.beoName = file.name;
           markLoaded("dropBeo", "beoName", file.name);
           setStatus("BEO loaded (" + pdf.numPages + " pages). " + (state.socRows ? "Ready." : "Add the SOC or press Check charges."));
@@ -2180,18 +2220,24 @@
     reader.readAsArrayBuffer(file);
   }
 
-  // Reassemble pdf.js text items into lines using their Y positions.
-  function reflow(items) {
+  // Reassemble pdf.js text items into lines using their Y positions, keeping
+  // each line's page and PDF-space position so a line can later be located and
+  // highlighted on the rendered page. Returns [{str, page, x, y, h}], blanks
+  // dropped (matching the joined-text line indices the engine sees).
+  function reflow(items, page) {
     var lines = [], cur = null, lastY = null;
     items.forEach(function (it) {
       var y = it.transform[5];
       if (lastY === null || Math.abs(y - lastY) > 3) {
-        cur = []; lines.push(cur); lastY = y;
+        cur = { strs: [], page: page, x: it.transform[4], y: y,
+          h: Math.hypot(it.transform[1], it.transform[3]) || 10 };
+        lines.push(cur); lastY = y;
       }
-      if (it.str) cur.push(it.str);
+      if (it.str) cur.strs.push(it.str);
     });
-    return lines.map(function (l) { return l.join(" ").replace(/\s+/g, " ").trim(); })
-      .filter(Boolean).join("\n");
+    return lines.map(function (l) {
+      return { str: l.strs.join(" ").replace(/\s+/g, " ").trim(), page: l.page, x: l.x, y: l.y, h: l.h };
+    }).filter(function (l) { return l.str.length; });
   }
 
   // ---- SOC (Word) ----
@@ -2236,6 +2282,7 @@
     ["beoName", "socName"].forEach(function (n) { $(n).hidden = true; });
     $("beoInput").value = ""; $("socInput").value = "";
     $("results").hidden = true; $("results").innerHTML = "";
+    $("beoViewer").hidden = true; $("bvPages").innerHTML = "";
     $("copyBtn").hidden = true;
     setStatus(""); refreshRun();
   }
@@ -2246,6 +2293,7 @@
   function run() {
     setStatus("");
     var out = $("results"); out.innerHTML = ""; out.hidden = false;
+    $("beoViewer").hidden = true; $("bvPages").innerHTML = "";
 
     // A multi-BEO distribution (one PDF with many BEOs) is split and each BEO
     // is checked on its own.
@@ -2278,7 +2326,7 @@
     var recon = (beoItems && beoItems.length && socItems && socItems.length)
       ? E.reconcile(beoItems, socItems) : null;
 
-    renderReportInto(out, report, recon, primary.label, beoHeader);
+    renderReportInto(out, report, recon, primary.label, beoHeader, 0);
 
     buildSummaryText(report, recon, primary.label, beoHeader);
     $("copyBtn").hidden = false;
@@ -2286,8 +2334,10 @@
   }
 
   // Append a full single-document report (banner, event facts, check table,
-  // reconciliation, totals) to a container.
-  function renderReportInto(container, report, recon, label, header) {
+  // reconciliation, totals) to a container. lineOffset maps an item's source
+  // line index back to the whole-PDF line metadata (used for a distribution,
+  // where each BEO's text is a slice of the full PDF).
+  function renderReportInto(container, report, recon, label, header, lineOffset) {
     renderBanner(container, report, recon, label);
     if (report.summary.validityNote) {
       var vn = document.createElement("div");
@@ -2297,7 +2347,7 @@
       container.appendChild(vn);
     }
     if (header) renderFacts(container, header, report, label);
-    renderCheckTable(container, report, label);
+    renderCheckTable(container, report, label, lineOffset || 0);
     if (recon) renderRecon(container, recon);
     renderTotals(container, report);
   }
@@ -2386,7 +2436,7 @@
       d.appendChild(sm);
       var body = document.createElement("div");
       body.className = "beo-body";
-      renderReportInto(body, c.report, null, "BEO", c.header);
+      renderReportInto(body, c.report, null, "BEO", c.header, c.seg.startLine || 0);
       d.appendChild(body);
       out.appendChild(d);
       detailsEls[idx] = d;
@@ -2462,8 +2512,11 @@
   }
   function fact(k, v) { return "<div><dt>" + esc(k) + "</dt><dd>" + esc(v) + "</dd></div>"; }
 
-  function renderCheckTable(out, report, label) {
-    var sec = block("Charge check", "vs 2026 menu prices · source: " + label);
+  function renderCheckTable(out, report, label, lineOffset) {
+    lineOffset = lineOffset || 0;
+    var pdfReady = !!(state.pdf && state.beoLineMeta && state.beoLineMeta.length);
+    var sec = block("Charge check", "vs 2026 menu prices · source: " + label +
+      (pdfReady ? " · click a line to see it on the BEO" : ""));
     var html = '<div class="tscroll"><table><thead><tr>' +
       "<th>Item</th><th class='num'>Qty</th><th class='num'>Charged</th>" +
       "<th class='num'>Menu price</th><th class='num'>Line total</th><th>Status</th>" +
@@ -2485,17 +2538,26 @@
         return '<div class="note' + flag + '">' + esc(n) + "</div>";
       }).join("");
       var against = r.category ? '<div class="note against">Checked against the ' + esc(r.category) + " menu.</div>" : "";
-      var hasSrc = !!(r.sourceExcerpt && r.sourceExcerpt.trim());
       var uid = ++rowUid;
-      html += "<tr class='item-row " + rowClass + (hasSrc ? " has-src" : "") + "'" +
-        (hasSrc ? " data-src='" + uid + "'" : "") + ">" +
+      // Prefer locating the line on the actual rendered BEO; fall back to a
+      // text excerpt (e.g. when only a SOC is loaded).
+      var pdfMode = pdfReady && r.source === "BEO" && r.sourceLine != null;
+      var hasSrc = pdfMode || !!(r.sourceExcerpt && r.sourceExcerpt.trim());
+      var dataAttrs = "";
+      if (pdfMode) {
+        dataAttrs = " data-uid='" + uid + "' data-pdf='1' data-srcline='" + (lineOffset + r.sourceLine) +
+          "' data-headline='" + (r.headLine != null ? (lineOffset + r.headLine) : "") + "'";
+      } else if (hasSrc) {
+        dataAttrs = " data-uid='" + uid + "' data-src='1'";
+      }
+      html += "<tr class='item-row " + rowClass + (hasSrc ? " has-src" : "") + "'" + dataAttrs + ">" +
         "<td><span class='itemname'>" + esc(r.name) + "</span>" + against + notes + "</td>" +
         "<td class='num'>" + (r.qty != null ? r.qty : "—") + "</td>" +
         "<td class='num'>" + money(r.unitPrice) + "</td>" +
         "<td class='num'>" + expected + "</td>" +
         "<td class='num'>" + money(r.lineTotal) + "</td>" +
         "<td><span class='chip " + chipCls + "'>" + esc(statusLabel) + "</span></td></tr>";
-      if (hasSrc) {
+      if (!pdfMode && hasSrc) {
         html += "<tr class='src-row' id='srcrow-" + uid + "' hidden><td colspan='6'>" +
           "<div class='src-panel'><div class='src-head'>From the BEO" +
           "<label class='src-check'><input type='checkbox' data-for='" + uid + "'> Reviewed</label></div>" +
@@ -2506,11 +2568,23 @@
     sec.querySelector(".body").innerHTML = html;
     out.appendChild(sec);
 
-    // Click a row to show the matching BEO section; tick "Reviewed" to check it off.
-    sec.querySelectorAll("tr.item-row.has-src").forEach(function (tr) {
+    // PDF mode: click a line to locate and highlight it on the rendered BEO.
+    sec.querySelectorAll("tr.item-row[data-pdf]").forEach(function (tr) {
       tr.addEventListener("click", function (e) {
-        if (e.target && e.target.closest && e.target.closest(".src-check")) return; // let the checkbox work
-        var uid = tr.getAttribute("data-src");
+        if (e.target && e.target.closest && e.target.closest(".src-check")) return;
+        sec.querySelectorAll("tr.item-row.src-open").forEach(function (o) { o.classList.remove("src-open"); });
+        tr.classList.add("src-open");
+        var charge = parseInt(tr.getAttribute("data-srcline"), 10);
+        var head = tr.getAttribute("data-headline");
+        showBeoLocation(head === "" ? null : parseInt(head, 10), charge, tr);
+      });
+    });
+
+    // Text-excerpt fallback: toggle the dropdown; tick "Reviewed" to check off.
+    sec.querySelectorAll("tr.item-row[data-src]").forEach(function (tr) {
+      tr.addEventListener("click", function (e) {
+        if (e.target && e.target.closest && e.target.closest(".src-check")) return;
+        var uid = tr.getAttribute("data-uid");
         var srcRow = sec.querySelector("#srcrow-" + uid);
         if (!srcRow) return;
         var show = srcRow.hidden;
@@ -2521,9 +2595,90 @@
     sec.querySelectorAll(".src-check input").forEach(function (cb) {
       cb.addEventListener("change", function () {
         var uid = cb.getAttribute("data-for");
-        var itemRow = sec.querySelector("tr.item-row[data-src='" + uid + "']");
+        var itemRow = sec.querySelector("tr.item-row[data-uid='" + uid + "']");
         if (itemRow) itemRow.classList.toggle("reviewed", cb.checked);
       });
+    });
+  }
+
+  // Render one BEO page to a fresh canvas, scaled to fit the viewer width.
+  function renderBeoPage(pageNum) {
+    return state.pdf.getPage(pageNum).then(function (page) {
+      var base = page.getViewport({ scale: 1 });
+      var avail = Math.max(280, ($("bvPages").clientWidth || 700) - 28);
+      var scale = Math.min(2, Math.max(0.5, avail / base.width));
+      var viewport = page.getViewport({ scale: scale });
+      var canvas = document.createElement("canvas");
+      canvas.width = Math.ceil(viewport.width);
+      canvas.height = Math.ceil(viewport.height);
+      var ctx = canvas.getContext("2d");
+      return page.render({ canvasContext: ctx, viewport: viewport }).promise.then(function () {
+        return { canvas: canvas, viewport: viewport };
+      });
+    });
+  }
+
+  // Locate a check line on the actual rendered BEO and highlight it.
+  function showBeoLocation(headLine, chargeLine, rowEl) {
+    if (!state.pdf || !state.beoLineMeta) return;
+    var meta = state.beoLineMeta;
+    var charge = (chargeLine != null) ? meta[chargeLine] : null;
+    var head = (headLine != null) ? meta[headLine] : null;
+    if (!charge && !head) return;
+    var targets = [];                 // {page, metas:[...]}
+    function addTarget(m) {
+      if (!m) return;
+      var t = targets.filter(function (x) { return x.page === m.page; })[0];
+      if (!t) { t = { page: m.page, metas: [] }; targets.push(t); }
+      if (t.metas.indexOf(m) === -1) t.metas.push(m);
+    }
+    addTarget(head); addTarget(charge);
+
+    var viewer = $("beoViewer"), pagesEl = $("bvPages");
+    viewer.hidden = false;
+    $("bvTitle").textContent = "BEO — page " + targets.map(function (t) { return t.page; }).join(" & ");
+    var rev = $("bvReviewed");
+    rev.checked = !!(rowEl && rowEl.classList.contains("reviewed"));
+    rev.onchange = function () { if (rowEl) rowEl.classList.toggle("reviewed", rev.checked); };
+    pagesEl.innerHTML = '<div class="note" style="padding:8px">Rendering the BEO…</div>';
+    viewer.scrollIntoView({ behavior: "smooth", block: "start" });
+
+    var seq = Promise.resolve();
+    var built = [];
+    targets.forEach(function (t) {
+      seq = seq.then(function () {
+        return renderBeoPage(t.page).then(function (rec) {
+          var wrap = document.createElement("div");
+          wrap.className = "bv-page";
+          wrap.style.width = rec.canvas.width + "px";
+          wrap.appendChild(rec.canvas);
+          var primaryHl = null;
+          t.metas.forEach(function (m) {
+            var pt = rec.viewport.convertToViewportPoint(m.x, m.y); // baseline, top-left origin
+            var hpx = (m.h || 10) * (rec.viewport.scale || 1);
+            var hl = document.createElement("div");
+            hl.className = "bv-hl";
+            hl.style.top = Math.max(0, pt[1] - hpx * 1.2) + "px";
+            hl.style.height = (hpx * 1.6) + "px";
+            wrap.appendChild(hl);
+            if (m === charge || (!charge && m === head)) primaryHl = hl;
+          });
+          built.push({ wrap: wrap, hl: primaryHl });
+        });
+      });
+    });
+    seq.then(function () {
+      pagesEl.innerHTML = "";
+      built.forEach(function (b) { pagesEl.appendChild(b.wrap); });
+      // Scroll the viewer to the primary highlight.
+      var focus = built.filter(function (b) { return b.hl; })[0] || built[0];
+      if (focus) {
+        var top = focus.wrap.offsetTop + (focus.hl ? parseFloat(focus.hl.style.top) : 0) - 60;
+        pagesEl.scrollTop = Math.max(0, top);
+      }
+    }).catch(function (err) {
+      pagesEl.innerHTML = '<div class="note flag" style="padding:8px">Could not render the BEO page: ' +
+        esc(err && err.message || String(err)) + "</div>";
     });
   }
 
