@@ -750,6 +750,17 @@ ok(cbqR && cbqR.matchedName === "Coffee Break One",
 ok(cbqR && cbqR.priceStatus === "undercharged",
   "coffee break $29 vs $30 flagged undercharged (got " + (cbqR && cbqR.priceStatus) + ")");
 
+section("Event display name is Booking Name - BEO Name");
+var hdr1 = engine.parseBeoHeader("BEO#: 55169\nBooking Name: Boobalicious Ball 2026\nBEO Name: GREEN ROOMS\n");
+ok(hdr1.displayName === "Boobalicious Ball 2026 - GREEN ROOMS",
+  "combines booking + BEO name (got " + hdr1.displayName + ")");
+var hdr2 = engine.parseBeoHeader("BEO#: 999\nBooking Name: Just Booking\n");
+ok(hdr2.displayName === "Just Booking", "booking name only when no BEO name (got " + hdr2.displayName + ")");
+var hdr3 = engine.parseBeoHeader("BEO#: 999\nBEO Name: Just BEO\n");
+ok(hdr3.displayName === "Just BEO", "BEO name only when no booking name (got " + hdr3.displayName + ")");
+var hdr4 = engine.parseBeoHeader("BEO#: 999\nBooking Name: Town Hall\nBEO Name: Town Hall\n");
+ok(hdr4.displayName === "Town Hall", "collapses to one when booking and BEO name are identical (got " + hdr4.displayName + ")");
+
 section("A charge's heading is never taken from the event summary table");
 // The DATE/TIME/VENUE/EVENT grid at the top lists event types ("Arrival Tea &
 // Coffee") that collide with menu items. The charge must take its heading from

@@ -673,7 +673,7 @@
       }
       html += "<tr style='cursor:pointer' data-beo='" + idx + "'>" +
         "<td>" + esc(c.seg.beoNumber || "?") + "</td>" +
-        "<td>" + esc(c.header.eventName || c.header.bookingName || "—") + "</td>" +
+        "<td>" + esc(c.header.displayName || c.header.eventName || c.header.bookingName || "—") + "</td>" +
         "<td>" + esc(c.header.eventDate ? BEOEngine.fmtDate(c.header.eventDate) : "—") + "</td>" +
         "<td class='num'>" + s.total + "</td>" +
         "<td><span class='chip " + chipCls + "'>" + esc(statusText) + "</span></td></tr>";
@@ -694,7 +694,7 @@
       var d = document.createElement("details");
       d.className = "beo-detail";
       d.dataset.beo = idx;
-      var sName = c.header.eventName || c.header.bookingName || "—";
+      var sName = c.header.displayName || c.header.eventName || c.header.bookingName || "—";
       var badge = c.hard > 0 ? "⚠️ " + c.hard : (c.report.summary.review > 0 ? "🔎 " + c.report.summary.review : "✅");
       var sm = document.createElement("summary");
       sm.innerHTML = "<b>" + esc(c.seg.beoNumber || "?") + "</b> · " + esc(sName) +
@@ -769,7 +769,7 @@
     var sec = block("Event details", "from the BEO");
     var facts = '<div class="facts">';
     if (h.beoNumber) facts += fact("BEO #", h.beoNumber);
-    if (h.bookingName) facts += fact("Event", h.bookingName);
+    if (h.displayName || h.bookingName) facts += fact("Event", h.displayName || h.bookingName);
     if (h.eventDate) facts += fact("Date", BEOEngine.fmtDate(h.eventDate));
     if (h.account) facts += fact("Account", h.account);
     if (h.guests) facts += fact("Guests", String(h.guests));
@@ -1134,7 +1134,7 @@
     var s = report.summary;
     var L = [];
     L.push("BEO & SOC Charge Check — Crown Events & Conferences Perth");
-    if (header && header.bookingName) L.push("Event: " + header.bookingName);
+    if (header && (header.displayName || header.bookingName)) L.push("Event: " + (header.displayName || header.bookingName));
     if (header && header.beoNumber) L.push("BEO #" + header.beoNumber);
     L.push("Source checked: " + label);
     L.push("");
@@ -1173,7 +1173,7 @@
     L.push("");
     checked.forEach(function (c) {
       var s = c.report.summary;
-      var name = c.header.eventName || c.header.bookingName || "—";
+      var name = c.header.displayName || c.header.eventName || c.header.bookingName || "—";
       var date = c.header.eventDate ? BEOEngine.fmtDate(c.header.eventDate) : "—";
       var tag = c.hard > 0 ? "CHECK" : (s.review > 0 ? "confirm" : "OK");
       L.push("BEO " + (c.seg.beoNumber || "?") + " · " + name + " · " + date + " — [" + tag + "]");

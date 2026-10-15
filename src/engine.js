@@ -616,11 +616,19 @@
   function parseBeoHeader(text) {
     var t = String(text || "");
     function grab(re) { var m = t.match(re); return m ? m[1].trim() : ""; }
+    var bookingName = grab(/Booking Name:\s*([^\n]+)/i);
+    var eventName = grab(/BEO Name:\s*([^\n]+)/i);
+    // The event's display title: "Booking Name - BEO Name" when both are present
+    // and differ, otherwise whichever one we have (and just one when identical).
+    var displayName = (bookingName && eventName && bookingName.toLowerCase() !== eventName.toLowerCase())
+      ? (bookingName + " - " + eventName)
+      : (bookingName || eventName || "");
     return {
       beoNumber: grab(/BEO#?:?\s*([0-9]{3,})/i),
       account: grab(/Account:\s*([^\n]+)/i),
-      bookingName: grab(/Booking Name:\s*([^\n]+)/i),
-      eventName: grab(/BEO Name:\s*([^\n]+)/i),
+      bookingName: bookingName,
+      eventName: eventName,
+      displayName: displayName,
       eventDate: parseEventDate(t),
       guests: (function () { var m = t.match(/(\d+)\s+guests?\s*@/); return m ? parseInt(m[1], 10) : null; })()
     };
