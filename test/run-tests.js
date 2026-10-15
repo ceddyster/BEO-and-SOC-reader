@@ -685,6 +685,14 @@ ok(nabBy(/Leeuwin Estate Sparkling Brut|Corona|Eddystone Point Pinot Noir/).leng
 ok(nabItems.filter(function (r) { return r.status === "unmatched"; }).length === 0,
   "no unmatched lines in the NAB BEO");
 
+// Each checked line carries the BEO text behind it (for click-to-reveal).
+ok(nabItems.every(function (r) { return r.sourceExcerpt && r.sourceExcerpt.trim().length; }),
+  "every NAB line has a source excerpt");
+ok(nabLunch[0].sourceExcerpt.indexOf("Lunch Buffet Daily Menu One") !== -1,
+  "the lunch-buffet excerpt shows its BEO heading");
+ok(nabMin[0].sourceExcerpt.toLowerCase().indexOf("on consumption") !== -1,
+  "the soft-drink minimum excerpt shows the 'on consumption' line");
+
 section("Security officer hourly rate by day of week");
 function secBEO(hours, rate) {
   return "Miscellaneous\n" + hours + " Security officer hours required @ $" + rate + " per hour\n";

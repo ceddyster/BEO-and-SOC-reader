@@ -244,6 +244,32 @@
       if (!dup) items.push(it);
     }
 
+    // The original BEO lines behind an item, so the UI can show the exact
+    // section to eyeball. Trimmed, blanks dropped, capped to ~16 lines.
+    function excerpt(from, to) {
+      from = Math.max(0, from); to = Math.min(lines.length - 1, to);
+      if (to < from) return "";
+      if (to - from > 16) from = to - 16;
+      return lines.slice(from, to + 1).map(function (s) { return s.replace(/\s+/g, " ").trim(); })
+        .filter(Boolean).join("\n");
+    }
+    function lineIndexOf(re, startAfter) {
+      for (var k = (startAfter || 0); k < lines.length; k++) if (re.test(lines[k])) return k;
+      return -1;
+    }
+    // The item's own block: its heading line plus the dozen lines beneath it
+    // (dishes / inclusions), then the "N guests @ $X" charge line — so a BEO
+    // whose charge is page-split from its heading still shows the right section
+    // without the interleaved program/setup columns in between.
+    function excerptBlock(headIdx, chargeIdx) {
+      headIdx = Math.max(0, headIdx);
+      var end = Math.min(headIdx + 14, chargeIdx);
+      var arr = lines.slice(headIdx, end).map(function (s) { return s.replace(/\s+/g, " ").trim(); }).filter(Boolean);
+      var charge = (lines[chargeIdx] || "").replace(/\s+/g, " ").trim();
+      if (charge && arr.indexOf(charge) === -1) arr.push(charge);
+      return arr.join("\n");
+    }
+
     // Which BEO section a line sits in: the nearest "Menu" (food) or "Beverage"
     // (beverage) header above it. Other section headers are ignored, so the
     // two-column reading order doesn't flip it early.
@@ -375,24 +401,27 @@
       pushUnique({ qty: qty, name: nameOut, unitPrice: price, lineTotal: round2(qty * price),
         kind: kind, alternatingCourses: altCourses, group: itemGroup, contextLines: contextLines,
         serviceHours: serviceHours, anchor: anchor,
+        sourceExcerpt: excerptBlock(isMinSpend ? minSpendJ : (best ? best.j : i - 10), i),
         confident: !!best || kind !== "per-person" || /canap/i.test(nameOut), source: "BEO" });
     });
 
     // On-consumption beverages: "Leeuwin Estate Sparkling Brut @ $75.00 per bottle"
-    String(text || "").split(/\r?\n/).forEach(function (line) {
+    lines.forEach(function (line, idx) {
       var cm = line.match(/^(.*?)\s*@\s*\$([\d,]+(?:\.\d{1,2})?)\s*per\s+(bottle|glass|can|nip|jug|pint)\b/i);
       if (!cm) return;
       var nm = cm[1].replace(/\s+/g, " ").trim().replace(/^[>•\-\s]+/, "");
       if (nm.length < 2) return;
       pushUnique({ qty: null, name: nm, unitPrice: parseMoney(cm[2]),
-        beoUnit: cm[3].toLowerCase(), kind: "consumption", group: "beverage", source: "BEO" });
+        beoUnit: cm[3].toLowerCase(), kind: "consumption", group: "beverage",
+        sourceExcerpt: excerpt(idx, idx), source: "BEO" });
     });
 
     // Minimum / event spend: "1 @ $5,400.00 event spend"
     re = /\$([\d,]+(?:\.\d{1,2})?)\s*event spend/gi;
     while ((m = re.exec(soft)) !== null) {
+      var esJ = lineIndexOf(/event spend/i);
       pushUnique({ qty: 1, name: "Minimum event spend", unitPrice: parseMoney(m[1]),
-        lineTotal: parseMoney(m[1]), kind: "non-menu", source: "BEO" });
+        lineTotal: parseMoney(m[1]), kind: "non-menu", sourceExcerpt: excerpt(esJ - 2, esJ), source: "BEO" });
     }
 
     // Security officer hours: "5 Security officer hours ... @ $75.00 per hour".
@@ -407,22 +436,26 @@
       var secDay = /\bsunday\b/i.test(m[0]) ? "sunday"
         : /\bsaturday\b/i.test(m[0]) ? "saturday"
         : /\b(mon|tue|wed|thu|fri|weekday|week\s*day)\w*\b/i.test(m[0]) ? "weekday" : null;
+      var secJ = lineIndexOf(/\d+\s+security officer hours?/i);
       pushUnique({ qty: h, name: "Security officer hours", unitPrice: rate,
-        lineTotal: round2(h * rate), kind: "security", beoUnit: "hour", securityDay: secDay, source: "BEO" });
+        lineTotal: round2(h * rate), kind: "security", beoUnit: "hour", securityDay: secDay,
+        sourceExcerpt: excerpt(secJ - 1, secJ + 2), source: "BEO" });
     }
 
     // Attrition / minimum spend: "@ $5,460.00 per event"
     re = /attrition[\s\S]{0,80}?@\s*\$?([\d,]+(?:\.\d{1,2})?)\s*per\s+event/g;
     while ((m = re.exec(soft)) !== null) {
+      var atJ = lineIndexOf(/attrition/i);
       pushUnique({ qty: 1, name: "Attrition to meet minimum spend", unitPrice: parseMoney(m[1]),
-        lineTotal: parseMoney(m[1]), kind: "non-menu", source: "BEO" });
+        lineTotal: parseMoney(m[1]), kind: "non-menu", sourceExcerpt: excerpt(atJ, atJ + 2), source: "BEO" });
     }
 
     // Audio visual quote: "... $3,589.65 per quote"
     re = /\$([\d,]+(?:\.\d{1,2})?)\s*per\s+quote/g;
     while ((m = re.exec(soft)) !== null) {
+      var avJ = lineIndexOf(/per\s+quote|audio visual|encore/i);
       pushUnique({ qty: 1, name: "Audio visual", unitPrice: parseMoney(m[1]),
-        lineTotal: parseMoney(m[1]), kind: "non-menu", source: "BEO" });
+        lineTotal: parseMoney(m[1]), kind: "non-menu", sourceExcerpt: excerpt(avJ - 1, avJ + 1), source: "BEO" });
     }
 
     // Barista coffee cart — a flat fee PER CART ($495 half day / $640 full day),
@@ -438,7 +471,7 @@
       var pmx = ctx.match(/\$([\d,]+(?:\.\d{1,2})?)/);
       pushUnique({ qty: carts, name: "Barista Coffee Cart " + (full ? "Full Day" : "Half Day"),
         unitPrice: full ? 640 : 495, lineTotal: pmx ? parseMoney(pmx[1]) : null,
-        kind: "cart", group: "food", source: "BEO" });
+        kind: "cart", group: "food", sourceExcerpt: excerpt(idx - 2, idx + 2), source: "BEO" });
     });
 
     return items;
@@ -497,7 +530,8 @@
     var result = {
       qty: item.qty, name: item.name, unitPrice: item.unitPrice, lineTotal: item.lineTotal,
       source: item.source, kind: item.kind || null, beoUnit: item.beoUnit || null,
-      alternatingCourses: item.alternatingCourses || 0, status: "ok", notes: []
+      alternatingCourses: item.alternatingCourses || 0,
+      sourceExcerpt: item.sourceExcerpt || null, status: "ok", notes: []
     };
 
     // Internal maths check (qty x unit price == line total) — only when we have both.

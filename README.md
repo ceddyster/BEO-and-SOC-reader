@@ -29,6 +29,12 @@ Open **`index.html`** in any modern browser (Chrome, Edge, Firefox, Safari). The
    comparison (when both are loaded), and totals. **Copy summary** puts a plain-text version
    on your clipboard to paste into an email or note.
 
+**Click any line in the charge check** to drop down the exact section of the BEO it came from
+— the menu heading, the dishes/inclusions listed under it, and the `N guests @ $X` charge —
+so you can eyeball an `unmatched`, `non-menu` or crew line against the source. Tick **Reviewed**
+in that panel to check the line off (it greys out and strikes through). This works for every
+line, in single BEOs and inside each BEO of a distribution.
+
 You can check just one document or both. An internet connection is needed the first time so
 the page can load the PDF and Word readers.
 
