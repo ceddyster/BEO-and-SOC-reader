@@ -1216,16 +1216,19 @@
         if (!best || mm.score > best.score) best = { score: mm.score, name: cand, j: j };
         if (mm.score >= 0.85) {
           if (!strong) strong = { score: mm.score, name: cand, j: j }; // closest strong (any)
-          // Closest strong per-person PACKAGE. A buffet/package heading ("Dinner
-          // Buffet Menu Three", pp) must win over a nearer composition dish that
-          // happens to match a priced platter (e.g. a cheese/fruit platter line),
-          // so the charge is checked against the package, not a dish within it.
-          if (!strongPkg && /^(pp|child)/.test(mm.item.unit || "")) {
+          // TOPMOST strong per-person PACKAGE in the block. A package heading
+          // precedes its own selections, so within a charge's block the real
+          // heading is the highest package, not the nearest match: e.g. a coffee
+          // break's selectable "Mini gourmet quiches" or a buffet's "cheese
+          // platter" dish sits BELOW the package it belongs to and must not be
+          // taken as the charge's heading. Scanning upward, keep overwriting so
+          // strongPkg ends on the topmost package line.
+          if (/^(pp|child)/.test(mm.item.unit || "")) {
             strongPkg = { score: mm.score, name: cand, j: j };
           }
         }
       }
-      // Prefer the nearest package heading; fall back to the nearest strong line
+      // Prefer the topmost package heading; fall back to the nearest strong line
       // (a standalone platter with no package above it), then to the best overall.
       best = strongPkg || strong || best;
 

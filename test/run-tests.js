@@ -738,6 +738,18 @@ var sbR = engine.checkDocument(engine.parseBeo(
 ok(sbR && sbR.matchedName === "Working Lunch Menu One" && sbR.priceStatus === "correct",
   "Sandwich Buffet Menu One → Working Lunch Menu One $44 (got " + (sbR && sbR.matchedName) + ")");
 
+section("A package's own selection isn't taken as the charge's heading");
+// A coffee break lists selectable items; one of them ("Mini gourmet quiches")
+// is also a crew menu item priced per person. The charge belongs to the coffee
+// break ABOVE it, not to the nearer quiche line — the topmost package wins.
+var cbqR = engine.checkDocument(engine.parseBeo(
+  "Menu\n15:50 - 16:20 Afternoon Tea\nCoffee Break Menu One\nAssorted cookies\n~~~~~\nSAVOURY ITEMS\nMini gourmet quiches\n- Lorraine\n- Florentine\n~~~~~\nFreshly brewed coffee and selection of teas\n900 guests @ $29.00 per person\n",
+  catalogue), catalogue).items[0];
+ok(cbqR && cbqR.matchedName === "Coffee Break One",
+  "quiche-in-a-coffee-break charge → Coffee Break One, not Crew Mini Gourmet Quiches (got " + (cbqR && cbqR.matchedName) + ")");
+ok(cbqR && cbqR.priceStatus === "undercharged",
+  "coffee break $29 vs $30 flagged undercharged (got " + (cbqR && cbqR.priceStatus) + ")");
+
 section("Real BEO — NAB Branch Leadership Forum (multi-section, page-split)");
 var nab = fs.readFileSync(path.join(__dirname, "fixtures", "nab_beo.txt"), "utf8");
 var nabRep = engine.checkDocument(engine.parseBeo(nab, catalogue), catalogue,
