@@ -40,6 +40,14 @@ viewer to check the line off (the row greys out and strikes through). In a distr
 BEO opens as its own continuous document (just its pages). (If only a SOC is loaded — no BEO PDF
 to render — the line drops down a plain-text excerpt instead.)
 
+**Seeing the actual menu it's checked against.** When you click a line, the viewer also shows,
+beside the BEO, the **prices page of the real 2026 menu** that line is checked against (the
+Dinner Buffet menu for a buffet, the Coffee Breaks menu for a morning tea, the Crew Packages
+menu for a crew platter, and so on) — the actual menu page, not just the text. The menu pages
+are bundled into the tool as images (`assets/menus/`, embedded via `src/menu-images.js`), so no
+internet or Drive access is needed to show them. To refresh them after a menu change, re-render
+the prices page of each `E&C Menu 2026 …` PDF and regenerate `src/menu-images.js`.
+
 > The checker itself already reads the whole BEO as one continuous text, so page breaks never
 > hide anything from the price check; the continuous viewer just makes it as easy for **you** to
 > scroll to and point at any part.

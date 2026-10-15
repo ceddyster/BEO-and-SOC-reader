@@ -16,6 +16,7 @@ function inline(srcPath) {
 }
 
 html = html.replace('<script src="src/prices.js"></script>', inline("src/prices.js"));
+html = html.replace('<script src="src/menu-images.js"></script>', inline("src/menu-images.js"));
 html = html.replace('<script src="src/engine.js"></script>', inline("src/engine.js"));
 
 if (html.indexOf('src="src/')!== -1) {
