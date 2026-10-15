@@ -216,11 +216,6 @@
   .bv-page { position: relative; margin: 0; }
   .bv-page + .bv-page { border-top: 1px dashed var(--border); }
   .bv-page canvas { display: block; }
-  /* Focused clip: just the band around the item, page breaks stitched out */
-  .bv-clip { position: relative; overflow: hidden; }
-  .bv-clip + .bv-clip { border-top: 2px dashed var(--accent); }
-  .bv-clip-inner { position: absolute; left: 0; }
-  .bv-head #bvToggle { margin-left: auto; }
   .bv-hl { position: absolute; background: rgba(255,208,0,.35);
     border: 2px solid rgba(230,160,0,.95); border-radius: 3px; pointer-events: none; }
 
@@ -283,8 +278,7 @@
   <div id="beoViewer" hidden>
     <div class="bv-head">
       <span class="bv-title" id="bvTitle">BEO</span>
-      <button class="btn" id="bvToggle" type="button" hidden style="padding:4px 10px;font-size:12.5px">Show full page(s)</button>
-      <label class="src-check"><input type="checkbox" id="bvReviewed"> Reviewed</label>
+      <label class="src-check" style="margin-left:auto"><input type="checkbox" id="bvReviewed"> Reviewed</label>
       <button class="icon-btn" id="bvClose" title="Close" aria-label="Close">✕</button>
     </div>
     <div class="bv-pages" id="bvPages"></div>
@@ -2912,7 +2906,6 @@
     toPage = toPage || state.pdf.numPages;
     var viewer = $("beoViewer"), pagesEl = $("bvPages");
     viewer.hidden = false;
-    $("bvToggle").hidden = true;
     $("bvTitle").textContent = title || ("BEO — pages " + fromPage + "–" + toPage);
     var rev = $("bvReviewed");
     if (rowEl) {
@@ -2979,11 +2972,10 @@
       || /^(Package\s+Quantity|Michaela|Zinet)\b/i.test(str);
   }
 
-  // Locate a check line on the rendered BEO — a FOCUSED CLIP showing the whole
-  // item block (its heading, the dishes / inclusions / notes beneath it, and
-  // the "N guests @ $X" charge), with only the page break stitched out (page
-  // header / footer / whitespace removed, bottom of one page joined to the top
-  // of the next). "Show full page(s)" switches to the whole page(s).
+  // Locate a check line on the rendered BEO: render the full page(s) the item's
+  // block spans and draw a highlight box over the whole block (its heading, the
+  // dishes / inclusions / notes beneath it, and the "N guests @ $X" charge),
+  // then scroll to it. The page is shown uncropped, in its real layout.
   function showBeoLocation(headLine, chargeLine, rowEl, fromPage, toPage) {
     if (!state.pdf || !state.beoLineMeta) return;
     var meta = state.beoLineMeta;
@@ -3017,53 +3009,48 @@
 
     var viewer = $("beoViewer"), pagesEl = $("bvPages");
     viewer.hidden = false;
-    $("bvTitle").textContent = "BEO — item in context" + (pA !== pB ? " (p." + pA + " → p." + pB + ", joined)" : " (p." + pA + ")");
+    $("bvTitle").textContent = "BEO — item highlighted" + (pA !== pB ? " (p." + pA + "–" + pB + ")" : " (p." + pA + ")");
     var rev = $("bvReviewed");
     rev.parentElement.style.display = "";
     rev.checked = !!(rowEl && rowEl.classList.contains("reviewed"));
     rev.onchange = function () { if (rowEl) rowEl.classList.toggle("reviewed", rev.checked); };
-    var toggle = $("bvToggle");
-    toggle.hidden = false;
-    toggle.onclick = function () { openBeoRange(pA, pB, [meta[headLine], meta[chargeLine]].filter(Boolean), rowEl, "BEO — full page" + (pA !== pB ? "s " + pA + "–" + pB : " " + pA)); };
     pagesEl.innerHTML = '<div class="note" style="padding:8px">Rendering the BEO…</div>';
     viewer.scrollIntoView({ behavior: "smooth", block: "start" });
 
-    var seq = Promise.resolve(), clips = [];
+    // Render the full page(s) and draw the highlight box over the item block's
+    // left-column text — no cropping, so the item is shown in its real position
+    // on the page with everything around it intact.
+    var seq = Promise.resolve(), built = [];
     pages.forEach(function (pn) {
       seq = seq.then(function () {
         return getBeoPage(pn).then(function (rec) {
+          var wrap = document.createElement("div");
+          wrap.className = "bv-page";
+          wrap.style.width = rec.canvas.width + "px";
+          wrap.appendChild(rec.canvas);
           var onPage = block.filter(function (m) { return m.page === pn; });
-          if (!onPage.length) return;
-          var hpx = (onPage[0].h || 10) * (state.pageScale || 1);
-          var baselines = onPage.map(function (m) { return rec.viewport.convertToViewportPoint(m.x, m.y)[1]; });
-          var contentTop = Math.min.apply(null, baselines) - hpx * 1.4;   // above the first line
-          var contentBot = Math.max.apply(null, baselines) + hpx * 0.6;   // below the last line
-          var top = Math.max(0, contentTop - hpx * 0.3);
-          var bottom = Math.min(rec.canvas.height, contentBot + hpx * 0.3);
-          // Horizontal extent of the block's own (left-column) text, capped at
-          // the column boundary so the box never covers the right column.
-          var xs = onPage.map(function (m) { return rec.viewport.convertToViewportPoint(m.x, m.y)[0]; });
-          var x2s = onPage.map(function (m) { return rec.viewport.convertToViewportPoint(m.x2 || m.x, m.y)[0]; });
-          var leftPx = Math.max(0, Math.min.apply(null, xs) - hpx * 0.5);
-          var rightPx = Math.min(Math.max.apply(null, x2s) + hpx * 0.5, rec.canvas.width * 0.52);
-          var clip = document.createElement("div");
-          clip.className = "bv-clip";
-          clip.style.width = rec.canvas.width + "px";
-          clip.style.height = Math.max(20, bottom - top) + "px";
-          var inner = document.createElement("div");
-          inner.className = "bv-clip-inner";
-          inner.style.top = (-top) + "px";
-          inner.appendChild(rec.canvas);
-          // One highlight box over the block's left-column text on this page.
-          var hl = document.createElement("div");
-          hl.className = "bv-hl";
-          hl.style.top = Math.max(0, contentTop) + "px";
-          hl.style.height = (contentBot - contentTop) + "px";
-          hl.style.left = leftPx + "px";
-          hl.style.width = Math.max(40, rightPx - leftPx) + "px";
-          inner.appendChild(hl);
-          clip.appendChild(inner);
-          clips.push(clip);
+          var hlTop = null;
+          if (onPage.length) {
+            var hpx = (onPage[0].h || 10) * (state.pageScale || 1);
+            var baselines = onPage.map(function (m) { return rec.viewport.convertToViewportPoint(m.x, m.y)[1]; });
+            var contentTop = Math.min.apply(null, baselines) - hpx * 1.4;   // above the first line
+            var contentBot = Math.max.apply(null, baselines) + hpx * 0.6;   // below the last line
+            // Horizontal extent of the block's own (left-column) text, capped at
+            // the column boundary so the box never covers the right column.
+            var xs = onPage.map(function (m) { return rec.viewport.convertToViewportPoint(m.x, m.y)[0]; });
+            var x2s = onPage.map(function (m) { return rec.viewport.convertToViewportPoint(m.x2 || m.x, m.y)[0]; });
+            var leftPx = Math.max(0, Math.min.apply(null, xs) - hpx * 0.5);
+            var rightPx = Math.min(Math.max.apply(null, x2s) + hpx * 0.5, rec.canvas.width * 0.52);
+            var hl = document.createElement("div");
+            hl.className = "bv-hl";
+            hl.style.top = Math.max(0, contentTop) + "px";
+            hl.style.height = (contentBot - contentTop) + "px";
+            hl.style.left = leftPx + "px";
+            hl.style.width = Math.max(40, rightPx - leftPx) + "px";
+            wrap.appendChild(hl);
+            hlTop = Math.max(0, contentTop);
+          }
+          built.push({ wrap: wrap, top: hlTop });
         });
       });
     });
@@ -3072,9 +3059,11 @@
       pagesEl.innerHTML = "";
       var doc = document.createElement("div");
       doc.className = "bv-doc";
-      clips.forEach(function (c) { doc.appendChild(c); });
+      built.forEach(function (b) { doc.appendChild(b.wrap); });
       pagesEl.appendChild(doc);
-      pagesEl.scrollTop = 0;
+      // Scroll to the first highlighted block so the item is in view.
+      var focus = built.filter(function (b) { return b.top != null; })[0];
+      pagesEl.scrollTop = focus ? Math.max(0, focus.wrap.offsetTop + focus.top - 60) : 0;
     }).catch(function (err) {
       pagesEl.innerHTML = '<div class="note flag" style="padding:8px">Could not render the BEO: ' +
         esc(err && err.message || String(err)) + "</div>";

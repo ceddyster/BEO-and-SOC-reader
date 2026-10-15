@@ -31,13 +31,14 @@ Open **`index.html`** in any modern browser (Chrome, Edge, Firefox, Safari). The
 
 **Seeing a line on the actual BEO.** The BEO is rendered as **one continuous page** — all its
 pages stacked into a single scrolling document — so nothing is split across page breaks. Press
-**📄 View full BEO** to open it, or **click any line in the charge check** to open it scrolled to
-that line with the menu heading and the `N guests @ $X` charge **highlighted**. So an
-`unmatched`, `non-menu` or crew line takes one click to see in context on the real document (not
-a text copy). Tick **Reviewed** on the viewer to check the line off (the row greys out and
-strikes through). In a distribution, each BEO opens as its own continuous document (just its
-pages). (If only a SOC is loaded — no BEO PDF to render — the line drops down a plain-text
-excerpt instead.)
+**📄 View full BEO** to open it, or **click any line in the charge check** to open the full
+page(s) scrolled to that line, with the whole item block (its menu heading, the dishes /
+inclusions / notes beneath it, and the `N guests @ $X` charge) **highlighted** in place — the
+page is shown uncropped, in its real layout. So an `unmatched`, `non-menu` or crew line takes
+one click to see in context on the real document (not a text copy). Tick **Reviewed** on the
+viewer to check the line off (the row greys out and strikes through). In a distribution, each
+BEO opens as its own continuous document (just its pages). (If only a SOC is loaded — no BEO PDF
+to render — the line drops down a plain-text excerpt instead.)
 
 > The checker itself already reads the whole BEO as one continuous text, so page breaks never
 > hide anything from the price check; the continuous viewer just makes it as easy for **you** to
