@@ -711,6 +711,33 @@ ok(selR && /Crew Sandwiches Platter/.test(selR.matchedName) && /Crew Fresh Fruit
   "names both matched platters");
 ok(selR && selR.priceImpact === -100, "total impact -$100 across 25 guests (got " + (selR && selR.priceImpact) + ")");
 
+section("A charge never borrows the heading of the charge above it");
+// Two charges, back to back: the second's own heading ("Sandwich Buffet Menu
+// One") doesn't collide with the first's ("Coffee Break Menu One"). The second
+// charge must take its OWN heading, not reach past its charge line to steal the
+// first charge's title and keep its own rate.
+var twoBeo = "Menu\n" +
+  "10:35 - 11:00 Morning Tea\nCoffee Break Menu One\nAssorted cookies\nMini continental Danish pastries\n16 guests @ $29.00 per person\n" +
+  "13:15 - 14:00 Working Lunch\nSandwich Buffet Menu One\nChicken Caesar salad\nEgg, sweet corn, chive\n16 guests @ $44.00 per person\n";
+var twoR = engine.checkDocument(engine.parseBeo(twoBeo, catalogue), catalogue).items;
+var cb = twoR.find(function (r) { return r.unitPrice === 29; });
+var wl = twoR.find(function (r) { return r.unitPrice === 44; });
+ok(cb && cb.matchedName === "Coffee Break One", "first charge → Coffee Break One (got " + (cb && cb.matchedName) + ")");
+ok(wl && wl.matchedName === "Working Lunch Menu One",
+  "second charge takes its OWN heading → Working Lunch Menu One, not the coffee break (got " + (wl && wl.matchedName) + ")");
+ok(wl && wl.priceStatus === "correct", "working lunch $44 correct (got " + (wl && wl.priceStatus) + ")");
+ok(twoR.filter(function (r) { return /Coffee Break/.test(r.matchedName || ""); }).length === 1,
+  "the coffee-break heading is used by exactly one charge, not two");
+
+section("A strong item name is not discarded as a section divider");
+// "Sandwich Buffet Menu One" starts with the section word "Sandwich" but is the
+// item itself — it must still be matched, not skipped as a course divider.
+var sbR = engine.checkDocument(engine.parseBeo(
+  "Menu\n13:15 - 14:00 Working Lunch\nSandwich Buffet Menu One\nChicken Caesar salad\n20 guests @ $44.00 per person\n",
+  catalogue), catalogue).items[0];
+ok(sbR && sbR.matchedName === "Working Lunch Menu One" && sbR.priceStatus === "correct",
+  "Sandwich Buffet Menu One → Working Lunch Menu One $44 (got " + (sbR && sbR.matchedName) + ")");
+
 section("Real BEO — NAB Branch Leadership Forum (multi-section, page-split)");
 var nab = fs.readFileSync(path.join(__dirname, "fixtures", "nab_beo.txt"), "utf8");
 var nabRep = engine.checkDocument(engine.parseBeo(nab, catalogue), catalogue,

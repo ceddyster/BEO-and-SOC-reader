@@ -294,9 +294,23 @@
       if (!pm) return;
       var qty = parseInt(pm[1], 10);
       var price = parseMoney(pm[2]);
-      var winArr = lines.slice(Math.max(0, i - 40), i);
+
+      // Each "N guests @ $X per person" charge delimits its own block. The
+      // heading, time anchor and context for THIS charge must come from below
+      // the PREVIOUS per-person charge line — never from a prior charge's block,
+      // or a charge whose own heading doesn't match the menu would reach back and
+      // steal the heading from the charge above it (two charges, one title).
+      var blockStart = 0;
+      for (var bs = i - 1; bs >= 0; bs--) {
+        if (/(\d+)\s+(?:guests?|children|child|kids?|pax|people)\s*@\s*\$?([\d,]+(?:\.\d{1,2})?)\s*per\s+(?:person|child|guest|head)/.test(softNorm(lines[bs]))) {
+          blockStart = bs + 1; break;
+        }
+      }
+      var floorA = Math.max(0, i - 40, blockStart);
+      var floorW = Math.max(0, i - 90, blockStart);
+      var winArr = lines.slice(floorA, i);
       var win = winArr.join("  ");
-      var wideWin = lines.slice(Math.max(0, i - 90), i).join("  "); // page-split context
+      var wideWin = lines.slice(floorW, i).join("  "); // page-split context (within this block)
       var grp = sectionGroupBefore(i); // food / beverage / null
 
       // Match among the heading lines above the price. BEOs are two-column, so
@@ -305,14 +319,18 @@
       // wide window, and a preference for the NEAREST strong match so a weak
       // nearby line can't beat the real heading further up.
       var best = null, strong = null, strongPkg = null;
-      for (var j = i - 1; j >= Math.max(0, i - 90); j--) {
+      for (var j = i - 1; j >= floorW; j--) {
         var cand = lines[j].replace(/\s+/g, " ").trim();
         if (cand.length < 3) continue;
         if (/[@$]/.test(cand)) continue;              // charge lines
         if (/^\d+\s+guests?\b/i.test(cand)) continue; // "N guests ..."
         if (/^\d{3,4}\b/.test(cand)) continue;        // program times (1905 ...)
-        if (SECTION_RE.test(cand)) continue;          // ENTREE / MAIN COURSE / ...
         var mm = findMatch(cand, catalogue, undefined, grp);
+        // Skip course dividers / section labels ("SANDWICH", "MENU", "Beverage",
+        // "MAIN COURSE") — UNLESS the line is itself a strong menu-item name. A
+        // real heading like "Sandwich Buffet Menu One" starts with a section word
+        // but IS the item, so it must not be discarded as a divider.
+        if ((!mm || mm.score < 0.85) && SECTION_RE.test(cand)) continue;
         // A "per person" charge names a package, a per-head menu, or a shared
         // platter — never an INDIVIDUAL drink (wine by the bottle, spirit by the
         // glass, beer or cocktail priced "each"). Reject only those: a crew
@@ -348,7 +366,7 @@
       // menu items; if this signal sits closer to the charge than any matched
       // heading, the charge is that placeholder, not the distant package.
       var minSpendJ = null;
-      for (var ms = i - 1; ms >= Math.max(0, i - 90) && minSpendJ === null; ms--) {
+      for (var ms = i - 1; ms >= floorW && minSpendJ === null; ms--) {
         if (/on\s+consumption|minimum[^.]{0,80}spend/i.test(lines[ms])) minSpendJ = ms;
       }
       var isMinSpend = minSpendJ !== null && (!best || minSpendJ > best.j);
@@ -377,7 +395,7 @@
       // one is chosen, check the charge against the SUM of the selected platters.
       var platters = [];
       if (grp === "food") {
-        for (var pj = i - 1; pj >= Math.max(0, i - 40); pj--) {
+        for (var pj = i - 1; pj >= floorA; pj--) {
           var pcand = lines[pj].replace(/\s+/g, " ").trim();
           if (!pcand) continue;
           if (/[@$]/.test(pcand)) break;                                   // previous charge line
@@ -447,7 +465,7 @@
       // package served at two different times (morning tea vs afternoon tea) is
       // counted as two charges rather than collapsed into one.
       var anchor = null;
-      for (var a = i - 1; a >= Math.max(0, i - 60) && anchor === null; a--) {
+      for (var a = i - 1; a >= Math.max(0, i - 60, blockStart) && anchor === null; a--) {
         var tm = lines[a].match(/\d{1,2}:\d{2}\s*[-–—]\s*\d{1,2}:\d{2}/);
         if (tm) anchor = tm[0];
       }

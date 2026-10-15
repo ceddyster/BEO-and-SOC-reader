@@ -86,9 +86,9 @@
     { category: "Lunch Plated", name: "Plated Lunch Alternating Service", price: 10, unit: "pp_per_course" },
 
     // ---------- LUNCH — WORKING ----------
-    { category: "Working Lunch", name: "Working Lunch Menu One", price: 44, unit: "pp", composition: { set: "workingLunch", limits: { sandwich: 3, salad: 1 } }, note: "Select 3 sandwiches and 1 salad; incl. coffee & tea (max 1 hr)." },
-    { category: "Working Lunch", name: "Working Lunch Menu Two", price: 49, unit: "pp", composition: { set: "workingLunch", limits: { sandwich: 4 } }, note: "Select 4 sandwiches; incl. seasonal fruit platter." },
-    { category: "Working Lunch", name: "Working Lunch Menu Three", price: 62, unit: "pp", composition: { set: "workingLunch", limits: { sandwich: 4 } }, note: "Select 4 sandwiches (premium selection)." },
+    { category: "Working Lunch", name: "Working Lunch Menu One", price: 44, unit: "pp", composition: { set: "workingLunch", limits: { sandwich: 3, salad: 1 } }, note: "Select 3 sandwiches and 1 salad; incl. coffee & tea (max 1 hr).", aliases: ["Sandwich Buffet Menu One", "Sandwich Buffet One"] },
+    { category: "Working Lunch", name: "Working Lunch Menu Two", price: 49, unit: "pp", composition: { set: "workingLunch", limits: { sandwich: 4 } }, note: "Select 4 sandwiches; incl. seasonal fruit platter.", aliases: ["Sandwich Buffet Menu Two", "Sandwich Buffet Two"] },
+    { category: "Working Lunch", name: "Working Lunch Menu Three", price: 62, unit: "pp", composition: { set: "workingLunch", limits: { sandwich: 4 } }, note: "Select 4 sandwiches (premium selection).", aliases: ["Sandwich Buffet Menu Three", "Sandwich Buffet Three"] },
 
     // ---------- LUNCHBOX ----------
     { category: "Lunchbox", name: "Lunchbox Package", price: 48.5, unit: "pp", composition: { set: "lunchbox", options: ["Menu One", "Menu Two", "Menu Three", "Menu Four"], maxOptions: 2 }, note: "$48.50 per person; maximum two menu options per function.", aliases: ["Lunch Box", "Lunchbox Menu One", "Lunchbox Menu Two", "Lunchbox Menu Three", "Lunchbox Menu Four"] },
