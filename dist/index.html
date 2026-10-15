@@ -1266,9 +1266,19 @@
         if (tm) anchor = tm[0];
       }
 
+      // Lunch vs dinner, from an explicit word near the heading, else the
+      // service start time (used to pick the crew set-menu lunch/dinner rate).
+      var mealTime = null;
+      if (/\bdinner\b/i.test(win) && !/\blunch\b/i.test(win)) mealTime = "dinner";
+      else if (/\blunch\b/i.test(win) && !/\bdinner\b/i.test(win)) mealTime = "lunch";
+      else if (anchor) {
+        var sh = parseInt(anchor.match(/(\d{1,2}):/)[1], 10);
+        mealTime = sh >= 16 ? "dinner" : (sh >= 11 ? "lunch" : null);
+      }
+
       pushUnique({ qty: qty, name: nameOut, unitPrice: price, lineTotal: round2(qty * price),
         kind: kind, alternatingCourses: altCourses, group: itemGroup, contextLines: contextLines,
-        serviceHours: serviceHours, anchor: anchor,
+        serviceHours: serviceHours, anchor: anchor, mealTime: mealTime,
         sourceExcerpt: excerptBlock(isMinSpend ? minSpendJ : (best ? best.j : i - 10), i),
         sourceLine: i, headLine: (isMinSpend ? minSpendJ : (best ? best.j : null)),
         confident: !!best || kind !== "per-person" || /canap/i.test(nameOut), source: "BEO" });
@@ -1530,6 +1540,16 @@
 
     var per = item.beoUnit ? (" per " + item.beoUnit) : "";
     var match = findMatch(item.name, catalogue, undefined, item.group);
+    // Crew set menu has a lunch and a dinner rate; the matcher can't tell them
+    // apart from "Chef's selection of main course", so pick by the service time.
+    if (match && item.mealTime && /^Crew Set Menu .*(Lunch|Dinner)$/.test(match.item.name)) {
+      var want = item.mealTime === "dinner" ? "Dinner" : "Lunch";
+      if (!new RegExp(want + "$").test(match.item.name)) {
+        var target = match.item.name.replace(/(Lunch|Dinner)$/, want);
+        var alt = (catalogue.items || []).filter(function (x) { return x.name === target; })[0];
+        if (alt) match = { item: alt, score: match.score };
+      }
+    }
     if (match) {
       result.matchedName = match.item.name;
       result.matchScore = round2(match.score);

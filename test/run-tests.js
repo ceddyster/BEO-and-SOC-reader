@@ -649,6 +649,18 @@ var crewAlias = engine.checkDocument(engine.parseSocRows([["50", "Chef's selecti
 ok(crewAlias.matchedName === "Crew Set Menu Two Course Dinner", "menu-wording matched Crew Two Course Dinner (got " + (crewAlias && crewAlias.matchedName) + ")");
 ok(crewAlias.priceStatus === "overcharged", "Crew two-course dinner billed $70 (should be $61) -> overcharged");
 
+// Crew set menu lunch vs dinner picked by the service time on the BEO.
+var crewDin = engine.checkDocument(engine.parseBeo(
+  "Menu\n20:00 - 21:00 Crew Catering - AV Desk\nCrew Catering - Set Menu\nChef's selection of main course\n12 guests @ $44.00 per person\n",
+  catalogue), catalogue).items[0];
+ok(crewDin.matchedName === "Crew Set Menu Main Dinner" && crewDin.priceStatus === "correct",
+  "crew main at 20:00 → Dinner rate $44 correct (got " + (crewDin && crewDin.matchedName) + ")");
+var crewLun = engine.checkDocument(engine.parseBeo(
+  "Menu\n12:00 - 13:00 Staff Lunch\nCrew Catering - Set Menu\nChef's selection of main course\n10 guests @ $39.00 per person\n",
+  catalogue), catalogue).items[0];
+ok(crewLun.matchedName === "Crew Set Menu Main Lunch" && crewLun.priceStatus === "correct",
+  "crew main at 12:00 (Staff Lunch) → Lunch rate $39 correct (got " + (crewLun && crewLun.matchedName) + ")");
+
 section("Real BEO — NAB Branch Leadership Forum (multi-section, page-split)");
 var nab = fs.readFileSync(path.join(__dirname, "fixtures", "nab_beo.txt"), "utf8");
 var nabRep = engine.checkDocument(engine.parseBeo(nab, catalogue), catalogue,
