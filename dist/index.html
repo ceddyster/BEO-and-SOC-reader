@@ -221,9 +221,8 @@
   .bv-clip + .bv-clip { border-top: 2px dashed var(--accent); }
   .bv-clip-inner { position: absolute; left: 0; }
   .bv-head #bvToggle { margin-left: auto; }
-  .bv-hl { position: absolute; left: 0; right: 0; background: rgba(255,208,0,.35);
-    border-top: 2px solid rgba(230,160,0,.95); border-bottom: 2px solid rgba(230,160,0,.95);
-    pointer-events: none; }
+  .bv-hl { position: absolute; background: rgba(255,208,0,.35);
+    border: 2px solid rgba(230,160,0,.95); border-radius: 3px; pointer-events: none; }
 
   footer.foot { margin-top: 30px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--border);
     padding-top: 16px; }
@@ -2248,9 +2247,10 @@
     });
     var mid = pageWidth * 0.5;
     function mkLine(arr) {
-      var first = arr[0];
+      var first = arr[0], x2 = first.transform[4];
+      arr.forEach(function (it) { var r = it.transform[4] + (it.width || 0); if (r > x2) x2 = r; });
       return { str: arr.map(function (x) { return x.str; }).join(" ").replace(/\s+/g, " ").trim(),
-        page: page, x: first.transform[4], y: first.transform[5],
+        page: page, x: first.transform[4], x2: x2, y: first.transform[5],
         h: Math.hypot(first.transform[1], first.transform[3]) || 10 };
     }
     var main = [], right = [];
@@ -2821,6 +2821,12 @@
           var contentBot = Math.max.apply(null, baselines) + hpx * 0.6;   // below the last line
           var top = Math.max(0, contentTop - hpx * 0.3);
           var bottom = Math.min(rec.canvas.height, contentBot + hpx * 0.3);
+          // Horizontal extent of the block's own (left-column) text, capped at
+          // the column boundary so the box never covers the right column.
+          var xs = onPage.map(function (m) { return rec.viewport.convertToViewportPoint(m.x, m.y)[0]; });
+          var x2s = onPage.map(function (m) { return rec.viewport.convertToViewportPoint(m.x2 || m.x, m.y)[0]; });
+          var leftPx = Math.max(0, Math.min.apply(null, xs) - hpx * 0.5);
+          var rightPx = Math.min(Math.max.apply(null, x2s) + hpx * 0.5, rec.canvas.width * 0.52);
           var clip = document.createElement("div");
           clip.className = "bv-clip";
           clip.style.width = rec.canvas.width + "px";
@@ -2829,11 +2835,13 @@
           inner.className = "bv-clip-inner";
           inner.style.top = (-top) + "px";
           inner.appendChild(rec.canvas);
-          // One highlight over the whole block on this page.
+          // One highlight box over the block's left-column text on this page.
           var hl = document.createElement("div");
           hl.className = "bv-hl";
           hl.style.top = Math.max(0, contentTop) + "px";
           hl.style.height = (contentBot - contentTop) + "px";
+          hl.style.left = leftPx + "px";
+          hl.style.width = Math.max(40, rightPx - leftPx) + "px";
           inner.appendChild(hl);
           clip.appendChild(inner);
           clips.push(clip);
