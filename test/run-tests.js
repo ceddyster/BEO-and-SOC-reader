@@ -750,6 +750,43 @@ ok(cbqR && cbqR.matchedName === "Coffee Break One",
 ok(cbqR && cbqR.priceStatus === "undercharged",
   "coffee break $29 vs $30 flagged undercharged (got " + (cbqR && cbqR.priceStatus) + ")");
 
+section("A charge's heading is never taken from the event summary table");
+// The DATE/TIME/VENUE/EVENT grid at the top lists event types ("Arrival Tea &
+// Coffee") that collide with menu items. The charge must take its heading from
+// the Menu section below the "Package … Per Person … Price" header, not the grid.
+var sumR = engine.checkDocument(engine.parseBeo(
+  "DATE TIME VENUE EVENT SET-UP GTD ROOM HIRE\nArrival Tea & Coffee -\n13-10-26 08:30 - 09:00 Astral 1\nSession 1\n" +
+  "Package Quantity Per Person Price\nMenu\n08:30 - 09:00 Arrival Tea & Coffee - Session 1\nAstral 1\n" +
+  "Coffee Break Menu One\nAssorted cookies\nGourmet finger sandwiches\n150 guests @ $30.00 per person\n",
+  catalogue), catalogue).items[0];
+ok(sumR && sumR.matchedName === "Coffee Break One",
+  "arrival-tea session charge → Coffee Break One, not Day Delegate Arrival from the summary grid (got " + (sumR && sumR.matchedName) + ")");
+
+section("Breakfast set menus are recognised");
+// Header alias: "Breakfast Set Menu One" → Plated Breakfast Menu One.
+var bsmR = engine.checkDocument(engine.parseBeo(
+  "Package Quantity Per Person Price\nMenu\n07:15 - 08:45 Breakfast\nBreakfast Set Menu One\n" +
+  "FROM THE BAKERY (PRE-SET)\nMini butter croissants, continental Danish pastries\n" +
+  "FROM THE PAN\nScrambled eggs on focaccia\n72 guests @ $47.00 per person\n",
+  catalogue), catalogue).items[0];
+ok(bsmR && bsmR.matchedName === "Plated Breakfast Menu One" && bsmR.priceStatus === "undercharged",
+  "Breakfast Set Menu One → Plated Breakfast Menu One, $47 vs $56 undercharged (got " + (bsmR && bsmR.matchedName) + "/" + (bsmR && bsmR.priceStatus) + ")");
+
+// Structure detector: an oddly-worded header ("Custom Breakfast Set Menu") with
+// the bakery/pan structure is still classified as a plated breakfast, a cold
+// dish inside it isn't taken as the charge, and an off-menu bakery item flags.
+var cbfR = engine.checkDocument(engine.parseBeo(
+  "Package Quantity Per Person Price\nMenu\n07:00 - 09:00 Breakfast\nCustom Breakfast Set Menu\n" +
+  "FROM THE BAKERY (PRE-SET)\nPAIN AU CHOCOLAT\nCOLD DISHES (PRE-SET)\nSeasonal fresh fruit platter\n" +
+  "FROM THE PAN\nScrambled eggs, grilled sourdough, bacon rasher\n400 guests @ $43.30 per person\n",
+  catalogue), catalogue).items[0];
+ok(cbfR && cbfR.matchedName === "Plated Breakfast Menu One",
+  "Custom Breakfast Set Menu → Plated Breakfast Menu One by structure (got " + (cbfR && cbfR.matchedName) + ")");
+ok(cbfR && cbfR.priceStatus === "undercharged", "custom breakfast $43.30 vs $56 undercharged");
+ok(cbfR && !/fruit platter/i.test(cbfR.matchedName || ""), "the cold-dish fruit platter is not taken as the charge");
+ok(cbfR && cbfR.notes.join(" ").toLowerCase().indexOf("bakery item is listed that isn't") !== -1,
+  "off-menu bakery item (pain au chocolat) is flagged");
+
 section("Real BEO — NAB Branch Leadership Forum (multi-section, page-split)");
 var nab = fs.readFileSync(path.join(__dirname, "fixtures", "nab_beo.txt"), "utf8");
 var nabRep = engine.checkDocument(engine.parseBeo(nab, catalogue), catalogue,

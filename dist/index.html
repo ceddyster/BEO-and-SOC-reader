@@ -417,11 +417,11 @@
     { category: "Breakfast Plated", name: "Plated Breakfast Menu One", price: 56, unit: "pp", minGuests: 30,
       breakfast: { bakery: 1, continental: 1, pan: 1 },
       note: "Select 1 from the bakery, 1 continental, 1 from the pan; incl. coffee, tea & juice.",
-      aliases: ["Breakfast Plated Menu One", "Plated Breakfast One"] },
+      aliases: ["Breakfast Plated Menu One", "Plated Breakfast One", "Breakfast Set Menu One", "Breakfast Set One"] },
     { category: "Breakfast Plated", name: "Plated Breakfast Menu Two", price: 60, unit: "pp", minGuests: 30,
       breakfast: { bakery: 2, continental: 1, pan: 1 },
       note: "Both bakery items, 1 continental, 1 from the pan; incl. coffee, tea & juice.",
-      aliases: ["Breakfast Plated Menu Two", "Plated Breakfast Two"] },
+      aliases: ["Breakfast Plated Menu Two", "Plated Breakfast Two", "Breakfast Set Menu Two", "Breakfast Set Two"] },
     { category: "Breakfast Buffet", name: "Breakfast Buffet", price: 59.5, unit: "pp", minGuests: 30 },
     { category: "Breakfast Continental", name: "Continental Breakfast", price: 48.5, unit: "pp", minGuests: 30 },
     { category: "Breakfast Standup", name: "Standup Breakfast Egg and Bacon Sliders", price: 30, unit: "pp_per_selection", minGuests: 30 },
@@ -1174,6 +1174,18 @@
           blockStart = bs + 1; break;
         }
       }
+      // Never reach above the catering-table header ("Package  Quantity  Per
+      // Person  Price"). The DATE/TIME/VENUE/EVENT summary grid above it lists
+      // event types ("Arrival Tea & Coffee", "Working Lunch", "Breakfast") that
+      // collide with menu items but are NOT menu lines, so a charge must not take
+      // its heading from there. Floor the block at that header when it precedes.
+      for (var mh = i - 1; mh >= 0; mh--) {
+        var mhl = lines[mh].replace(/\s+/g, " ");
+        if (/\bper\s*person\b.*\bprice\b/i.test(mhl) || /^package\b.*\bquantity\b/i.test(mhl)) {
+          if (mh + 1 > blockStart) blockStart = mh + 1;
+          break;
+        }
+      }
       var floorA = Math.max(0, i - 40, blockStart);
       var floorW = Math.max(0, i - 90, blockStart);
       var winArr = lines.slice(floorA, i);
@@ -1232,6 +1244,25 @@
       // (a standalone platter with no package above it), then to the best overall.
       best = strongPkg || strong || best;
 
+      // Plated-breakfast detector. A block with the "FROM THE BAKERY" + "FROM THE
+      // PAN" structure is a plated breakfast even when the heading is worded oddly
+      // ("Custom Breakfast Set Menu") and matches no catalogue item. Classify it
+      // as the Plated Breakfast menu so its bakery/continental/pan selections and
+      // price are checked — and so a cold dish inside it (a fruit platter) isn't
+      // mistaken for the charge. Only when the heading we found isn't already a
+      // real per-person package (a Breakfast Buffet heading keeps its own match).
+      var bestIsPackage = best && /^(pp|child)/.test(
+        ((findMatch(best.name, catalogue, undefined, grp) || { item: {} }).item.unit) || "");
+      var bfMenu = null, bfHeadJ = -1;
+      if (grp === "food" && !bestIsPackage &&
+          /from the bakery/i.test(wideWin) && /from the pan/i.test(wideWin)) {
+        for (var bh = Math.max(0, floorW); bh < i; bh++) {
+          if (/breakfast/i.test(lines[bh]) && /\b(set|menu|custom)\b/i.test(lines[bh])) { bfHeadJ = bh; break; }
+        }
+        bfMenu = (bfHeadJ >= 0 && /\b(two|2)\b/i.test(lines[bfHeadJ]))
+          ? "Plated Breakfast Menu Two" : "Plated Breakfast Menu One";
+      }
+
       // Nearest line above the charge that marks a minimum-spend / on-consumption
       // placeholder (e.g. "Soft drinks on consumption (Min)"). These aren't fixed
       // menu items; if this signal sits closer to the charge than any matched
@@ -1280,12 +1311,18 @@
         }
       }
 
-      var altCourses = 0, kind = "per-person", nameOut, itemGroup = grp, serviceHours, bpm;
+      var altCourses = 0, kind = "per-person", nameOut, itemGroup = grp, serviceHours, bpm, forceMatch = null;
       if (platters.length >= 2) {
         // Multi-item platter selection — priced as the sum of the chosen platters.
         nameOut = platters.map(function (p) { return p.name; }).join(" + ");
         kind = "platter-selection";
         itemGroup = "food";
+      } else if (bfMenu) {
+        // Plated breakfast recognised by its bakery/pan structure — show the
+        // BEO's own heading but check it against the Plated Breakfast menu.
+        nameOut = bfHeadJ >= 0 ? lines[bfHeadJ].replace(/\s+/g, " ").trim() : "Breakfast Set Menu";
+        itemGroup = "food";
+        forceMatch = bfMenu;
       } else if (canapCount) {
         nameOut = "Cocktail Reception " + canapCount + " Canapes";
         itemGroup = "food"; // canapés are a food (Canapés menu) even at a drinks reception
@@ -1328,7 +1365,11 @@
       // Keep the lines beneath the heading so compositions can be checked
       // (beverage-package add-ons, plated-breakfast selections, etc.).
       var contextLines;
-      if (best) {
+      if (bfMenu) {
+        // From the breakfast heading down to the charge, so the composition
+        // checker sees every bakery / continental / pan selection.
+        contextLines = lines.slice((bfHeadJ >= 0 ? bfHeadJ : floorW) + 1, i).map(function (s) { return s.trim(); }).filter(Boolean);
+      } else if (best) {
         contextLines = lines.slice(best.j + 1, i).map(function (s) { return s.trim(); }).filter(Boolean);
       }
 
@@ -1352,14 +1393,15 @@
       }
 
       var headJ = platters.length >= 2 ? platters[0].j
-        : (isMinSpend ? minSpendJ : (best ? best.j : null));
+        : (bfMenu && bfHeadJ >= 0 ? bfHeadJ : (isMinSpend ? minSpendJ : (best ? best.j : null)));
       pushUnique({ qty: qty, name: nameOut, unitPrice: price, lineTotal: round2(qty * price),
         kind: kind, alternatingCourses: altCourses, group: itemGroup, contextLines: contextLines,
         platterItems: platters.length >= 2 ? platters.map(function (p) { return p.item; }) : null,
+        forceMatch: forceMatch,
         serviceHours: serviceHours, anchor: anchor, mealTime: mealTime,
         sourceExcerpt: excerptBlock(headJ != null ? headJ : i - 10, i),
         sourceLine: i, headLine: headJ,
-        confident: !!best || kind !== "per-person" || /canap/i.test(nameOut), source: "BEO" });
+        confident: !!best || !!bfMenu || kind !== "per-person" || /canap/i.test(nameOut), source: "BEO" });
     });
 
     // On-consumption beverages: "Leeuwin Estate Sparkling Brut @ $75.00 per bottle"
@@ -1657,7 +1699,15 @@
     }
 
     var per = item.beoUnit ? (" per " + item.beoUnit) : "";
-    var match = findMatch(item.name, catalogue, undefined, item.group);
+    // forceMatch pins the catalogue item (e.g. a plated breakfast recognised by
+    // structure, whose BEO heading doesn't match by name) so its composition and
+    // price are still checked.
+    var match = item.forceMatch
+      ? (function () {
+          var it = (catalogue.items || []).filter(function (x) { return x.name === item.forceMatch; })[0];
+          return it ? { item: it, score: 1 } : null;
+        })()
+      : findMatch(item.name, catalogue, undefined, item.group);
     // Crew set menu has a lunch and a dinner rate; the matcher can't tell them
     // apart from "Chef's selection of main course", so pick by the service time.
     if (match && item.mealTime && /^Crew Set Menu .*(Lunch|Dinner)$/.test(match.item.name)) {
@@ -2002,6 +2052,10 @@
     var sel = catalogue.breakfastSelections;
     if (!rules || !sel || !item.contextLines || !item.contextLines.length) return null;
     var text = " " + normalize(item.contextLines.join("  ")) + " ";
+    var raw = item.contextLines.join("  ");
+    // Each category's divider heading as it appears on the BEO, so we can tell a
+    // section that was left out from one that lists an item we don't recognise.
+    var dividers = { bakery: /from the bakery/i, continental: /cold dish|continental/i, pan: /from the pan/i };
     var counts = {}, flags = [];
     ["bakery", "continental", "pan"].forEach(function (cat) {
       var n = 0;
@@ -2011,6 +2065,10 @@
       counts[cat] = n;
       if (rules[cat] != null && n > rules[cat]) {
         flags.push(n + " " + cat + " item" + (n > 1 ? "s" : "") + " selected but the menu allows " + rules[cat]);
+      }
+      // Divider present but nothing recognised → an off-menu item was listed.
+      if (rules[cat] != null && n === 0 && dividers[cat].test(raw)) {
+        flags.push("a " + cat + " item is listed that isn't on the Plated Breakfast menu — confirm it");
       }
     });
     return { counts: counts, rules: rules, flags: flags };
@@ -2039,10 +2097,14 @@
     } else if (info.flags.length) {
       result.priceStatus = "review";
       if (result.status !== "math-error") result.status = "review";
-      result.notes.push("Selections exceed the menu — " + info.flags.join("; ") + " (" + countTxt + "). Check the BEO.");
     } else {
       result.priceStatus = "correct";
       result.notes.push("Price and selections OK (" + countTxt + ").");
+    }
+    // Always surface any selection problems (an off-menu or excess item), even
+    // when the price itself is already flagged.
+    if (info.flags.length) {
+      result.notes.push("Selections — " + info.flags.join("; ") + " (" + countTxt + "). Check the BEO.");
     }
   }
 
