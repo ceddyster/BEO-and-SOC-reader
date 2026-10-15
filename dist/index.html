@@ -2194,8 +2194,9 @@
           (function (p) {
             seq = seq.then(function () {
               return pdf.getPage(p).then(function (page) {
+                var pw = page.getViewport({ scale: 1 }).width;
                 return page.getTextContent().then(function (tc) {
-                  pages[p] = reflow(tc.items, p);
+                  pages[p] = reflow(tc.items, p, pw);
                 });
               });
             });
@@ -2223,24 +2224,52 @@
     reader.readAsArrayBuffer(file);
   }
 
-  // Reassemble pdf.js text items into lines using their Y positions, keeping
-  // each line's page and PDF-space position so a line can later be located and
-  // highlighted on the rendered page. Returns [{str, page, x, y, h}], blanks
-  // dropped (matching the joined-text line indices the engine sees).
-  function reflow(items, page) {
-    var lines = [], cur = null, lastY = null;
+  // Reassemble pdf.js text items into lines, column-aware. A BEO page is two
+  // columns that are unrelated: the left column carries Menu / Beverage items
+  // and their charges, the right column carries program / setup / notes. We
+  // group items into rows by Y, split a row at a clear mid-page gap, then read
+  // the LEFT (main) column top-to-bottom first and the right column after — so a
+  // menu heading and its "N guests @ $X" charge stay together instead of being
+  // interleaved with unrelated right-column lines. Each line keeps its page and
+  // PDF-space position so it can be highlighted on the rendered page.
+  function reflow(items, page, pageWidth) {
+    pageWidth = pageWidth || 600;
+    var rows = [], cur = null, lastY = null;
     items.forEach(function (it) {
       var y = it.transform[5];
-      if (lastY === null || Math.abs(y - lastY) > 3) {
-        cur = { strs: [], page: page, x: it.transform[4], y: y,
-          h: Math.hypot(it.transform[1], it.transform[3]) || 10 };
-        lines.push(cur); lastY = y;
-      }
-      if (it.str) cur.strs.push(it.str);
+      if (lastY === null || Math.abs(y - lastY) > 3) { cur = []; rows.push(cur); lastY = y; }
+      cur.push(it);
     });
-    return lines.map(function (l) {
-      return { str: l.strs.join(" ").replace(/\s+/g, " ").trim(), page: l.page, x: l.x, y: l.y, h: l.h };
-    }).filter(function (l) { return l.str.length; });
+    var mid = pageWidth * 0.5;
+    function mkLine(arr) {
+      var first = arr[0];
+      return { str: arr.map(function (x) { return x.str; }).join(" ").replace(/\s+/g, " ").trim(),
+        page: page, x: first.transform[4], y: first.transform[5],
+        h: Math.hypot(first.transform[1], first.transform[3]) || 10 };
+    }
+    var main = [], right = [];
+    rows.forEach(function (row) {
+      var its = row.slice().sort(function (a, b) { return a.transform[4] - b.transform[4]; });
+      // Largest horizontal gap between consecutive items on the row.
+      var splitAt = -1, bestGap = 0, gapMidX = 0;
+      for (var k = 1; k < its.length; k++) {
+        var prev = its[k - 1], prevRight = prev.transform[4] + (prev.width || 0);
+        var gap = its[k].transform[4] - prevRight;
+        if (gap > bestGap) { bestGap = gap; splitAt = k; gapMidX = (prevRight + its[k].transform[4]) / 2; }
+      }
+      var twoCol = splitAt > 0 && bestGap > pageWidth * 0.08 && gapMidX > pageWidth * 0.33 && gapMidX < pageWidth * 0.67;
+      if (twoCol) {
+        main.push(mkLine(its.slice(0, splitAt)));
+        right.push(mkLine(its.slice(splitAt)));
+      } else if (its[0].transform[4] >= mid) {
+        right.push(mkLine(its));              // a right-column-only row
+      } else {
+        main.push(mkLine(its));               // left column or full-width
+      }
+    });
+    main.sort(function (a, b) { return b.y - a.y; });   // top-to-bottom
+    right.sort(function (a, b) { return b.y - a.y; });
+    return main.concat(right).filter(function (l) { return l.str.length; });
   }
 
   // ---- SOC (Word) ----
