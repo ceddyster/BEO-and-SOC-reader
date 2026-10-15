@@ -675,6 +675,29 @@ ok(bevNS && bevNS.matchedName === "Crown Reserve Package - 6.5 Hours" && bevNS.p
 ok(!mix.some(function (r) { return /Crew Set Menu/.test(r.matchedName || "") && r.unitPrice === 64; }),
   "no phantom crew charge at $64");
 
+section("A per-person charge reads the platter name above it");
+// Crew platters are priced per platter ("each") yet the BEO bills them "per
+// person"; the charge must still match the platter named two lines above it,
+// not fall through to "(unidentified per-person item)".
+var platBeo = "Menu\n13:00 - 21:00 Crew Catering - Band\nCrew Catering - Platters\nChef's selection of sandwiches\n6 guests @ $19.50 per person\n";
+var platR = engine.checkDocument(engine.parseBeo(platBeo, catalogue), catalogue).items[0];
+ok(platR && platR.matchedName === "Crew Sandwiches Platter" && platR.priceStatus === "correct",
+  "crew sandwich platter billed per person → Crew Sandwiches Platter $19.50 correct (got " +
+  (platR && platR.matchedName) + "/" + (platR && platR.priceStatus) + ")");
+ok(platR && !/unidentified/.test(platR.name), "platter charge is not left unidentified");
+// But an individual drink (wine by the bottle, spirit by the glass) must NOT be
+// picked up as the heading of a per-person charge.
+var drinkBeo = "Beverage\n19:00 - 23:00 Reception\nVasse Felix Filius Shiraz\n40 guests @ $60.00 per person\n";
+var drinkR = engine.checkDocument(engine.parseBeo(drinkBeo, catalogue), catalogue).items[0];
+ok(drinkR && drinkR.matchedName !== "Vasse Felix Filius Shiraz",
+  "per-person charge does not match an individual wine (got " + (drinkR && drinkR.matchedName) + ")");
+// A buffet package heading still beats a nearer composition dish that collides
+// with a priced platter name.
+var buffBeo = "Menu\n19:00 - 21:00 Dinner\nDinner Buffet Menu Three\nAssorted cheese platter\nSeasonal fresh fruit platter\n60 guests @ $120.00 per person\n";
+var buffR = engine.checkDocument(engine.parseBeo(buffBeo, catalogue), catalogue).items[0];
+ok(buffR && buffR.matchedName === "Dinner Buffet Menu Three" && buffR.priceStatus === "correct",
+  "buffet package wins over a nearer platter-named dish (got " + (buffR && buffR.matchedName) + ")");
+
 section("Real BEO — NAB Branch Leadership Forum (multi-section, page-split)");
 var nab = fs.readFileSync(path.join(__dirname, "fixtures", "nab_beo.txt"), "utf8");
 var nabRep = engine.checkDocument(engine.parseBeo(nab, catalogue), catalogue,

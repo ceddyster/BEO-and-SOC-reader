@@ -1172,7 +1172,7 @@
       // note "...for Catering Break 1") between a heading and its price — hence a
       // wide window, and a preference for the NEAREST strong match so a weak
       // nearby line can't beat the real heading further up.
-      var best = null, strong = null;
+      var best = null, strong = null, strongPkg = null;
       for (var j = i - 1; j >= Math.max(0, i - 90); j--) {
         var cand = lines[j].replace(/\s+/g, " ").trim();
         if (cand.length < 3) continue;
@@ -1181,19 +1181,35 @@
         if (/^\d{3,4}\b/.test(cand)) continue;        // program times (1905 ...)
         if (SECTION_RE.test(cand)) continue;          // ENTREE / MAIN COURSE / ...
         var mm = findMatch(cand, catalogue, undefined, grp);
-        // A "per person" charge names a per-person package, never an individual
-        // drink/dish line (a wine/beer/spirit priced per bottle/glass/each).
-        // Per-child menus (unit "child") are per-head packages too.
-        if (mm && !/^(pp|child)/.test(mm.item.unit || "")) mm = null;
+        // A "per person" charge names a package, a per-head menu, or a shared
+        // platter — never an INDIVIDUAL drink (wine by the bottle, spirit by the
+        // glass, beer or cocktail priced "each"). Reject only those: a crew
+        // platter is priced per platter ("each") yet the BEO bills it per person,
+        // so food "each"/"flat" items (platters, individual coffee) stay eligible.
+        if (mm) {
+          var u = (mm.item.unit || ""), g = mm.item.group;
+          if (/^(bottle|glass)$/.test(u) || (u === "each" && g === "beverage")) mm = null;
+        }
         // Stay in the charge's own section: a Beverage charge must not borrow a
         // food heading (or vice versa), so a line like "Crown Reserve Package -
         // 6.5 Hours" that has no exact tier can't bleed up to a crew meal.
         if (mm && grp && mm.item.group && mm.item.group !== grp) mm = null;
         if (!mm) continue;
         if (!best || mm.score > best.score) best = { score: mm.score, name: cand, j: j };
-        if (mm.score >= 0.85 && !strong) strong = { score: mm.score, name: cand, j: j }; // closest strong
+        if (mm.score >= 0.85) {
+          if (!strong) strong = { score: mm.score, name: cand, j: j }; // closest strong (any)
+          // Closest strong per-person PACKAGE. A buffet/package heading ("Dinner
+          // Buffet Menu Three", pp) must win over a nearer composition dish that
+          // happens to match a priced platter (e.g. a cheese/fruit platter line),
+          // so the charge is checked against the package, not a dish within it.
+          if (!strongPkg && /^(pp|child)/.test(mm.item.unit || "")) {
+            strongPkg = { score: mm.score, name: cand, j: j };
+          }
+        }
       }
-      best = strong || best;
+      // Prefer the nearest package heading; fall back to the nearest strong line
+      // (a standalone platter with no package above it), then to the best overall.
+      best = strongPkg || strong || best;
 
       // Nearest line above the charge that marks a minimum-spend / on-consumption
       // placeholder (e.g. "Soft drinks on consumption (Min)"). These aren't fixed
