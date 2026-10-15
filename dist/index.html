@@ -234,9 +234,6 @@
   .bv-hl { position: absolute; background: rgba(255,208,0,.35);
     border: 2px solid rgba(230,160,0,.95); border-radius: 3px; pointer-events: none; }
 
-  footer.foot { margin-top: 30px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--border);
-    padding-top: 16px; }
-  footer.foot code { font-family: var(--mono); background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
   a { color: var(--accent); }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
@@ -295,24 +292,6 @@
     <div class="body" id="priceList"></div>
   </details>
 
-  <footer class="foot">
-    <p><b>Where each line is checked.</b> Charges under the BEO's <b>Menu</b> section are checked
-    against the food price books (Dinner/Lunch/Breakfast, Buffet/Plated, Coffee Breaks, Canapés,
-    Day Delegate, Crew, Children's, …); charges under the <b>Beverage</b> section — and any
-    drink billed per bottle or glass — against the beverage price books (Beverage Packages,
-    Wine, Beer &amp; Cider, Spirits, Cocktails, Non-Alcoholic). Each row shows which menu it was
-    compared against.</p>
-    <p><b>How the price check works.</b> Each charge line is matched by name to the menu
-    price book (tier-aware, so a “6 Hour” package only matches the 6-hour price). Matched
-    lines are compared penny-for-penny: <code>correct</code>, <code>undercharged</code> or
-    <code>overcharged</code>, with the per-person difference and the total impact across the
-    guest count. The tool also recomputes <code>qty × price</code> to catch arithmetic slips.
-    Operational charges with no menu price — audio-visual, security, room hire, attrition /
-    minimum spend — are listed as <code>non-menu</code> for you to confirm manually.</p>
-    <p>Prices come from the <b>E&amp;C Menu 2026</b> price book. Food and most beverages are
-    valid 01 Jul 2026 – 30 Jun 2027; the Christmas buffet to 31 Dec 2026. If a menu changes,
-    update <code>src/prices.js</code> and reload.</p>
-  </footer>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
