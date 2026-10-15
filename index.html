@@ -482,6 +482,8 @@
     });
     main.sort(function (a, b) { return b.y - a.y; });   // top-to-bottom
     right.sort(function (a, b) { return b.y - a.y; });
+    main.forEach(function (l) { l.col = "main"; });     // left column (Menu/Beverage + charges)
+    right.forEach(function (l) { l.col = "right"; });   // right column (program/setup/notes)
     return main.concat(right).filter(function (l) { return l.str.length; });
   }
 
@@ -956,21 +958,51 @@
     });
   }
 
-  // Locate a check line on the rendered BEO — a FOCUSED CLIP: just the band
-  // from the item's heading down to its charge, with any page break between
-  // them stitched out (bottom of one page joined to the top of the next), so
-  // you see only that item's beverage/menu section. "Show full page(s)"
-  // switches to the whole page(s).
+  // Page header / footer lines that are NOT part of an item's block — dropped
+  // from the clip so a page break can be stitched out.
+  function isStructuralLine(str) {
+    return /^EVENT ORDER$/i.test(str) || /^BEO#?:/i.test(str) || /^Page:\s*\d+\s*of\s*\d+/i.test(str)
+      || /^Created:/i.test(str) || /^Hotel (Name|Address):/i.test(str)
+      || /\bDate\b[\s\S]*\bDate\b/.test(str) || /\bDate\s*$/.test(str)
+      || /^(Package\s+Quantity|Michaela|Zinet)\b/i.test(str);
+  }
+
+  // Locate a check line on the rendered BEO — a FOCUSED CLIP showing the whole
+  // item block (its heading, the dishes / inclusions / notes beneath it, and
+  // the "N guests @ $X" charge), with only the page break stitched out (page
+  // header / footer / whitespace removed, bottom of one page joined to the top
+  // of the next). "Show full page(s)" switches to the whole page(s).
   function showBeoLocation(headLine, chargeLine, rowEl, fromPage, toPage) {
     if (!state.pdf || !state.beoLineMeta) return;
     var meta = state.beoLineMeta;
-    var head = (headLine != null) ? meta[headLine] : null;
-    var charge = (chargeLine != null) ? meta[chargeLine] : null;
-    var metas = []; if (head) metas.push(head); if (charge) metas.push(charge);
-    if (!metas.length) { openBeoRange(fromPage, toPage, [], rowEl, null); return; }
+    if (headLine == null && chargeLine == null) { openBeoRange(fromPage, toPage, [], rowEl, null); return; }
+    var a = (headLine != null) ? headLine : chargeLine;
+    var b = (chargeLine != null) ? chargeLine : headLine;
+    var startIdx = Math.min(a, b), endIdx = Math.max(a, b);
+    // Pull in the item's time / venue line just above the heading.
+    for (var s = 1; s <= 2; s++) {
+      var pv = meta[startIdx - 1];
+      if (pv && (/^\d{1,2}:\d{2}\s*[-–—]\s*\d{1,2}:\d{2}/.test(pv.str) ||
+        /\b(foyer|astral|ballroom|green room|room \d|studio|river)\b/i.test(pv.str)) && !isStructuralLine(pv.str)) {
+        startIdx = startIdx - 1;
+      } else break;
+    }
+    // All lines of the item block: left-column (Menu/Beverage) content only,
+    // minus page header/footer lines — so right-column setup text that got
+    // appended between a heading and a page-split charge is excluded.
+    var block = [];
+    for (var li = startIdx; li <= endIdx; li++) {
+      var m = meta[li];
+      if (m && m.str && m.col !== "right" && !isStructuralLine(m.str)) block.push(m);
+    }
+    if (!block.length && meta[chargeLine]) block.push(meta[chargeLine]);
+    if (!block.length) { openBeoRange(fromPage, toPage, [], rowEl, null); return; }
 
-    var start = metas[0], end = metas[metas.length - 1];
-    var pA = Math.min(start.page, end.page), pB = Math.max(start.page, end.page);
+    var pages = [];
+    block.forEach(function (m) { if (pages.indexOf(m.page) === -1) pages.push(m.page); });
+    pages.sort(function (x, y) { return x - y; });
+    var pA = pages[0], pB = pages[pages.length - 1];
+
     var viewer = $("beoViewer"), pagesEl = $("bvPages");
     viewer.hidden = false;
     $("bvTitle").textContent = "BEO — item in context" + (pA !== pB ? " (p." + pA + " → p." + pB + ", joined)" : " (p." + pA + ")");
@@ -980,68 +1012,41 @@
     rev.onchange = function () { if (rowEl) rowEl.classList.toggle("reviewed", rev.checked); };
     var toggle = $("bvToggle");
     toggle.hidden = false;
-    toggle.onclick = function () { openBeoRange(pA, pB, metas, rowEl, "BEO — full page" + (pA !== pB ? "s " + pA + "–" + pB : " " + pA)); };
+    toggle.onclick = function () { openBeoRange(pA, pB, [meta[headLine], meta[chargeLine]].filter(Boolean), rowEl, "BEO — full page" + (pA !== pB ? "s " + pA + "–" + pB : " " + pA)); };
     pagesEl.innerHTML = '<div class="note" style="padding:8px">Rendering the BEO…</div>';
     viewer.scrollIntoView({ behavior: "smooth", block: "start" });
 
     var seq = Promise.resolve(), clips = [];
-    function copyCanvas(src) {
-      try {
-        var c = document.createElement("canvas"); c.width = src.width; c.height = src.height;
-        var cx = c.getContext("2d"); if (cx) { cx.drawImage(src, 0, 0); return c; }
-      } catch (e) { /* no 2d context (e.g. test env) */ }
-      return src;
-    }
-    // Only the pages that actually hold the heading / charge — a middle page
-    // between them is dropped entirely.
-    var metaPages = [];
-    metas.forEach(function (m) { if (metaPages.indexOf(m.page) === -1) metaPages.push(m.page); });
-    metaPages.sort(function (a, b) { return a - b; });
-    var _one = function (pn) {
+    pages.forEach(function (pn) {
       seq = seq.then(function () {
         return getBeoPage(pn).then(function (rec) {
-          var onPage = metas.filter(function (m) { return m.page === pn; });
+          var onPage = block.filter(function (m) { return m.page === pn; });
           if (!onPage.length) return;
           var hpx = (onPage[0].h || 10) * (state.pageScale || 1);
-          // A tight band around each line (a little above, a few lines below to
-          // catch its own notes), merged when two bands touch.
-          var bands = onPage.map(function (m) {
-            var b = rec.viewport.convertToViewportPoint(m.x, m.y)[1];
-            return { top: b - hpx * 2, bottom: b + hpx * 4.2, metas: [m] };
-          }).sort(function (a, b) { return a.top - b.top; });
-          var merged = [bands[0]];
-          for (var k = 1; k < bands.length; k++) {
-            var last = merged[merged.length - 1];
-            if (bands[k].top <= last.bottom + hpx * 2) {
-              last.bottom = Math.max(last.bottom, bands[k].bottom);
-              last.metas = last.metas.concat(bands[k].metas);
-            } else merged.push(bands[k]);
-          }
-          merged.forEach(function (band, bi) {
-            var top = Math.max(0, band.top), bottom = Math.min(rec.canvas.height, band.bottom);
-            var clip = document.createElement("div");
-            clip.className = "bv-clip";
-            clip.style.width = rec.canvas.width + "px";
-            clip.style.height = Math.max(20, bottom - top) + "px";
-            var inner = document.createElement("div");
-            inner.className = "bv-clip-inner";
-            inner.style.top = (-top) + "px";
-            inner.appendChild(bi === 0 ? rec.canvas : copyCanvas(rec.canvas));
-            band.metas.forEach(function (m) {
-              var b = rec.viewport.convertToViewportPoint(m.x, m.y)[1];
-              var hl = document.createElement("div");
-              hl.className = "bv-hl";
-              hl.style.top = Math.max(0, b - hpx * 1.2) + "px";
-              hl.style.height = (hpx * 1.6) + "px";
-              inner.appendChild(hl);
-            });
-            clip.appendChild(inner);
-            clips.push(clip);
-          });
+          var baselines = onPage.map(function (m) { return rec.viewport.convertToViewportPoint(m.x, m.y)[1]; });
+          var contentTop = Math.min.apply(null, baselines) - hpx * 1.4;   // above the first line
+          var contentBot = Math.max.apply(null, baselines) + hpx * 0.6;   // below the last line
+          var top = Math.max(0, contentTop - hpx * 0.3);
+          var bottom = Math.min(rec.canvas.height, contentBot + hpx * 0.3);
+          var clip = document.createElement("div");
+          clip.className = "bv-clip";
+          clip.style.width = rec.canvas.width + "px";
+          clip.style.height = Math.max(20, bottom - top) + "px";
+          var inner = document.createElement("div");
+          inner.className = "bv-clip-inner";
+          inner.style.top = (-top) + "px";
+          inner.appendChild(rec.canvas);
+          // One highlight over the whole block on this page.
+          var hl = document.createElement("div");
+          hl.className = "bv-hl";
+          hl.style.top = Math.max(0, contentTop) + "px";
+          hl.style.height = (contentBot - contentTop) + "px";
+          inner.appendChild(hl);
+          clip.appendChild(inner);
+          clips.push(clip);
         });
       });
-    };
-    metaPages.forEach(_one);
+    });
 
     seq.then(function () {
       pagesEl.innerHTML = "";
