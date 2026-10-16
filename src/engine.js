@@ -892,6 +892,36 @@
         return result;
       }
 
+      // Coffee break: the NUMBER of sweet/savoury items chosen is the reliable
+      // signal of which tier — and price — applies (One = 1 item $30, Two = 2
+      // $37, Three = 4 $55); a BEO can name the wrong tier. When the items listed
+      // imply a HIGHER tier than the one named, check against that higher tier
+      // (upgrade only, so a couple of items missed in extraction can't wrongly
+      // downgrade a tier). This catches "Coffee Break Menu One" with four items.
+      if (match.item.breakItems && match.item.category === "Coffee Breaks" && item.contextLines) {
+        var cbN = analyzeCoffeeBreakItems(item, match.item).count;
+        if (cbN > match.item.breakItems) {
+          // The tier whose item allowance is the most this count still fits
+          // within (so 3 items stays Two — there's no 3-item tier — and only
+          // 4+ reaches Three). Upgrade only when that tier costs more.
+          var cbAlt = null;
+          (catalogue.items || []).forEach(function (x) {
+            if (x.category === "Coffee Breaks" && x.breakItems && x.breakItems <= cbN &&
+                (!cbAlt || x.breakItems > cbAlt.breakItems)) cbAlt = x;
+          });
+          if (cbAlt && cbAlt.price > match.item.price) {
+            result.notes.push("BEO lists about " + cbN + " sweet/savoury items — that's " +
+              cbAlt.name + " (" + money(cbAlt.price) + "pp), not the " + match.item.name +
+              " named on the BEO. Checked against " + cbAlt.name + " by item count.");
+            match = { item: cbAlt, score: match.score };
+            result.matchedName = cbAlt.name;
+            result.expectedPrice = cbAlt.price;
+            result.unit = cbAlt.unit;
+            result.menuNote = cbAlt.note || null;
+          }
+        }
+      }
+
       var base = match.item.price;
       var diff = round2(item.unitPrice - base);
       result.priceDiff = diff;
@@ -1363,17 +1393,21 @@
     // Operational / room-setup content (which can interleave from the BEO's other
     // column) ends the food-selection list.
     var stopRe = /\b(room|linen|napkin|tablecloth|table|tables|chair|chairs|floor ?plan|preset|station|stage|dance floor|cluster|clusters|glasses|ice bucket|lectern|microphone|security|please refer|set ?up|allocated|centrepiece|cabaret|trestle|banquet|av desk|whiteboard|projector|screen|signage|pinboard|water and mint|chef notes?)\b/i;
-    var inSel = false, count = 0;
+    var inSel = false, count = 0, cont = false;
     (item.contextLines || []).forEach(function (l) {
       var t = l.replace(/\s+/g, " ").trim();
       if (!t) return;
-      if (/^(sweet|savoury|savory)\b.*\b(items?|selections?)\b/i.test(t)) { inSel = true; return; }
-      if (/^(from the|continental|menu$|beverages?$|program|dietary|miscellaneous|technical)/i.test(t)) { inSel = false; return; }
-      if (stopRe.test(t)) { inSel = false; return; }
+      if (/^(sweet|savoury|savory)\b.*\b(items?|selections?)\b/i.test(t)) { inSel = true; cont = false; return; }
+      if (/^(from the|continental|menu$|beverages?$|program|dietary|miscellaneous|technical)/i.test(t)) { inSel = false; cont = false; return; }
+      if (stopRe.test(t)) { inSel = false; cont = false; return; }
       if (!inSel) return;
-      if (/^~+$/.test(t) || /^[>*]/.test(t)) return;               // separators / notes
+      if (/^~+$/.test(t) || /^[>*•‣·]/.test(t) || /^[-–—]\s/.test(t)) return; // separators / notes / sub-bullets
       if (/assorted cookies|freshly brewed|selection of teas/i.test(t)) return; // always included
+      // A dish can wrap across lines (the first line ends with a comma); count
+      // the whole dish once, not once per line.
+      if (cont) { cont = /,$/.test(t); return; }
       count++;
+      cont = /,$/.test(t);
     });
     return { count: count, allowed: allowed, flag: count > allowed };
   }

@@ -359,6 +359,30 @@ var cbTwoOver = engine.checkDocument(engine.parseBeo(
   catalogue), catalogue).items[0];
 ok(cbTwoOver.priceStatus === "review", "Coffee Break Two with 3 items flagged to check");
 
+section("Coffee break tier is set by the item count, not the named tier");
+// Four items under "Coffee Break Menu One" is really Coffee Break Three ($55);
+// the $30 charge is undercharged. The item count tracks the price.
+var cbFour = engine.checkDocument(engine.parseBeo(
+  "Menu\n10:35 - 11:00 Morning Tea\nCoffee Break Menu One\nAssorted cookies\n~~~~~\n" +
+  "SWEET ITEMS\nMini continental Danish pastries\nRaspberry and chocolate lamingtons, vanilla cream\n" +
+  "SAVOURY ITEMS\nMini gourmet quiches\nGourmet finger sandwiches\n~~~~~\n" +
+  "Freshly brewed coffee and selection of teas\n2 guests @ $30.00 per person\n",
+  catalogue), catalogue).items[0];
+ok(cbFour.matchedName === "Coffee Break Three",
+  "four items → Coffee Break Three despite 'Menu One' label (got " + cbFour.matchedName + ")");
+ok(cbFour.priceStatus === "undercharged" && cbFour.expectedPrice === 55,
+  "checked against $55 (Three), $30 undercharged (got " + cbFour.expectedPrice + "/" + cbFour.priceStatus + ")");
+ok(cbFour.notes.join(" ").indexOf("by item count") !== -1, "note explains it was re-tiered by item count");
+// A dish that wraps across two lines is one item, not two — so a genuine
+// single-item Coffee Break One is not wrongly upgraded.
+var cbWrap = engine.checkDocument(engine.parseBeo(
+  "Menu\n14:45 - 15:15 Afternoon Tea\nCoffee Break Menu One\nAssorted cookies\n~~~~~\n" +
+  "SAVOURY ITEMS\nRoasted pumpkin and sweet potato frittata,\ntomato salsa verde, basil pesto\n~~~~~\n" +
+  "Freshly brewed coffee and selection of teas\n50 guests @ $30.00 per person\n",
+  catalogue), catalogue).items[0];
+ok(cbWrap.matchedName === "Coffee Break One" && cbWrap.priceStatus === "correct",
+  "a wrapped single dish stays Coffee Break One (got " + cbWrap.matchedName + "/" + cbWrap.priceStatus + ")");
+
 section("Tea and Coffee priced by duration");
 var tc4 = engine.checkDocument(engine.parseBeo(
   "Menu\n08:00 - 12:00 Tea and Coffee\nTea and Coffee\nFreshly brewed coffee and selection of teas\n50 guests @ $22.00 per person\n",
