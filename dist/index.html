@@ -1274,7 +1274,19 @@
         for (var bh = Math.max(0, floorW); bh < i; bh++) {
           if (/breakfast/i.test(lines[bh]) && /\b(set|menu|custom)\b/i.test(lines[bh])) { bfHeadJ = bh; break; }
         }
-        bfMenu = (bfHeadJ >= 0 && /\b(two|2)\b/i.test(lines[bfHeadJ]))
+        // Menu One vs Two is decided by what's actually chosen, not by the number
+        // the BEO writes (it can be mis-worded, e.g. "Breakfast Set Menu Three"
+        // when there are only two plated breakfasts). Menu Two is the one with
+        // both bakery items; Menu One has one — so count the recognised bakery
+        // selections in the block.
+        var bfBlock = " " + normalize(lines.slice(bfHeadJ >= 0 ? bfHeadJ : floorW, i).join("  ")) + " ";
+        var bfBakery = 0;
+        (((catalogue.breakfastSelections || {}).bakery) || []).forEach(function (kw) {
+          if (bfBlock.indexOf(normalize(kw)) !== -1) bfBakery++;
+        });
+        // Fall back to the header number only when no bakery item is recognised.
+        var saysTwo = bfHeadJ >= 0 && /\b(two|2)\b/i.test(lines[bfHeadJ]);
+        bfMenu = (bfBakery >= 2 || (bfBakery === 0 && saysTwo))
           ? "Plated Breakfast Menu Two" : "Plated Breakfast Menu One";
       }
 

@@ -798,6 +798,28 @@ ok(cbfR && !/fruit platter/i.test(cbfR.matchedName || ""), "the cold-dish fruit 
 ok(cbfR && cbfR.notes.join(" ").toLowerCase().indexOf("bakery item is listed that isn't") !== -1,
   "off-menu bakery item (pain au chocolat) is flagged");
 
+section("Plated breakfast One vs Two is decided by what's chosen, not the label");
+// A mis-worded "Breakfast Set Menu Three" (there are only two plated breakfasts)
+// with BOTH bakery items (croissants + petite muffins) is Menu Two, not One.
+var bf3R = engine.checkDocument(engine.parseBeo(
+  "Package Quantity Per Person Price\nMenu\n06:45 - 09:00 Breakfast\nBreakfast Set Menu Three\n" +
+  "FROM THE BAKERY (PRE-SET)\nMini butter croissants, continental Danish pastries\nAssorted petite muffins\n" +
+  "COLD DISHES (PRE-SET)\nSeasonal fresh fruit platter\n" +
+  "FROM THE PAN\nScrambled eggs, grilled sourdough, bacon rasher\n312 guests @ $59.00 per person\n",
+  catalogue), catalogue).items[0];
+ok(bf3R && bf3R.matchedName === "Plated Breakfast Menu Two",
+  "two bakery items → Plated Breakfast Menu Two despite 'Three' label (got " + (bf3R && bf3R.matchedName) + ")");
+ok(bf3R && bf3R.priceStatus === "undercharged" && bf3R.expectedPrice === 60,
+  "checked against $60 (Menu Two), $59 undercharged (got " + (bf3R && bf3R.expectedPrice) + "/" + (bf3R && bf3R.priceStatus) + ")");
+// One bakery item stays Menu One.
+var bf1R = engine.checkDocument(engine.parseBeo(
+  "Package Quantity Per Person Price\nMenu\n07:15 - 08:45 Breakfast\nCustom Breakfast Set Menu\n" +
+  "FROM THE BAKERY\nMini butter croissants, continental Danish pastries\n" +
+  "FROM THE PAN\nScrambled eggs on focaccia\n72 guests @ $50.00 per person\n",
+  catalogue), catalogue).items[0];
+ok(bf1R && bf1R.matchedName === "Plated Breakfast Menu One",
+  "one bakery item → Plated Breakfast Menu One (got " + (bf1R && bf1R.matchedName) + ")");
+
 section("Real BEO — NAB Branch Leadership Forum (multi-section, page-split)");
 var nab = fs.readFileSync(path.join(__dirname, "fixtures", "nab_beo.txt"), "utf8");
 var nabRep = engine.checkDocument(engine.parseBeo(nab, catalogue), catalogue,
