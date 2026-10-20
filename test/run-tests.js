@@ -394,6 +394,22 @@ ok(cbWrap2.matchedName === "Coffee Break One" && cbWrap2.priceStatus === "underc
   "a dish wrapping onto a lower-case line is one item → Coffee Break One $30 (got " +
   cbWrap2.matchedName + "/" + cbWrap2.expectedPrice + ")");
 
+// When a coffee break spans a page break, the right-column program/setup/
+// signature/page-footer content interleaves between the one chosen item and the
+// charge; none of it should be counted as extra items.
+var cbPage = engine.checkDocument(engine.parseBeo(
+  "Menu\n10:00 - 10:30 Morning Tea\nCoffee Break Menu One\nAssorted cookies\n~~~~~\n" +
+  "SWEET ITEMS\nRaspberry and chocolate lamingtons, vanilla cream\n~~~~~\n" +
+  "Michaela Davies Date Maeve Cooney Date\n6100\nPhone: 61 8 9362 7574\nProgram\nPROGRAM\n" +
+  "0600 Client access\n0800 Meeting commences\nSERVICE NOTES:\nSetup\nROOM SET UP\n" +
+  "24 Banquet chairs\nEVENT ORDER\nBEO#: 56051\nPage: 2 of 2\nCreated: 16-Oct-26 09:16\n" +
+  "Freshly brewed coffee and selection of teas\n~~~~~\n* Denotes vegetarian dish\n~~~~~\n" +
+  "24 guests @ $30.00 per person\n",
+  catalogue), catalogue).items[0];
+ok(cbPage.matchedName === "Coffee Break One" && cbPage.priceStatus === "correct",
+  "page-break right-column junk isn't counted → Coffee Break One $30 correct (got " +
+  cbPage.matchedName + "/" + cbPage.priceStatus + ")");
+
 section("Tea and Coffee priced by duration");
 var tc4 = engine.checkDocument(engine.parseBeo(
   "Menu\n08:00 - 12:00 Tea and Coffee\nTea and Coffee\nFreshly brewed coffee and selection of teas\n50 guests @ $22.00 per person\n",

@@ -1497,12 +1497,17 @@
     // Operational / room-setup content (which can interleave from the BEO's other
     // column) ends the food-selection list.
     var stopRe = /\b(room|linen|napkin|tablecloth|table|tables|chair|chairs|floor ?plan|preset|station|stage|dance floor|cluster|clusters|glasses|ice bucket|lectern|microphone|security|please refer|set ?up|allocated|centrepiece|cabaret|trestle|banquet|av desk|whiteboard|projector|screen|signage|pinboard|water and mint|chef notes?)\b/i;
+    // Right-column / page-footer content that interleaves when a coffee break
+    // spans a page break (the program, setup, the "Name Date Name Date" sign-off,
+    // page banner, phone, etc.). Any of these ends the food-selection list.
+    var structRe = /^(event order|beo#?:|page:\s*\d|created:|phone:|ph:|program|runsheet|timings|service notes?|additional contact|door cards?|setup|health and safety|audio ?visual|technical|miscellaneous|dietary|billing)\b|\bdate\b[^\n]{0,40}\bdate\b|^\d{3,4}\b|^>/i;
     var inSel = false, count = 0, cont = false;
     (item.contextLines || []).forEach(function (l) {
       var t = l.replace(/\s+/g, " ").trim();
       if (!t) return;
       if (/^(sweet|savoury|savory)\b.*\b(items?|selections?)\b/i.test(t)) { inSel = true; cont = false; return; }
       if (/^(from the|continental|menu$|beverages?$|program|dietary|miscellaneous|technical)/i.test(t)) { inSel = false; cont = false; return; }
+      if (structRe.test(t)) { inSel = false; cont = false; return; }
       if (stopRe.test(t)) { inSel = false; cont = false; return; }
       if (!inSel) return;
       if (/^~+$/.test(t) || /^[>*•‣·]/.test(t) || /^[-–—]\s/.test(t)) return; // separators / notes / sub-bullets
