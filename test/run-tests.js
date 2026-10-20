@@ -993,6 +993,20 @@ var secSatUnder = engine.checkDocument(engine.parseBeo(secBEO(8, "63.00"), catal
 ok(secSatUnder.priceStatus === "undercharged" && secSatUnder.expectedPrice === 75,
   "Saturday security @ $63 undercharged (expected $75)");
 
+section("Operational staff hours — $55 per staff-hour");
+// Real BEO wording, where "$55.00" and "per hour" are split by a "person," wrap.
+var opR = engine.checkDocument(engine.parseBeo(
+  "Miscellaneous\n5 Operational staff hours (1 x Staff 21:00 - 02:00) @ $55.00\nperson, per hour\n",
+  catalogue), catalogue).items.find(function (r) { return r.matchedName === "Operational Staff"; });
+ok(opR && opR.qty === 5 && opR.unitPrice === 55, "parsed 5 operational staff hours @ $55 (got " + (opR && opR.qty) + "/" + (opR && opR.unitPrice) + ")");
+ok(opR && opR.priceStatus === "correct" && opR.expectedPrice === 55, "operational $55/hour correct (got " + (opR && opR.priceStatus) + ")");
+var opOver = engine.checkDocument(engine.parseBeo(
+  "Miscellaneous\n8 Operational staff hours (2 x Staff 05:00 - 09:00) @ $60.00 person, per hour\n",
+  catalogue), catalogue).items.find(function (r) { return r.matchedName === "Operational Staff"; });
+ok(opOver && opOver.priceStatus === "overcharged" && opOver.expectedPrice === 55,
+  "operational @ $60 overcharged vs $55 (got " + (opOver && opOver.priceStatus) + ")");
+ok(opOver && opOver.priceImpact === 40, "operational overcharge impact $5/hr × 8 = $40 (got " + (opOver && opOver.priceImpact) + ")");
+
 // Sunday → $86/hour.
 var secSun = engine.checkDocument(engine.parseBeo(secBEO(6, "86.00"), catalogue), catalogue, "2026-10-18").items[0];
 ok(secSun.priceStatus === "correct", "Sunday security @ $86 correct");

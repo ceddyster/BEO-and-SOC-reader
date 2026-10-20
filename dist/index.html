@@ -822,6 +822,11 @@
   // officer-hour; the day comes from the event date on the BEO/SOC.
   var SECURITY_RATES = { weekday: 63, saturday: 75, sunday: 86 };
 
+  // Operational staff — charged per staff-hour, like security. $55/hour applies
+  // every day for now; Saturday / Sunday rates to be confirmed (update these two
+  // when the higher weekend rates are provided).
+  var OPERATIONAL_RATES = { weekday: 55, saturday: 55, sunday: 55 };
+
   // Half-hour beverage-package pricing. A package can run in half-hour steps:
   // the whole-hour tier below it plus one half-hour increment (e.g. a 2.5-hour
   // Crown Reserve is the 2 Hour tier $54 + $2 = $56). Valid only between
@@ -838,6 +843,7 @@
     items: ITEMS,
     nonMenuHints: NON_MENU_HINTS,
     securityRates: SECURITY_RATES,
+    operationalRates: OPERATIONAL_RATES,
     beverageHalfHour: BEVERAGE_HALF_HOUR,
     packageInclusions: PACKAGE_INCLUSIONS,
     wineTier: WINE_TIER,
@@ -1488,6 +1494,22 @@
         sourceExcerpt: excerpt(secJ - 1, secJ + 2), sourceLine: secJ, headLine: secJ, source: "BEO" });
     }
 
+    // Operational staff hours: "5 Operational staff hours (1 x Staff 21:00 -
+    // 02:00) @ $55.00 person, per hour" — same shape as security, priced per
+    // staff-hour at a day-of-week rate (kind "operational"). The amount and
+    // "per hour" can be split by a "person," wrap, so the gap is tolerated.
+    re = /(\d+)\s+operational staff hours?[\s\S]{0,140}?@\s*\$?([\d,]+(?:\.\d{1,2})?)\s*(?:person\s*,?\s*)?(?:per\s+)?hour/gi;
+    while ((m = re.exec(soft)) !== null) {
+      var oph = parseInt(m[1], 10), oprate = parseMoney(m[2]);
+      var opDay = /\bsunday\b/i.test(m[0]) ? "sunday"
+        : /\bsaturday\b/i.test(m[0]) ? "saturday"
+        : /\b(mon|tue|wed|thu|fri|weekday|week\s*day)\w*\b/i.test(m[0]) ? "weekday" : null;
+      var opJ = lineIndexOf(/\d+\s+operational staff hours?/i);
+      pushUnique({ qty: oph, name: "Operational staff hours", unitPrice: oprate,
+        lineTotal: round2(oph * oprate), kind: "operational", beoUnit: "hour", securityDay: opDay,
+        sourceExcerpt: excerpt(opJ - 1, opJ + 2), sourceLine: opJ, headLine: opJ, source: "BEO" });
+    }
+
     // Attrition / minimum spend: "@ $5,460.00 per event"
     re = /attrition[\s\S]{0,80}?@\s*\$?([\d,]+(?:\.\d{1,2})?)\s*per\s+event/g;
     while ((m = re.exec(soft)) !== null) {
@@ -1717,6 +1739,45 @@
         if (result.status !== "math-error") result.status = result.priceStatus;
         result.notes.push("Security officer on " + dayLabel + " should be $" + secExp + "/hour; charged " + money(secCharged) +
           "/hour (" + (secD < 0 ? "under" : "over") + " by " + money(Math.abs(secD)) + "/hour" +
+          (item.qty != null ? ", " + money(Math.abs(result.priceImpact)) + " across " + item.qty + " hour" + (item.qty > 1 ? "s" : "") : "") + ").");
+      }
+      return result;
+    }
+
+    // Operational staff — charged per staff-hour at a day-of-week rate, like
+    // security. $55/hour every day for now (weekend rates TBC).
+    if (item.kind === "operational") {
+      result.category = "Operational Staff";
+      result.matchedName = "Operational Staff";
+      var oprates = (catalogue.operationalRates) || { weekday: 55, saturday: 55, sunday: 55 };
+      var opCharged = item.unitPrice;
+      var opExp, opLabel;
+      if (item.securityDay === "sunday") { opExp = oprates.sunday; opLabel = "Sunday"; }
+      else if (item.securityDay === "saturday") { opExp = oprates.saturday; opLabel = "Saturday"; }
+      else if (item.securityDay === "weekday") { opExp = oprates.weekday; opLabel = "a weekday (Mon–Fri)"; }
+      else {
+        var odow = dayOfWeek(eventDate);
+        if (odow == null) {
+          opExp = oprates.weekday;
+          opLabel = "any day";  // all days are the same rate for now
+        } else {
+          opExp = odow === 0 ? oprates.sunday : odow === 6 ? oprates.saturday : oprates.weekday;
+          opLabel = WEEKDAY_NAMES[odow] + (odow === 0 || odow === 6 ? "" : " (weekday)");
+        }
+      }
+      result.expectedPrice = opExp;
+      var opD = round2(opCharged - opExp);
+      result.priceDiff = opD;
+      result.priceImpact = item.qty != null ? round2(opD * item.qty) : null;
+      if (Math.abs(opD) <= 0.005) {
+        result.priceStatus = "correct";
+        result.notes.push("Operational staff on " + opLabel + " = $" + opExp + "/hour" +
+          (item.qty != null ? " × " + item.qty + " hour" + (item.qty > 1 ? "s" : "") : "") + ". Correct.");
+      } else {
+        result.priceStatus = opD < 0 ? "undercharged" : "overcharged";
+        if (result.status !== "math-error") result.status = result.priceStatus;
+        result.notes.push("Operational staff on " + opLabel + " should be $" + opExp + "/hour; charged " + money(opCharged) +
+          "/hour (" + (opD < 0 ? "under" : "over") + " by " + money(Math.abs(opD)) + "/hour" +
           (item.qty != null ? ", " + money(Math.abs(result.priceImpact)) + " across " + item.qty + " hour" + (item.qty > 1 ? "s" : "") : "") + ").");
       }
       return result;

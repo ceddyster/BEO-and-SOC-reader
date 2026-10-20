@@ -526,6 +526,11 @@
   // officer-hour; the day comes from the event date on the BEO/SOC.
   var SECURITY_RATES = { weekday: 63, saturday: 75, sunday: 86 };
 
+  // Operational staff — charged per staff-hour, like security. $55/hour applies
+  // every day for now; Saturday / Sunday rates to be confirmed (update these two
+  // when the higher weekend rates are provided).
+  var OPERATIONAL_RATES = { weekday: 55, saturday: 55, sunday: 55 };
+
   // Half-hour beverage-package pricing. A package can run in half-hour steps:
   // the whole-hour tier below it plus one half-hour increment (e.g. a 2.5-hour
   // Crown Reserve is the 2 Hour tier $54 + $2 = $56). Valid only between
@@ -542,6 +547,7 @@
     items: ITEMS,
     nonMenuHints: NON_MENU_HINTS,
     securityRates: SECURITY_RATES,
+    operationalRates: OPERATIONAL_RATES,
     beverageHalfHour: BEVERAGE_HALF_HOUR,
     packageInclusions: PACKAGE_INCLUSIONS,
     wineTier: WINE_TIER,
