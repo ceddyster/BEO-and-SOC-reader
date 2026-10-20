@@ -383,6 +383,17 @@ var cbWrap = engine.checkDocument(engine.parseBeo(
 ok(cbWrap.matchedName === "Coffee Break One" && cbWrap.priceStatus === "correct",
   "a wrapped single dish stays Coffee Break One (got " + cbWrap.matchedName + "/" + cbWrap.priceStatus + ")");
 
+// A dish that wraps WITHOUT a trailing comma (the continuation line starts
+// lower-case) is still one item — "... toastie" / "on country bread".
+var cbWrap2 = engine.checkDocument(engine.parseBeo(
+  "Menu\n11:00 - 11:30 Morning Tea\nCoffee Break Menu One\nAssorted cookies\n~~~~~\n" +
+  "SAVOURY ITEMS\nSerrano ham, Manchego cheese, caramelised onion toastie\non country bread\n~~~~~\n" +
+  "Freshly brewed coffee and selection of teas\n1000 guests @ $29.00 per person\n",
+  catalogue), catalogue).items[0];
+ok(cbWrap2.matchedName === "Coffee Break One" && cbWrap2.priceStatus === "undercharged" && cbWrap2.expectedPrice === 30,
+  "a dish wrapping onto a lower-case line is one item → Coffee Break One $30 (got " +
+  cbWrap2.matchedName + "/" + cbWrap2.expectedPrice + ")");
+
 section("Tea and Coffee priced by duration");
 var tc4 = engine.checkDocument(engine.parseBeo(
   "Menu\n08:00 - 12:00 Tea and Coffee\nTea and Coffee\nFreshly brewed coffee and selection of teas\n50 guests @ $22.00 per person\n",

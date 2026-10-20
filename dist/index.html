@@ -2399,9 +2399,11 @@
       if (!inSel) return;
       if (/^~+$/.test(t) || /^[>*•‣·]/.test(t) || /^[-–—]\s/.test(t)) return; // separators / notes / sub-bullets
       if (/assorted cookies|freshly brewed|selection of teas/i.test(t)) return; // always included
-      // A dish can wrap across lines (the first line ends with a comma); count
-      // the whole dish once, not once per line.
-      if (cont) { cont = /,$/.test(t); return; }
+      // A dish can wrap across lines; count the whole dish once, not once per
+      // line. A continuation is either the previous line ending with a comma, or
+      // this line starting lower-case (a new dish starts with a capital, e.g.
+      // "Serrano ham… toastie" / "on country bread" is one item).
+      if (cont || (/^[a-z]/.test(t) && count > 0)) { cont = /,$/.test(t); return; }
       count++;
       cont = /,$/.test(t);
     });
