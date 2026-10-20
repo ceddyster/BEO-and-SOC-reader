@@ -173,18 +173,15 @@
   .cat-head { font-family: var(--display); font-size: 12px; text-transform: uppercase; letter-spacing: .05em;
     color: var(--accent); margin: 14px 0 4px; }
 
-  /* Distribution: one collapsible section per BEO */
-  details.beo-detail { margin-top: 12px; border: 1px solid var(--border); border-radius: var(--radius);
-    background: var(--surface); box-shadow: var(--shadow); overflow: hidden; }
-  details.beo-detail > summary { cursor: pointer; padding: 13px 16px; font-size: 14px; list-style: none;
-    display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  details.beo-detail > summary::-webkit-details-marker { display: none; }
-  details.beo-detail > summary::before { content: "▸"; color: var(--muted); font-size: 12px; }
-  details.beo-detail[open] > summary::before { content: "▾"; }
-  details.beo-detail > summary:hover { background: var(--surface-2); }
-  .beo-badge { margin-left: auto; font-weight: 700; font-size: 13px; }
-  .beo-body { padding: 0 16px 16px; }
+  /* Distribution: overview rows that expand in place to the full BEO check */
+  table.beo-list td.bx-caret { color: var(--muted); width: 1.2em; text-align: center; }
+  tr.beo-row { cursor: pointer; }
+  tr.beo-row:hover td { background: var(--surface-2); }
+  tr.beo-row.open td { background: var(--surface-2); font-weight: 600; }
+  tr.beo-expand > td { padding: 0 !important; background: var(--bg); border-bottom: 2px solid var(--border); }
+  .beo-body { padding: 6px 14px 18px; }
   .beo-body .banner { margin-top: 12px; }
+  .beo-body .block:first-of-type { margin-top: 14px; }
 
   /* Click a check row to reveal the matching BEO section */
   tr.item-row.has-src { cursor: pointer; }
@@ -2818,17 +2815,18 @@
       "<h2>" + segs.length + " BEOs in this distribution</h2>" +
       "<p>" + (withIssues ? withIssues + " with charges to check · " : "") +
       (toConfirm ? toConfirm + " to confirm · " : "") + clean + " look correct. " +
-      "Open any BEO below for the full line-by-line check.</p>" +
+      "Click any BEO in the list below to open its full line-by-line check.</p>" +
       '<div class="pill-row">' +
       (withIssues ? pill("under", withIssues + " to check") : "") +
       (toConfirm ? pill("over", toConfirm + " to confirm") : "") +
       pill("ok", clean + " clean") + "</div></div>";
     out.appendChild(div);
 
-    // Overview table.
-    var sec = block("BEOs", "21–27 Oct distribution · each checked on its own date");
-    var html = '<div class="tscroll"><table><thead><tr>' +
-      "<th>BEO #</th><th>Event</th><th>Date</th><th class='num'>Lines</th><th>Status</th>" +
+    // One list: an overview table where each row expands in place to that BEO's
+    // full line-by-line check (accordion — only one open at a time).
+    var sec = block("BEOs", segs.length + " BEOs · each checked on its own date · click a row to open it");
+    var html = '<div class="tscroll"><table class="beo-list"><thead><tr>' +
+      "<th></th><th>BEO #</th><th>Event</th><th>Date</th><th class='num'>Lines</th><th>Status</th>" +
       "</tr></thead><tbody>";
     checked.forEach(function (c, idx) {
       var s = c.report.summary;
@@ -2846,50 +2844,44 @@
       } else {
         chipCls = "correct"; statusText = s.total ? "OK" : "no charges";
       }
-      html += "<tr style='cursor:pointer' data-beo='" + idx + "'>" +
+      html += "<tr class='beo-row' data-beo='" + idx + "'>" +
+        "<td class='bx-caret'>▸</td>" +
         "<td>" + esc(c.seg.beoNumber || "?") + "</td>" +
         "<td>" + esc(c.header.displayName || c.header.eventName || c.header.bookingName || "—") + "</td>" +
         "<td>" + esc(c.header.eventDate ? BEOEngine.fmtDate(c.header.eventDate) : "—") + "</td>" +
         "<td class='num'>" + s.total + "</td>" +
-        "<td><span class='chip " + chipCls + "'>" + esc(statusText) + "</span></td></tr>";
+        "<td><span class='chip " + chipCls + "'>" + esc(statusText) + "</span></td></tr>" +
+        "<tr class='beo-expand' id='bx-" + idx + "' hidden><td colspan='6'>" +
+        "<div class='beo-body' data-idx='" + idx + "'></div></td></tr>";
     });
     html += "</tbody></table></div>";
     sec.querySelector(".body").innerHTML = html;
     out.appendChild(sec);
 
-    // Per-BEO detail (collapsible). Issues first, then to-confirm, then clean.
-    var order = checked.map(function (c, i) { return i; }).sort(function (a, b) {
-      var ca = checked[a], cb = checked[b];
-      var rank = function (c) { return c.hard > 0 ? 0 : (c.report.summary.review > 0 ? 1 : 2); };
-      return rank(ca) - rank(cb);
-    });
-    var detailsEls = [];
-    order.forEach(function (idx) {
-      var c = checked[idx];
-      var d = document.createElement("details");
-      d.className = "beo-detail";
-      d.dataset.beo = idx;
-      var sName = c.header.displayName || c.header.eventName || c.header.bookingName || "—";
-      var badge = c.hard > 0 ? "⚠️ " + c.hard : (c.report.summary.review > 0 ? "🔎 " + c.report.summary.review : "✅");
-      var sm = document.createElement("summary");
-      sm.innerHTML = "<b>" + esc(c.seg.beoNumber || "?") + "</b> · " + esc(sName) +
-        " · " + esc(c.header.eventDate ? BEOEngine.fmtDate(c.header.eventDate) : "—") +
-        " <span class='beo-badge'>" + badge + "</span>";
-      d.appendChild(sm);
-      var body = document.createElement("div");
-      body.className = "beo-body";
-      renderReportInto(body, c.report, null, "BEO", c.header, c.seg.startLine || 0, c.span);
-      d.appendChild(body);
-      out.appendChild(d);
-      detailsEls[idx] = d;
-    });
-
-    // Clicking an overview row opens and scrolls to that BEO.
-    sec.querySelectorAll("tr[data-beo]").forEach(function (tr) {
+    // Accordion wiring — render each BEO's detail lazily the first time it opens.
+    var rendered = {};
+    sec.querySelectorAll("tr.beo-row").forEach(function (tr) {
       tr.addEventListener("click", function () {
         var idx = tr.getAttribute("data-beo");
-        var d = detailsEls[idx];
-        if (d) { d.open = true; d.scrollIntoView({ behavior: "smooth", block: "start" }); }
+        var ex = sec.querySelector("#bx-" + idx);
+        var wasOpen = !ex.hidden;
+        // Close any open detail first (one at a time).
+        sec.querySelectorAll("tr.beo-expand").forEach(function (e) { e.hidden = true; });
+        sec.querySelectorAll("tr.beo-row.open").forEach(function (r) {
+          r.classList.remove("open");
+          var cc = r.querySelector(".bx-caret"); if (cc) cc.textContent = "▸";
+        });
+        if (wasOpen) return;  // clicking the open row just closes it
+        if (!rendered[idx]) {
+          var c = checked[idx];
+          renderReportInto(ex.querySelector(".beo-body"), c.report, null, "BEO", c.header,
+            c.seg.startLine || 0, c.span);
+          rendered[idx] = true;
+        }
+        ex.hidden = false;
+        tr.classList.add("open");
+        var car = tr.querySelector(".bx-caret"); if (car) car.textContent = "▾";
+        tr.scrollIntoView({ behavior: "smooth", block: "nearest" });
       });
     });
 
