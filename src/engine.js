@@ -502,14 +502,20 @@
         nameOut = cm ? cm[0].replace(/\s+/g, " ").trim() : "Custom package";
         kind = "custom";
         itemGroup = null;
-      } else if ((bpm = wideWin.match(/(crown reserve|crown deluxe|wa premium|soft drink(?:\s*only)?)\s*(?:beverage\s*)?package\s*[-–—]?\s*([\d.]+)\s*hours?/i))) {
+      } else if ((bpm = wideWin.match(/(crown reserve|crown deluxe|wa premium|soft drink(?:\s*only)?)\s*(?:beverage\s*)?package\s*[-–—]?\s*([\d.]+)\s*hours?(?:\s*(?:and\s+)?(\d{1,2})\s*min)?/i))) {
         // A beverage package whose duration isn't a standard whole-hour tier
         // (e.g. "Crown Reserve Package - 6.5 Hours" / "Crown Deluxe Package -
         // 5.5 Hours") — recognised as that package, flagged to confirm rather
-        // than mis-priced or left unknown. Uses the block-wide window because the
+        // than mis-priced or left unknown. The duration can be written as a
+        // decimal ("5.5 Hours") or as hours + minutes ("5 Hours 30 minutes"); fold
+        // the minutes into the hour figure so a half-hour charge is priced, not
+        // read as the whole hour below it. Uses the block-wide window because the
         // package heading can sit well above its charge (the included drinks are
         // listed between them, and setup text / a page break interleaves).
-        nameOut = bpm[1].replace(/\b\w/g, function (c) { return c.toUpperCase(); }) + " Package - " + bpm[2] + " Hours";
+        var bpHours = parseFloat(bpm[2]) + (bpm[3] ? parseInt(bpm[3], 10) / 60 : 0);
+        // Trim float noise (5 + 30/60 = 5.499999…) to a clean half-hour figure.
+        bpHours = Math.round(bpHours * 100) / 100;
+        nameOut = bpm[1].replace(/\b\w/g, function (c) { return c.toUpperCase(); }) + " Package - " + bpHours + " Hours";
         kind = "bev-nonstandard";
         itemGroup = "beverage";
       } else if (/dietary\s+requirement\s+surcharge|additional dietary requirements|above the 10% allowance/i.test(wideWin)) {

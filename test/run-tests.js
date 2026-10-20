@@ -801,6 +801,16 @@ ok(over.priceStatus === "review",
 var under2 = bevHalf("Crown Deluxe Package - 1.5 Hours", "63.00");
 ok(under2.priceStatus === "review",
   "1.5h is below the 2-hour minimum → review (got " + under2.priceStatus + ")");
+// Duration written as "N Hours M minutes" (BEO CECP 10-15-2026) must fold the
+// minutes in — "5 Hours 30 minutes" is 5.5 hrs, not read as the 5-hour tier.
+var mins = bevHalf("Crown Deluxe Package - 5 Hours 30 minutes", "79.50");
+ok(mins.matchedName === "Crown Deluxe Package - 5.5 Hours",
+  "\"5 Hours 30 minutes\" read as 5.5 hours (got " + mins.matchedName + ")");
+ok(mins.expectedPrice === 82.5 && mins.priceStatus === "undercharged",
+  "Deluxe 5.5h = 80 + 2.50 = $82.50; $79.50 undercharged (got " + mins.expectedPrice + "/" + mins.priceStatus + ")");
+var mins2 = bevHalf("Crown Reserve Package - 3 Hours 30 minutes", "60.00");
+ok(mins2.matchedName === "Crown Reserve Package - 3.5 Hours" && mins2.expectedPrice === 60 && mins2.priceStatus === "correct",
+  "Reserve \"3 Hours 30 minutes\" = 3.5h = 58 + 2 = $60 correct (got " + mins2.matchedName + "/" + mins2.expectedPrice + ")");
 
 section("A dietary-requirement surcharge is checked at 25% of the meal price");
 var dietItems = engine.checkDocument(engine.parseBeo(
