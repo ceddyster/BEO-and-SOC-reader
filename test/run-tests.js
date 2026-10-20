@@ -699,6 +699,26 @@ ok(bevNS && bevNS.matchedName === "Crown Reserve Package - 6.5 Hours" && bevNS.p
 ok(!mix.some(function (r) { return /Crew Set Menu/.test(r.matchedName || "") && r.unitPrice === 64; }),
   "no phantom crew charge at $64");
 
+section("A beverage package is found even when its heading is far above the charge");
+// The package heading sits well above its charge — the included drinks are
+// listed between them, then setup / table text and a page break interleave.
+var farBev = "Beverage\n19:00 - 23:30 Dinner\nCrown Deluxe Package - 5.5 Hours\n" +
+  "Veuve Tailhan Blanc de Blancs Brut NV\nVasse Felix Filius Sauvignon Blanc Semillon\nCorona\nHahn Premium Light\n" +
+  "ROOM SET UP\nSet banquet style\n62 Banquet round - 6ft\n630 Banquet chairs\nLINEN\n63 Black linen tablecloths\n" +
+  "TABLE ITEMS\nMenus supplied by Crown - Black\nCROWN BALLROOM STAGE SET UP\n2 Centre steps\n" +
+  "Heineken Zero\nAssorted soft drinks and orange juice\n630 guests @ $79.50 per person\n";
+var farBevR = engine.checkDocument(engine.parseBeo(farBev, catalogue), catalogue).items.find(function (r) { return /Deluxe/.test(r.name); });
+ok(farBevR && farBevR.matchedName === "Crown Deluxe Package - 5.5 Hours" && farBevR.priceStatus === "review",
+  "far-above Crown Deluxe 5.5h package is identified and flagged to confirm (got " + (farBevR && farBevR.matchedName) + ")");
+
+section("A dietary-requirement surcharge is identified, not left unmatched");
+var dietR = engine.checkDocument(engine.parseBeo(
+  "Menu\n19:00 - 23:30 Dinner\nDinner Set Menu Two\n630 guests @ $105.00 per person\n" +
+  "Dietary Requirement Surcharge\nAdditional dietary requirements above\nAbove the 10% allowance\n12 guests @ $26.25 per person\n",
+  catalogue), catalogue).items.find(function (r) { return r.unitPrice === 26.25; });
+ok(dietR && dietR.name === "Dietary requirement surcharge" && dietR.priceStatus === "not-checked",
+  "dietary surcharge labelled and listed non-menu (got " + (dietR && dietR.name) + "/" + (dietR && dietR.priceStatus) + ")");
+
 section("A per-person charge reads the platter name above it");
 // Crew platters are priced per platter ("each") yet the BEO bills them "per
 // person"; the charge must still match the platter named two lines above it,

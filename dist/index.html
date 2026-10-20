@@ -1378,13 +1378,22 @@
         nameOut = cm ? cm[0].replace(/\s+/g, " ").trim() : "Custom package";
         kind = "custom";
         itemGroup = null;
-      } else if ((bpm = win.match(/(crown reserve|crown deluxe|wa premium|soft drink(?:\s*only)?)\s*(?:beverage\s*)?package\s*[-–—]?\s*([\d.]+)\s*hours?/i))) {
+      } else if ((bpm = wideWin.match(/(crown reserve|crown deluxe|wa premium|soft drink(?:\s*only)?)\s*(?:beverage\s*)?package\s*[-–—]?\s*([\d.]+)\s*hours?/i))) {
         // A beverage package whose duration isn't a standard whole-hour tier
-        // (e.g. "Crown Reserve Package - 6.5 Hours") — recognised as that
-        // package, flagged to confirm rather than mis-priced or left unknown.
+        // (e.g. "Crown Reserve Package - 6.5 Hours" / "Crown Deluxe Package -
+        // 5.5 Hours") — recognised as that package, flagged to confirm rather
+        // than mis-priced or left unknown. Uses the block-wide window because the
+        // package heading can sit well above its charge (the included drinks are
+        // listed between them, and setup text / a page break interleaves).
         nameOut = bpm[1].replace(/\b\w/g, function (c) { return c.toUpperCase(); }) + " Package - " + bpm[2] + " Hours";
         kind = "bev-nonstandard";
         itemGroup = "beverage";
+      } else if (/dietary\s+requirement\s+surcharge|additional dietary requirements|above the 10% allowance/i.test(wideWin)) {
+        // The per-person surcharge for dietaries beyond the 10% allowance (25% of
+        // the menu price) — not a menu item; confirm against the quote.
+        nameOut = "Dietary requirement surcharge";
+        kind = "non-menu";
+        itemGroup = null;
       } else {
         nameOut = "(unidentified per-person item)";
       }
