@@ -445,15 +445,36 @@ var tc8b = engine.checkDocument(engine.parseBeo(
 ok(tc8b && tc8b.priceStatus === "undercharged", "Tea & Coffee 7 hrs charged $22 (should be $28) -> undercharged");
 ok(tc8b && tc8b.expectedPrice === 28, "7 hrs expects $28");
 
-section("Barista coffee cart (priced per cart)");
-var cart2 = engine.checkDocument(engine.parseBeo(
-  "Miscellaneous\nBarista Coffee Cart\n2 x Half Day Cart Hire $990.00\n", catalogue), catalogue).items[0];
-ok(cart2 && /Half Day/.test(cart2.matchedName || cart2.name), "recognises a half-day barista cart");
-ok(cart2 && cart2.qty === 2, "reads 2 carts (got " + (cart2 && cart2.qty) + ")");
-ok(cart2 && cart2.priceStatus === "correct", "2 × $495 = $990 correct");
-var cart1 = engine.checkDocument(engine.parseBeo(
-  "Miscellaneous\n2 x Barista Coffee Cart Full Day Hire $640.00\n", catalogue), catalogue).items[0];
-ok(cart1 && cart1.priceStatus === "undercharged", "2 full-day carts billed as $640 (one) -> undercharged");
+section("Barista coffee cart hire (per cart; half/full day by run time)");
+// Real wording: the cart HIRE sits in the Setup column as "N Coffee Cart … @ $X
+// per cart". A 4-hour run is a half day ($495); more is a full day ($640).
+var cartHalf = engine.checkDocument(engine.parseBeo(
+  "Setup\n09:00 - 13:00 Barista Coffee Cart\nAstral 2\n2 Coffee Cart - Crown @ $495.00 per cart\n",
+  catalogue), catalogue).items[0];
+ok(cartHalf && /Half Day/.test(cartHalf.matchedName || cartHalf.name),
+  "4-hour run → Half Day cart (got " + (cartHalf && cartHalf.matchedName) + ")");
+ok(cartHalf && cartHalf.qty === 2, "reads 2 carts (got " + (cartHalf && cartHalf.qty) + ")");
+ok(cartHalf && cartHalf.priceStatus === "correct", "2 × $495 = $990 correct (got " + (cartHalf && cartHalf.priceStatus) + ")");
+// 8-hour run → full day $640; charged the half-day $495 → undercharged.
+var cartFull = engine.checkDocument(engine.parseBeo(
+  "Setup\n07:30 - 15:30 Barista Coffee Cart\nAstral 2\n1 Coffee Cart - Crown @ $495.00 per cart\n",
+  catalogue), catalogue).items[0];
+ok(cartFull && /Full Day/.test(cartFull.matchedName || cartFull.name) && cartFull.expectedPrice === 640,
+  "8-hour run → Full Day $640 (got " + (cartFull && cartFull.matchedName) + "/" + (cartFull && cartFull.expectedPrice) + ")");
+ok(cartFull && cartFull.priceStatus === "undercharged", "full-day cart charged $495 → undercharged (got " + (cartFull && cartFull.priceStatus) + ")");
+// An 8-hour full-day cart charged correctly at $640.
+var cartOk = engine.checkDocument(engine.parseBeo(
+  "Setup\n07:30 - 15:30 Barista Coffee Cart\nAstral 2\n1 Coffee Cart - Crown @ $640.00 per cart\n",
+  catalogue), catalogue).items[0];
+ok(cartOk && cartOk.priceStatus === "correct", "full-day cart @ $640 correct (got " + (cartOk && cartOk.priceStatus) + ")");
+// A Menu-side "Barista coffee charged on consumption / $X per person" line is an
+// estimate, NOT the cart hire — it must not be parsed as a cart.
+var cartCons = engine.checkDocument(engine.parseBeo(
+  "Menu\n07:30 - 15:30 Barista Coffee Cart\nAstral 2\nBarista Coffee - 8 Hours\nBarista coffee charged on consumption\n" +
+  "Please note that an estimated $5.00 per person spend has\n173 guests @ $5.00 per person\n",
+  catalogue), catalogue).items;
+ok(!cartCons.some(function (r) { return r.kind === "cart"; }),
+  "a per-consumption barista line is not treated as a cart hire");
 
 section("Christmas Buffet — seasonal validity (to 31 Dec 2026)");
 ok(engine.parseEventDate("Saturday 10 Oct 2026") === "2026-10-10", "parses event date '10 Oct 2026'");

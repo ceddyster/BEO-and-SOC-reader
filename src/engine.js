@@ -630,19 +630,34 @@
         sourceLine: avJ, headLine: avJ, source: "BEO" });
     }
 
-    // Barista coffee cart — a flat fee PER CART ($495 half day / $640 full day),
-    // so the charge should reflect the number of carts.
+    // Barista coffee cart HIRE — a flat fee per cart, found in the Setup column
+    // as "N Coffee Cart … @ $X per cart". Half day (4-hour max) $495, full day
+    // (8-hour max) $640; which one applies is set by how long the cart runs.
+    // NOTE: a Menu-section "Barista coffee charged on consumption / $X per
+    // person" line is a per-head estimate, NOT the cart hire — it is parsed as a
+    // minimum-spend placeholder above, so the "per cart" anchor here avoids it.
     lines.forEach(function (line, idx) {
-      if (!/\b(barista|coffee cart|cart hire)\b/i.test(line)) return;
-      var ctx = lines.slice(Math.max(0, idx - 2), idx + 3).join("  ");
-      var full = /full day|eight hour|8\s*hour/i.test(ctx);
-      var half = /half day|four hour|4\s*hour/i.test(ctx);
-      if (!full && !half) return;
-      var qm = ctx.match(/(\d+)\s*(?:x\b|carts?\b)/i) || ctx.match(/\bx\s*(\d+)\b/i);
-      var carts = qm ? parseInt(qm[1], 10) : 1;
-      var pmx = ctx.match(/\$([\d,]+(?:\.\d{1,2})?)/);
-      pushUnique({ qty: carts, name: "Barista Coffee Cart " + (full ? "Full Day" : "Half Day"),
-        unitPrice: full ? 640 : 495, lineTotal: pmx ? parseMoney(pmx[1]) : null,
+      // The count, cart name and "@ $X per cart" price always sit on one physical
+      // line ("2 Coffee Cart - Crown @ $495.00 per cart"), so match the line
+      // itself — joining with the next line double-matched when a bare "COFFEE
+      // CART SET UP" heading sat directly above the priced line.
+      var cm = line.replace(/\s+/g, " ").match(/(\d+)?\s*(?:x\s*)?(?:coffee cart|barista[\w' -]*cart)[^@]{0,40}@\s*\$?([\d,]+(?:\.\d{1,2})?)\s*per\s*cart/i);
+      if (!cm) return;
+      var carts = cm[1] ? parseInt(cm[1], 10) : 1;
+      var perCart = parseMoney(cm[2]);
+      // Half vs full: an explicit keyword wins; otherwise the cart's run time
+      // (≤ 4 hrs = half day, more = full day) from a nearby time range.
+      var win = lines.slice(Math.max(0, idx - 4), idx + 2).join("  ");
+      var full = /full day/i.test(win), half = /half day/i.test(win);
+      if (!full && !half) {
+        var ch = null;
+        for (var cw = idx; cw >= Math.max(0, idx - 4) && ch == null; cw--) ch = hoursFromText(lines[cw]);
+        if (ch != null) { full = ch > 4; half = !full; }
+      }
+      // Last resort when the duration is unreadable: infer from the charged rate.
+      var dayFull = full || (!half && perCart >= 600);
+      pushUnique({ qty: carts, name: "Barista Coffee Cart " + (dayFull ? "Full Day" : "Half Day"),
+        unitPrice: dayFull ? 640 : 495, lineTotal: round2(carts * perCart),
         kind: "cart", group: "food", sourceExcerpt: excerpt(idx - 2, idx + 2),
         sourceLine: idx, headLine: idx, source: "BEO" });
     });
