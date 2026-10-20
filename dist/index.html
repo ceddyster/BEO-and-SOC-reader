@@ -2453,7 +2453,12 @@
     // Right-column / page-footer content that interleaves when a coffee break
     // spans a page break (the program, setup, the "Name Date Name Date" sign-off,
     // page banner, phone, etc.). Any of these ends the food-selection list.
-    var structRe = /^(event order|beo#?:|page:\s*\d|created:|phone:|ph:|program|runsheet|timings|service notes?|additional contact|door cards?|setup|health and safety|audio ?visual|technical|miscellaneous|dietary|billing)\b|\bdate\b[^\n]{0,40}\bdate\b|^\d{3,4}\b|^>/i;
+    // Recognise right-column / footer content by SHAPE, so it is caught however
+    // the lines happen to be grouped: a keyword line, a time (clock or program
+    // 4-digit), an "@ $… per …" charge, a line starting with a digit or ">", or a
+    // "Name Date" sign-off (one or two "Date" fields). Menu items — dish
+    // descriptions starting with a capital word — match none of these.
+    var structRe = /^(event order|beo#?:|page:\s*\d|created:|phone:|ph:|program|runsheet|timings?|service notes?|additional contact|door cards?|setup|set ?up|health and safety|audio ?visual|technical|miscellaneous|dietary|billing|networking|registration|plenary|bump|client access|room set)\b|\bdate\s*$|\bdate\b[^\n]{0,40}\bdate\b|^\d|\b\d{1,2}:\d{2}\b|@|^>/i;
     var inSel = false, count = 0, cont = false;
     (item.contextLines || []).forEach(function (l) {
       var t = l.replace(/\s+/g, " ").trim();

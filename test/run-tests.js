@@ -410,6 +410,22 @@ ok(cbPage.matchedName === "Coffee Break One" && cbPage.priceStatus === "correct"
   "page-break right-column junk isn't counted → Coffee Break One $30 correct (got " +
   cbPage.matchedName + "/" + cbPage.priceStatus + ")");
 
+// A two-item Coffee Break Two across a page break, with the right-column text
+// grouped as the browser tends to (the "Name Date" sign-off SPLIT across two
+// lines, program times, an "@ … per cart" charge, digit-led setup lines). Only
+// the two real items (one sweet, one savoury) should be counted.
+var cbPage2 = engine.checkDocument(engine.parseBeo(
+  "Menu\n11:30 - 12:00 Morning Tea\nCoffee Break Menu Two\nAssorted cookies\n~~~~~\n" +
+  "SWEET ITEMS\nBlueberry lemon cake, chia crumble\n~~~~~\nSAVOURY ITEMS\nMini gourmet quiches\n- Lorraine\n" +
+  "Veronica Twynham Date\nMolly Coogan Date\n6100\nPhone: 61 8 9362 7574\n" +
+  "0830 BARISTA COFFEE CART opens\n08:30 - 15:30 Barista Coffee Cart\n1 Coffee Cart - Crown @ $640.00 per cart\n" +
+  "2 Conference table - brown\nROOM SET UP\nEVENT ORDER\nBEO#: 55704\nPage: 2 of 4\n- Florentine\n~~~~~\n" +
+  "Freshly brewed coffee and selection of teas\n~~~~~\n145 guests @ $35.00 per person\n",
+  catalogue), catalogue).items[0];
+ok(cbPage2.matchedName === "Coffee Break Two" && cbPage2.priceStatus === "undercharged" && cbPage2.expectedPrice === 37,
+  "two items across a page break stay Coffee Break Two $37 (got " +
+  cbPage2.matchedName + "/" + cbPage2.expectedPrice + "/" + cbPage2.priceStatus + ")");
+
 section("Tea and Coffee priced by duration");
 var tc4 = engine.checkDocument(engine.parseBeo(
   "Menu\n08:00 - 12:00 Tea and Coffee\nTea and Coffee\nFreshly brewed coffee and selection of teas\n50 guests @ $22.00 per person\n",
