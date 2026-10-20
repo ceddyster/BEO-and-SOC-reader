@@ -835,6 +835,45 @@
     if (item.kind === "bev-nonstandard") {
       result.category = "Beverage Package";
       result.matchedName = item.name;
+      // Half-hour pricing: the whole-hour tier below, plus one half-hour step.
+      // Valid only within the package's hour range; otherwise flag.
+      var bnm = item.name.match(/(crown reserve|crown deluxe|wa premium)\s*package\s*[-–—]?\s*([\d.]+)\s*hours?/i);
+      var cfg = bnm && (catalogue.beverageHalfHour || {})[bnm[1].toLowerCase()];
+      var hrs = bnm ? parseFloat(bnm[2]) : null;
+      if (cfg && hrs != null) {
+        var isHalf = Math.abs((hrs * 2) - Math.round(hrs * 2)) < 1e-9 && (hrs % 1 !== 0);
+        var floorH = Math.floor(hrs);
+        var tier = (catalogue.items || []).filter(function (x) {
+          return x.name === cfg.baseName + " - " + floorH + " Hour";
+        })[0];
+        if (hrs < cfg.minHours || hrs > cfg.maxHours || !isHalf || !tier) {
+          if (result.status !== "math-error") result.status = "review";
+          result.priceStatus = "review";
+          result.notes.push(item.name + " charged " + money(item.unitPrice) + "pp — half-hour rates only apply " +
+            "between " + cfg.minHours + " and " + cfg.maxHours + " hours. Confirm this duration against the quote.");
+          return result;
+        }
+        var exp = round2(tier.price + cfg.halfHour);
+        result.expectedPrice = exp;
+        result.unit = "pp";
+        var bd = round2((item.unitPrice || 0) - exp);
+        result.priceDiff = bd;
+        result.priceImpact = item.qty != null ? round2(bd * item.qty) : null;
+        var calc = cfg.baseName + " " + floorH + " Hour " + money(tier.price) + " + " + money(cfg.halfHour) +
+          " (½ hr) = " + money(exp) + "pp";
+        if (Math.abs(bd) <= 0.005) {
+          result.priceStatus = "correct";
+          result.notes.push(calc + ". Correct.");
+        } else {
+          result.priceStatus = bd < 0 ? "undercharged" : "overcharged";
+          if (result.status !== "math-error") result.status = result.priceStatus;
+          result.notes.push(calc + "; charged " + money(item.unitPrice) + "pp (" + (bd < 0 ? "under" : "over") +
+            " by " + money(Math.abs(bd)) + "pp" +
+            (item.qty != null ? ", " + money(Math.abs(result.priceImpact)) + " across " + item.qty : "") + ").");
+        }
+        return result;
+      }
+      // Unknown family (e.g. a non-standard Soft Drink duration) — confirm.
       if (result.status !== "math-error") result.status = "review";
       result.priceStatus = "review";
       result.notes.push(item.name + " charged " + money(item.unitPrice) +

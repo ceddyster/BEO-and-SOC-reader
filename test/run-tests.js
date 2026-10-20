@@ -708,8 +708,35 @@ var farBev = "Beverage\n19:00 - 23:30 Dinner\nCrown Deluxe Package - 5.5 Hours\n
   "TABLE ITEMS\nMenus supplied by Crown - Black\nCROWN BALLROOM STAGE SET UP\n2 Centre steps\n" +
   "Heineken Zero\nAssorted soft drinks and orange juice\n630 guests @ $79.50 per person\n";
 var farBevR = engine.checkDocument(engine.parseBeo(farBev, catalogue), catalogue).items.find(function (r) { return /Deluxe/.test(r.name); });
-ok(farBevR && farBevR.matchedName === "Crown Deluxe Package - 5.5 Hours" && farBevR.priceStatus === "review",
-  "far-above Crown Deluxe 5.5h package is identified and flagged to confirm (got " + (farBevR && farBevR.matchedName) + ")");
+ok(farBevR && farBevR.matchedName === "Crown Deluxe Package - 5.5 Hours",
+  "far-above Crown Deluxe 5.5h package is identified (got " + (farBevR && farBevR.matchedName) + ")");
+ok(farBevR && farBevR.expectedPrice === 82.5 && farBevR.priceStatus === "undercharged",
+  "5.5h Deluxe priced at $82.50 (80 + 2.50), $79.50 undercharged (got " + (farBevR && farBevR.expectedPrice) + "/" + (farBevR && farBevR.priceStatus) + ")");
+
+section("Beverage packages price half-hour increments (2–6 hrs)");
+function bevHalf(name, charge) {
+  return engine.checkDocument(engine.parseBeo(
+    "Beverage\n19:00 - 00:00 Dinner\n" + name + "\n100 guests @ $" + charge + " per person\n",
+    catalogue), catalogue).items[0];
+}
+var rHalf = bevHalf("Crown Reserve Package - 2.5 Hours", "56.00");
+ok(rHalf.expectedPrice === 56 && rHalf.priceStatus === "correct",
+  "Reserve 2.5h = 54 + 2 = $56 correct (got " + rHalf.expectedPrice + "/" + rHalf.priceStatus + ")");
+var dHalf = bevHalf("Crown Deluxe Package - 2.5 Hours", "67.50");
+ok(dHalf.expectedPrice === 67.5 && dHalf.priceStatus === "correct",
+  "Deluxe 2.5h = 65 + 2.50 = $67.50 correct (got " + dHalf.expectedPrice + ")");
+var wHalf = bevHalf("WA Premium Package - 2.5 Hours", "88.50");
+ok(wHalf.expectedPrice === 88.5 && wHalf.priceStatus === "correct",
+  "WA Premium 2.5h = 85 + 3.50 = $88.50 correct (got " + wHalf.expectedPrice + ")");
+var rHalf45 = bevHalf("Crown Reserve Package - 4.5 Hours", "60.00");
+ok(rHalf45.expectedPrice === 64 && rHalf45.priceStatus === "undercharged",
+  "Reserve 4.5h = 62 + 2 = $64; $60 undercharged (got " + rHalf45.expectedPrice + "/" + rHalf45.priceStatus + ")");
+var over = bevHalf("Crown Reserve Package - 6.5 Hours", "72.00");
+ok(over.priceStatus === "review",
+  "6.5h is outside the 2–6 hour range → review (got " + over.priceStatus + ")");
+var under2 = bevHalf("Crown Deluxe Package - 1.5 Hours", "63.00");
+ok(under2.priceStatus === "review",
+  "1.5h is below the 2-hour minimum → review (got " + under2.priceStatus + ")");
 
 section("A dietary-requirement surcharge is checked at 25% of the meal price");
 var dietItems = engine.checkDocument(engine.parseBeo(

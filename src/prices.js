@@ -526,11 +526,23 @@
   // officer-hour; the day comes from the event date on the BEO/SOC.
   var SECURITY_RATES = { weekday: 63, saturday: 75, sunday: 86 };
 
+  // Half-hour beverage-package pricing. A package can run in half-hour steps:
+  // the whole-hour tier below it plus one half-hour increment (e.g. a 2.5-hour
+  // Crown Reserve is the 2 Hour tier $54 + $2 = $56). Valid only between
+  // minHours and maxHours; anything outside is flagged. baseName matches the
+  // catalogue tier names ("<baseName> - N Hour").
+  var BEVERAGE_HALF_HOUR = {
+    "crown reserve": { baseName: "Crown Reserve Package", halfHour: 2, minHours: 2, maxHours: 6 },
+    "crown deluxe": { baseName: "Crown Deluxe Package", halfHour: 2.5, minHours: 2, maxHours: 6 },
+    "wa premium": { baseName: "WA Premium Package", halfHour: 3.5, minHours: 2, maxHours: 6 }
+  };
+
   var API = {
     meta: CATALOGUE_META,
     items: ITEMS,
     nonMenuHints: NON_MENU_HINTS,
     securityRates: SECURITY_RATES,
+    beverageHalfHour: BEVERAGE_HALF_HOUR,
     packageInclusions: PACKAGE_INCLUSIONS,
     wineTier: WINE_TIER,
     packageSurcharges: PACKAGE_SURCHARGES,

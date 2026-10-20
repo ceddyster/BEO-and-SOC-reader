@@ -825,11 +825,23 @@
   // officer-hour; the day comes from the event date on the BEO/SOC.
   var SECURITY_RATES = { weekday: 63, saturday: 75, sunday: 86 };
 
+  // Half-hour beverage-package pricing. A package can run in half-hour steps:
+  // the whole-hour tier below it plus one half-hour increment (e.g. a 2.5-hour
+  // Crown Reserve is the 2 Hour tier $54 + $2 = $56). Valid only between
+  // minHours and maxHours; anything outside is flagged. baseName matches the
+  // catalogue tier names ("<baseName> - N Hour").
+  var BEVERAGE_HALF_HOUR = {
+    "crown reserve": { baseName: "Crown Reserve Package", halfHour: 2, minHours: 2, maxHours: 6 },
+    "crown deluxe": { baseName: "Crown Deluxe Package", halfHour: 2.5, minHours: 2, maxHours: 6 },
+    "wa premium": { baseName: "WA Premium Package", halfHour: 3.5, minHours: 2, maxHours: 6 }
+  };
+
   var API = {
     meta: CATALOGUE_META,
     items: ITEMS,
     nonMenuHints: NON_MENU_HINTS,
     securityRates: SECURITY_RATES,
+    beverageHalfHour: BEVERAGE_HALF_HOUR,
     packageInclusions: PACKAGE_INCLUSIONS,
     wineTier: WINE_TIER,
     packageSurcharges: PACKAGE_SURCHARGES,
@@ -1718,6 +1730,45 @@
     if (item.kind === "bev-nonstandard") {
       result.category = "Beverage Package";
       result.matchedName = item.name;
+      // Half-hour pricing: the whole-hour tier below, plus one half-hour step.
+      // Valid only within the package's hour range; otherwise flag.
+      var bnm = item.name.match(/(crown reserve|crown deluxe|wa premium)\s*package\s*[-–—]?\s*([\d.]+)\s*hours?/i);
+      var cfg = bnm && (catalogue.beverageHalfHour || {})[bnm[1].toLowerCase()];
+      var hrs = bnm ? parseFloat(bnm[2]) : null;
+      if (cfg && hrs != null) {
+        var isHalf = Math.abs((hrs * 2) - Math.round(hrs * 2)) < 1e-9 && (hrs % 1 !== 0);
+        var floorH = Math.floor(hrs);
+        var tier = (catalogue.items || []).filter(function (x) {
+          return x.name === cfg.baseName + " - " + floorH + " Hour";
+        })[0];
+        if (hrs < cfg.minHours || hrs > cfg.maxHours || !isHalf || !tier) {
+          if (result.status !== "math-error") result.status = "review";
+          result.priceStatus = "review";
+          result.notes.push(item.name + " charged " + money(item.unitPrice) + "pp — half-hour rates only apply " +
+            "between " + cfg.minHours + " and " + cfg.maxHours + " hours. Confirm this duration against the quote.");
+          return result;
+        }
+        var exp = round2(tier.price + cfg.halfHour);
+        result.expectedPrice = exp;
+        result.unit = "pp";
+        var bd = round2((item.unitPrice || 0) - exp);
+        result.priceDiff = bd;
+        result.priceImpact = item.qty != null ? round2(bd * item.qty) : null;
+        var calc = cfg.baseName + " " + floorH + " Hour " + money(tier.price) + " + " + money(cfg.halfHour) +
+          " (½ hr) = " + money(exp) + "pp";
+        if (Math.abs(bd) <= 0.005) {
+          result.priceStatus = "correct";
+          result.notes.push(calc + ". Correct.");
+        } else {
+          result.priceStatus = bd < 0 ? "undercharged" : "overcharged";
+          if (result.status !== "math-error") result.status = result.priceStatus;
+          result.notes.push(calc + "; charged " + money(item.unitPrice) + "pp (" + (bd < 0 ? "under" : "over") +
+            " by " + money(Math.abs(bd)) + "pp" +
+            (item.qty != null ? ", " + money(Math.abs(result.priceImpact)) + " across " + item.qty : "") + ").");
+        }
+        return result;
+      }
+      // Unknown family (e.g. a non-standard Soft Drink duration) — confirm.
       if (result.status !== "math-error") result.status = "review";
       result.priceStatus = "review";
       result.notes.push(item.name + " charged " + money(item.unitPrice) +
