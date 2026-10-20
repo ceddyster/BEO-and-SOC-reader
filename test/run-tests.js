@@ -711,13 +711,24 @@ var farBevR = engine.checkDocument(engine.parseBeo(farBev, catalogue), catalogue
 ok(farBevR && farBevR.matchedName === "Crown Deluxe Package - 5.5 Hours" && farBevR.priceStatus === "review",
   "far-above Crown Deluxe 5.5h package is identified and flagged to confirm (got " + (farBevR && farBevR.matchedName) + ")");
 
-section("A dietary-requirement surcharge is identified, not left unmatched");
-var dietR = engine.checkDocument(engine.parseBeo(
+section("A dietary-requirement surcharge is checked at 25% of the meal price");
+var dietItems = engine.checkDocument(engine.parseBeo(
   "Menu\n19:00 - 23:30 Dinner\nDinner Set Menu Two\n630 guests @ $105.00 per person\n" +
   "Dietary Requirement Surcharge\nAdditional dietary requirements above\nAbove the 10% allowance\n12 guests @ $26.25 per person\n",
-  catalogue), catalogue).items.find(function (r) { return r.unitPrice === 26.25; });
-ok(dietR && dietR.name === "Dietary requirement surcharge" && dietR.priceStatus === "not-checked",
-  "dietary surcharge labelled and listed non-menu (got " + (dietR && dietR.name) + "/" + (dietR && dietR.priceStatus) + ")");
+  catalogue), catalogue).items;
+var dietR = dietItems.find(function (r) { return r.name === "Dietary requirement surcharge"; });
+ok(dietR, "dietary surcharge is identified, not left unmatched");
+ok(dietR && dietR.expectedPrice === 26.25 && dietR.priceStatus === "correct",
+  "25% of $105 = $26.25, charged $26.25 → correct (got " + (dietR && dietR.expectedPrice) + "/" + (dietR && dietR.priceStatus) + ")");
+ok(dietR && /25% of Plated Dinner Menu Two/.test(dietR.matchedName || ""),
+  "checked against 25% of the meal menu price");
+// An incorrect surcharge is flagged.
+var dietBad = engine.checkDocument(engine.parseBeo(
+  "Menu\n19:00 - 23:30 Dinner\nDinner Set Menu Two\n630 guests @ $105.00 per person\n" +
+  "Dietary Requirement Surcharge\nAbove the 10% allowance\n12 guests @ $30.00 per person\n",
+  catalogue), catalogue).items.find(function (r) { return r.name === "Dietary requirement surcharge"; });
+ok(dietBad && dietBad.priceStatus === "overcharged",
+  "a $30 surcharge (should be $26.25) flagged overcharged (got " + (dietBad && dietBad.priceStatus) + ")");
 
 section("A per-person charge reads the platter name above it");
 // Crew platters are priced per platter ("each") yet the BEO bills them "per

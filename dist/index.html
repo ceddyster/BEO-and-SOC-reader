@@ -1389,10 +1389,11 @@
         kind = "bev-nonstandard";
         itemGroup = "beverage";
       } else if (/dietary\s+requirement\s+surcharge|additional dietary requirements|above the 10% allowance/i.test(wideWin)) {
-        // The per-person surcharge for dietaries beyond the 10% allowance (25% of
-        // the menu price) — not a menu item; confirm against the quote.
+        // The per-person surcharge for dietaries beyond the 10% allowance — 25% of
+        // the meal menu price. Checked in checkDocument against 25% of the main
+        // meal in this BEO (the base price isn't known at the single-line level).
         nameOut = "Dietary requirement surcharge";
-        kind = "non-menu";
+        kind = "dietary-surcharge";
         itemGroup = null;
       } else {
         nameOut = "(unidentified per-person item)";
@@ -1594,6 +1595,16 @@
         result.notes.push("Line total should be " + money(expectedTotal) +
           " (" + item.qty + " × " + money(item.unitPrice) + "), but reads " + money(item.lineTotal) + ".");
       }
+    }
+
+    // Dietary-requirement surcharge (25% of the meal price). The meal price lives
+    // on another line, so finalise this in checkDocument; leave a placeholder.
+    if (item.kind === "dietary-surcharge") {
+      result.category = "Dietary surcharge";
+      result._dietary = true;
+      if (result.status !== "math-error") result.status = "review";
+      result.priceStatus = "review";
+      return result;
     }
 
     // Tea and Coffee: priced by service duration (<=4 hrs $22, >4-8 hrs $28).
@@ -1939,6 +1950,51 @@
 
   function checkDocument(items, catalogue, eventDate) {
     var checked = (items || []).map(function (it) { return checkItem(it, catalogue, eventDate); });
+
+    // Dietary-requirement surcharge = 25% per person of the meal menu price.
+    // Check each such line against 25% of the main meal in this same BEO.
+    var surcharges = checked.filter(function (r) { return r._dietary; });
+    if (surcharges.length) {
+      var meals = checked.filter(function (r) {
+        return r.expectedPrice != null && /^pp/.test(r.unit || "") &&
+          /Dinner|Lunch|Breakfast|Buffet|Banquet|Indian|Chinese/i.test(r.category || "");
+      });
+      surcharges.forEach(function (r) {
+        // Prefer the meal whose 25% matches the charge (that pins the base menu);
+        // otherwise take the dearest meal (the main course the dietaries replace).
+        var base = meals.filter(function (m) {
+          return Math.abs(round2(m.expectedPrice * 0.25) - (r.unitPrice || 0)) <= 0.005;
+        })[0] || meals.slice().sort(function (a, b) { return b.expectedPrice - a.expectedPrice; })[0];
+        if (!base) {
+          r.priceStatus = "review";
+          if (r.status !== "math-error") r.status = "review";
+          r.notes.push("25% surcharge per person for dietary requirements over the 10% allowance — " +
+            "couldn't find the meal menu price in this BEO to check the 25% against. Confirm against the quote.");
+          return;
+        }
+        var exp = round2(base.expectedPrice * 0.25);
+        r.expectedPrice = exp;
+        r.matchedName = "25% of " + base.matchedName + " (" + money(base.expectedPrice) + ")";
+        var d = round2((r.unitPrice || 0) - exp);
+        r.priceDiff = d;
+        r.priceImpact = r.qty != null ? round2(d * r.qty) : null;
+        if (Math.abs(d) <= 0.005) {
+          r.priceStatus = "correct";
+          if (r.status !== "math-error") r.status = "ok";
+          r.notes.push("Dietary surcharge = 25% of " + base.matchedName + " " + money(base.expectedPrice) +
+            " = " + money(exp) + " per person. Correct.");
+        } else {
+          r.priceStatus = d < 0 ? "undercharged" : "overcharged";
+          if (r.status !== "math-error") r.status = r.priceStatus;
+          r.notes.push("Dietary surcharge should be 25% of " + base.matchedName + " " + money(base.expectedPrice) +
+            " = " + money(exp) + " per person; charged " + money(r.unitPrice) + " (" + (d < 0 ? "under" : "over") +
+            " by " + money(Math.abs(d)) + "pp" +
+            (r.qty != null ? ", " + money(Math.abs(r.priceImpact)) + " across " + r.qty : "") + ").");
+        }
+        r.notes.push("Only applies to dietary guests beyond 10% of the total — confirm the dietary count warrants it.");
+      });
+    }
+
     var summary = {
       total: checked.length,
       correct: 0, undercharged: 0, overcharged: 0, mathErrors: 0, nonMenu: 0, unmatched: 0, review: 0,
