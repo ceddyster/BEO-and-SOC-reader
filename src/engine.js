@@ -433,12 +433,15 @@
         return /\btea\s*(?:&|and)\s*coffee\b/i.test(t) && !/freshly brewed/i.test(t) && t.length < 60;
       });
 
-      // Crew platters can be a multi-item selection sharing ONE per-person
-      // charge — e.g. "Chef's selection of sandwiches" + "Sliced seasonal fresh
-      // fruit" billed together at "$28.00 per person". The menu prices each
-      // platter separately, so gather every platter line in this charge's block
-      // (back to the block's time anchor / previous charge) and, when more than
-      // one is chosen, check the charge against the SUM of the selected platters.
+      // Crew catering can bill several separately-priced items under ONE
+      // per-person charge — e.g. a "Hot Food" section listing "Wedges..." ($12pp)
+      // + "Assortment of mini quiches" ($16pp) at "$28.00 per person", or
+      // platters like "Chef's selection of sandwiches" + "Sliced seasonal fresh
+      // fruit". The menu prices each item separately (per person or per platter),
+      // so gather every crew-menu line in this charge's block (back to the block's
+      // time anchor / previous charge) and, when more than one is chosen, check
+      // the charge against the SUM of the selected items' menu prices. The BEO
+      // need not state the individual prices.
       var platters = [];
       if (grp === "food") {
         for (var pj = i - 1; pj >= floorA; pj--) {
@@ -449,7 +452,11 @@
           if (/\d{1,2}:\d{2}\s*[-–—]\s*\d{1,2}:\d{2}/.test(pcand)) break;   // time range = block start
           if (SECTION_RE.test(pcand)) break;
           var pmm = findMatch(pcand, catalogue, 0.85, "food");
-          if (pmm && pmm.item.category === "Crew Packages" && pmm.item.unit === "each") {
+          // A real priced crew item — a platter ("each") or a per-person hot-food
+          // item ("pp"). Not a section heading ("Crew Catering - Hot Food" scores
+          // well below 0.85, so it is skipped rather than summed).
+          if (pmm && pmm.item.category === "Crew Packages" &&
+              (pmm.item.unit === "each" || pmm.item.unit === "pp")) {
             platters.unshift({ name: pcand, item: pmm.item, j: pj });
           }
         }
@@ -967,11 +974,11 @@
       result._explained = true;
       if (Math.abs(pdiff) <= 0.005) {
         result.priceStatus = "correct";
-        result.notes.push("Platter selection — " + pparts.join(" + ") + " = " + money(psum) + " per person. Correct.");
+        result.notes.push("Crew selection — " + pparts.join(" + ") + " = " + money(psum) + " per person. Correct.");
       } else {
         result.priceStatus = pdiff < 0 ? "undercharged" : "overcharged";
         if (result.status !== "math-error") result.status = result.priceStatus;
-        result.notes.push("Platter selection — " + pparts.join(" + ") + " = " + money(psum) +
+        result.notes.push("Crew selection — " + pparts.join(" + ") + " = " + money(psum) +
           " per person; charged " + money(item.unitPrice) + "pp (" + (pdiff < 0 ? "under" : "over") +
           " by " + money(Math.abs(pdiff)) + "pp" +
           (item.qty != null ? ", " + money(Math.abs(result.priceImpact)) + " across " + item.qty + " guests" : "") + ").");

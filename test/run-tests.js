@@ -857,6 +857,22 @@ ok(selR && /Crew Sandwiches Platter/.test(selR.matchedName) && /Crew Fresh Fruit
   "names both matched platters");
 ok(selR && selR.priceImpact === -100, "total impact -$100 across 25 guests (got " + (selR && selR.priceImpact) + ")");
 
+// Per-person crew "Hot Food" with two separately-priced items under one charge
+// (BEO CECP 10-20-2026): Wedges $12pp + Assortment of mini quiches $16pp = $28pp.
+// The individual prices are NOT on the BEO; the checker sums the menu prices.
+var hotBeo = "Menu\n17:30 - 18:30 Crew Catering - Sophie\nCrew Catering - Hot Food\n" +
+  "Wedges served with ketchup, sweet chilli and sour cream\nAssortment of mini quiches\n1 guests @ $28.00 per person\n";
+var hotR = engine.checkDocument(engine.parseBeo(hotBeo, catalogue), catalogue).items[0];
+ok(hotR && hotR.kind === "platter-selection", "hot-food block detected as a multi-item crew selection (got " + (hotR && hotR.kind) + ")");
+ok(hotR && hotR.expectedPrice === 28, "expected rate is the sum $12 + $16 = $28 (got " + (hotR && hotR.expectedPrice) + ")");
+ok(hotR && hotR.priceStatus === "correct", "charged $28 is correct (got " + (hotR && hotR.priceStatus) + ")");
+ok(hotR && /Crew Wedges/.test(hotR.matchedName) && /Crew Mini Gourmet Quiches/.test(hotR.matchedName),
+  "names both matched hot-food items");
+// A single crew item under one charge stays a plain per-person match (not summed).
+var oneBeo = "Menu\n17:30 - 18:30 Crew Catering - Sophie\nCrew Catering - Platters\nSliced seasonal fresh fruit\n1 guests @ $12.50 per person\n";
+var oneR = engine.checkDocument(engine.parseBeo(oneBeo, catalogue), catalogue).items[0];
+ok(oneR && oneR.kind !== "platter-selection", "a lone crew item is not treated as a multi-item selection (got " + (oneR && oneR.kind) + ")");
+
 section("A charge never borrows the heading of the charge above it");
 // Two charges, back to back: the second's own heading ("Sandwich Buffet Menu
 // One") doesn't collide with the first's ("Coffee Break Menu One"). The second

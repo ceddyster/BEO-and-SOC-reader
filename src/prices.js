@@ -130,7 +130,7 @@
     { category: "Crew Packages", name: "Crew Set Menu Two Course Dinner", price: 61, unit: "pp", aliases: ["Crew Two Course Dinner", "Chefs Selection 2 Course Dinner"] },
     { category: "Crew Packages", name: "Crew Wedges", price: 12, unit: "pp", aliases: ["Crew Wedges with Ketchup Sweet Chilli and Sour Cream"] },
     { category: "Crew Packages", name: "Crew Pies and Sausage Rolls", price: 17, unit: "pp", note: "Chef's selection, 4 pieces per person.", aliases: ["Crew Pies and Sausage Rolls 4 Pieces"] },
-    { category: "Crew Packages", name: "Crew Mini Gourmet Quiches", price: 16, unit: "pp", aliases: ["Chefs Selection Mini Gourmet Quiches"] },
+    { category: "Crew Packages", name: "Crew Mini Gourmet Quiches", price: 16, unit: "pp", aliases: ["Chefs Selection Mini Gourmet Quiches", "Assortment of Mini Quiches", "Assortment of Mini Gourmet Quiches", "Mini Quiches"] },
     { category: "Crew Packages", name: "Crew Sandwiches Platter", price: 19.5, unit: "each", note: "Per platter — chef's selection of sandwiches.", aliases: ["Crew Sandwich Platter", "Chefs Selection of Sandwiches"] },
     { category: "Crew Packages", name: "Crew Mini Muffins Platter", price: 8, unit: "each", aliases: ["Crew Assortment of Mini Muffins"] },
     { category: "Crew Packages", name: "Crew Cheese Platter", price: 24, unit: "each", aliases: ["Crew Cheese Platter with Crackers"] },
