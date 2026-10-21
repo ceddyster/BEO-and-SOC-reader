@@ -1069,6 +1069,17 @@ var opOver = engine.checkDocument(engine.parseBeo(
 ok(opOver && opOver.priceStatus === "overcharged" && opOver.expectedPrice === 55,
   "operational @ $60 overcharged vs $55 (got " + (opOver && opOver.priceStatus) + ")");
 ok(opOver && opOver.priceImpact === 40, "operational overcharge impact $5/hr × 8 = $40 (got " + (opOver && opOver.priceImpact) + ")");
+// Sunday operational rate is $70/staff-hour (day taken from the line wording).
+var opSun = engine.checkDocument(engine.parseBeo(
+  "Miscellaneous\n4 Operational staff hours - Sunday rate (1 x Staff 00:00 - 04:00) @ $70.00 person, per hour\n",
+  catalogue), catalogue).items.find(function (r) { return r.matchedName === "Operational Staff"; });
+ok(opSun && opSun.priceStatus === "correct" && opSun.expectedPrice === 70,
+  "operational Sunday $70/hour correct (got " + (opSun && opSun.priceStatus) + "/" + (opSun && opSun.expectedPrice) + ")");
+var opSunUnder = engine.checkDocument(engine.parseBeo(
+  "Miscellaneous\n4 Operational staff hours - Sunday rate (1 x Staff 00:00 - 04:00) @ $55.00 person, per hour\n",
+  catalogue), catalogue).items.find(function (r) { return r.matchedName === "Operational Staff"; });
+ok(opSunUnder && opSunUnder.priceStatus === "undercharged" && opSunUnder.expectedPrice === 70,
+  "operational Sunday charged weekday $55 flagged undercharged vs $70 (got " + (opSunUnder && opSunUnder.priceStatus) + ")");
 
 // Sunday → $86/hour.
 var secSun = engine.checkDocument(engine.parseBeo(secBEO(6, "86.00"), catalogue), catalogue, "2026-10-18").items[0];
