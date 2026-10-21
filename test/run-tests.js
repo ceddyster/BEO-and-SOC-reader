@@ -717,9 +717,26 @@ ok(ddp1.notes.join(" ").toLowerCase().indexOf("varies") !== -1, "note says the p
 var ddpMin = engine.checkDocument(engine.parseSocRows([["20", "Day Delegate Package Two", "$110.00", "", "$2,200.00"]]), catalogue).items[0];
 ok(ddpMin.notes.join(" ").indexOf("30-guest minimum") !== -1, "flags below the 30-guest DDP minimum");
 
-var arr = engine.checkDocument(engine.parseSocRows([["80", "Arrival Coffee and Tea", "$8.00", "", "$640.00"]]), catalogue).items[0];
-ok(arr.matchedName === "Day Delegate Arrival Coffee and Tea", "matched the arrival coffee add-on (got " + (arr && arr.matchedName) + ")");
-ok(arr.priceStatus === "correct", "arrival coffee & tea @ $8 correct");
+// Arrival coffee & tea with a Day Delegate package in the same document → the
+// $8 add-on rate applies.
+var ddpArr = engine.checkDocument(engine.parseSocRows([
+  ["80", "Day Delegate Package One", "$95.00", "", "$7,600.00"],
+  ["80", "Arrival Coffee and Tea", "$8.00", "", "$640.00"]
+]), catalogue).items;
+var arr = ddpArr.filter(function (r) { return /arrival/i.test(r.name); })[0];
+ok(arr.matchedName === "Day Delegate Arrival Coffee and Tea", "DDP arrival matched the $8 add-on (got " + (arr && arr.matchedName) + ")");
+ok(arr.expectedPrice === 8 && arr.priceStatus === "correct", "DDP arrival coffee & tea @ $8 correct (got " + (arr && arr.expectedPrice) + "/" + (arr && arr.priceStatus) + ")");
+
+section("Arrival tea & coffee is $11 for non–Day Delegate events");
+// No Day Delegate package in the document → the standalone $11 rate applies.
+var arrStd = engine.checkDocument(engine.parseSocRows([["80", "Arrival Tea and Coffee", "$11.00", "", "$880.00"]]), catalogue).items[0];
+ok(arrStd.matchedName === "Arrival Tea and Coffee" && arrStd.expectedPrice === 11,
+  "non-DDP arrival priced at $11 (got " + (arrStd && arrStd.matchedName) + "/" + (arrStd && arrStd.expectedPrice) + ")");
+ok(arrStd.priceStatus === "correct", "non-DDP arrival @ $11 correct (got " + (arrStd && arrStd.priceStatus) + ")");
+// A non-DDP arrival charged the old $8 add-on rate is undercharged.
+var arrUnder = engine.checkDocument(engine.parseSocRows([["80", "Arrival Tea and Coffee", "$8.00", "", "$640.00"]]), catalogue).items[0];
+ok(arrUnder.expectedPrice === 11 && arrUnder.priceStatus === "undercharged" && arrUnder.priceImpact === -240,
+  "non-DDP arrival @ $8 flagged undercharged vs $11, -$240 across 80 (got " + (arrUnder && arrUnder.priceStatus) + "/" + (arrUnder && arrUnder.priceImpact) + ")");
 
 section("Crew Packages price checks");
 var crewRows = [

@@ -117,6 +117,7 @@
     { category: "Coffee Breaks", name: "Coffee Break Three", price: 55, unit: "pp", mustInclude: ["coffee"], breakItems: 4, note: "Select four items from sweet or savoury; incl. coffee, tea & assorted cookies (max 1 hr)." },
     { category: "Coffee Breaks", name: "Tea and Coffee Four Hour", price: 22, unit: "pp", note: "Freshly brewed coffee & selection of teas, 4-hour maximum." },
     { category: "Coffee Breaks", name: "Tea and Coffee Eight Hour", price: 28, unit: "pp", note: "Freshly brewed coffee & selection of teas, 8-hour maximum." },
+    { category: "Coffee Breaks", name: "Arrival Tea and Coffee", price: 11, unit: "pp", mustInclude: ["arrival"], note: "Arrival tea & coffee for non–Day Delegate events (under 2 hrs). Day Delegate events use the $8 arrival add-on instead.", aliases: ["Arrival Coffee and Tea", "Arrival Tea & Coffee", "Arrival Tea & Coffee Served", "Arrival Tea and Coffee Served"] },
     { category: "Coffee Breaks", name: "Barista Coffee Cart Half Day", price: 495, unit: "flat" },
     { category: "Coffee Breaks", name: "Barista Coffee Cart Full Day", price: 640, unit: "flat" },
     { category: "Coffee Breaks", name: "Individual Coffee", price: 6.5, unit: "each" },

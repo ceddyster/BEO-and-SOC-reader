@@ -1234,6 +1234,52 @@
       });
     }
 
+    // Arrival tea & coffee has two rates: $8 as the Day Delegate package add-on,
+    // or the standalone $11 (non–Day Delegate events, under 2 hrs). The right one
+    // depends on the whole BEO, not the single line — so decide here by whether
+    // this document also books a Day Delegate package, and re-price every arrival
+    // line to match. (The 4-/8-hour "Tea and Coffee" services are named without
+    // "arrival" and are left alone.)
+    var arrivals = checked.filter(function (r) {
+      return /\barrival\b/i.test(r.name || "") && /\b(tea|coffee)\b/i.test(r.name || "");
+    });
+    if (arrivals.length) {
+      function catPrice(nm, dflt) {
+        var it = (catalogue.items || []).filter(function (x) { return x.name === nm; })[0];
+        return it && it.price != null ? it.price : dflt;
+      }
+      var isDDP = checked.some(function (r) { return /Day Delegate Package/i.test(r.matchedName || ""); });
+      var ddpPrice = catPrice("Day Delegate Arrival Coffee and Tea", 8);
+      var stdPrice = catPrice("Arrival Tea and Coffee", 11);
+      arrivals.forEach(function (r) {
+        var exp = isDDP ? ddpPrice : stdPrice;
+        r.category = isDDP ? "Day Delegate" : "Coffee Breaks";
+        r.matchedName = isDDP ? "Day Delegate Arrival Coffee and Tea" : "Arrival Tea and Coffee";
+        r.expectedPrice = exp;
+        r.unit = "pp";
+        r._explained = true;
+        var d = round2((r.unitPrice || 0) - exp);
+        r.priceDiff = d;
+        r.priceImpact = r.qty != null ? round2(d * r.qty) : null;
+        var ctx = isDDP
+          ? "Day Delegate arrival coffee & tea add-on"
+          : "Arrival tea & coffee (non–Day Delegate, under 2 hrs)";
+        if (Math.abs(d) <= 0.005) {
+          r.priceStatus = "correct";
+          if (r.status !== "math-error") r.status = "ok";
+          r.notes = [ctx + " — menu price " + money(exp) + " per person. Correct."];
+        } else {
+          r.priceStatus = d < 0 ? "undercharged" : "overcharged";
+          if (r.status !== "math-error") r.status = r.priceStatus;
+          r.notes = [ctx + " — menu price is " + money(exp) + " per person; charged " + money(r.unitPrice) +
+            " (" + (d < 0 ? "under" : "over") + " by " + money(Math.abs(d)) + " each" +
+            (r.qty != null ? ", " + money(Math.abs(r.priceImpact)) + " across " + r.qty : "") + ")."];
+        }
+        if (!isDDP) r.notes.push("The $11 rate is for an arrival service under 2 hours; a longer tea & coffee " +
+          "service is the 4-hour ($22) or 8-hour ($28) menu — confirm the duration.");
+      });
+    }
+
     var summary = {
       total: checked.length,
       correct: 0, undercharged: 0, overcharged: 0, mathErrors: 0, nonMenu: 0, unmatched: 0, review: 0,
