@@ -340,6 +340,17 @@
       // note "...for Catering Break 1") between a heading and its price — hence a
       // wide window, and a preference for the NEAREST strong match so a weak
       // nearby line can't beat the real heading further up.
+      // Header-first, but the description has to agree with the header. A block
+      // that describes a plated / multi-course meal (ENTREE / MAIN COURSE /
+      // DESSERT section markers) can't be headed by a light refreshment — an
+      // arrival tea & coffee, a tea & coffee, or a coffee break. This stops a
+      // stray "ARRIVAL TEA & COFFEE" line interleaved from the Program runsheet
+      // being taken as the heading of a Lunch/Dinner Set Menu charge.
+      var blockHasMeal = false;
+      for (var mj = Math.max(0, floorHead); mj < i; mj++) {
+        if (/^\s*(entr[eé]{1,2}e?|main course|dessert)\b/i.test(lines[mj])) { blockHasMeal = true; break; }
+      }
+
       var best = null, strong = null, strongPkg = null;
       for (var j = i - 1; j >= floorHead; j--) {
         var cand = lines[j].replace(/\s+/g, " ").trim();
@@ -366,6 +377,8 @@
         // food heading (or vice versa), so a line like "Crown Reserve Package -
         // 6.5 Hours" that has no exact tier can't bleed up to a crew meal.
         if (mm && grp && mm.item.group && mm.item.group !== grp) mm = null;
+        // Description check: a light refreshment can't head a multi-course meal.
+        if (mm && blockHasMeal && mm.item.category === "Coffee Breaks") mm = null;
         if (!mm) continue;
         if (!best || mm.score > best.score) best = { score: mm.score, name: cand, j: j };
         if (mm.score >= 0.85) {
@@ -437,8 +450,10 @@
       }
 
       // A standalone "Tea and Coffee" section, priced by service duration.
-      // (Excludes the "freshly brewed coffee and selection of teas" inclusion line.)
-      var teaCoffee = winArr.some(function (l) {
+      // (Excludes the "freshly brewed coffee and selection of teas" inclusion
+      // line, and never in a multi-course meal block — a "ARRIVAL TEA & COFFEE"
+      // line interleaved from the Program runsheet isn't this charge's menu.)
+      var teaCoffee = !blockHasMeal && winArr.some(function (l) {
         var t = l.replace(/\s+/g, " ").trim();
         return /\btea\s*(?:&|and)\s*coffee\b/i.test(t) && !/freshly brewed/i.test(t) && t.length < 60;
       });

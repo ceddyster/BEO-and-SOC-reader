@@ -814,6 +814,17 @@ var lunch3 = engine.checkDocument(engine.parseBeo(
   catalogue), catalogue).items.find(function (r) { return r.unitPrice === 99; });
 ok(lunch3 && lunch3.matchedName === "Plated Lunch Menu One Three Course" && lunch3.priceStatus === "correct",
   "Lunch Set Menu One with 3 courses → Plated Lunch Menu One Three Course $99 (got " + (lunch3 && lunch3.matchedName) + ")");
+// Description verification: a light refreshment can't head a multi-course meal.
+// An unmatched meal header with a stray runsheet "ARRIVAL TEA & COFFEE" line
+// flags as unidentified — it must NOT be matched to Arrival/Tea & Coffee.
+var mealFlag = engine.checkDocument(engine.parseBeo(
+  "Package Quantity Per Person Price\nMenu\n12:30 Lunch\nMystery Plated Lunch Selection\nAssorted bread rolls\n" +
+  "Program\n0800 Guests arrive\nARRIVAL TEA & COFFEE & ORANGE JUICE\nCARAFES SERVED\n" +
+  "MAIN COURSE\nChicken\n~~~~~\nDESSERT\nPavlova\n~~~~~\n90 guests @ $81.00 per person\n",
+  catalogue), catalogue).items.find(function (r) { return r.unitPrice === 81; });
+ok(mealFlag && !/Arrival|Tea and Coffee/.test(mealFlag.matchedName || "") &&
+  (mealFlag.priceStatus === "no-match" || mealFlag.priceStatus === "review"),
+  "a meal block with a stray arrival line is flagged, not matched to tea & coffee (got " + (mealFlag && mealFlag.matchedName) + "/" + (mealFlag && mealFlag.priceStatus) + ")");
 
 section("Youth / children's soft drink package → Children's beverages menu");
 // "Youth Soft Drink Package - 5 Hours" is the $12.50 Children's beverages menu,
