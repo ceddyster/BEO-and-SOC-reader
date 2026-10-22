@@ -664,7 +664,8 @@
     re = /(\d+)\s+operational staff hours?[\s\S]{0,140}?@\s*\$?([\d,]+(?:\.\d{1,2})?)\s*(?:person\s*,?\s*)?(?:per\s+)?hour/gi;
     while ((m = re.exec(soft)) !== null) {
       var oph = parseInt(m[1], 10), oprate = parseMoney(m[2]);
-      var opDay = /\bsunday\b/i.test(m[0]) ? "sunday"
+      var opDay = /\bpublic\s*hol/i.test(m[0]) ? "publicHoliday"
+        : /\bsunday\b/i.test(m[0]) ? "sunday"
         : /\bsaturday\b/i.test(m[0]) ? "saturday"
         : /\b(mon|tue|wed|thu|fri|weekday|week\s*day)\w*\b/i.test(m[0]) ? "weekday" : null;
       var opJ = lineIndexOf(/\d+\s+operational staff hours?/i);
@@ -922,22 +923,28 @@
       return result;
     }
 
-    // Operational staff — charged per staff-hour at a day-of-week rate, like
-    // security. $55/hour every day for now (weekend rates TBC).
+    // Operational staff — charged per staff-hour. Standard $55 (weekdays &
+    // Saturday), Sunday $70, public holiday $85. Public holiday takes precedence
+    // over the day of week and comes from the BEO wording ("public holiday
+    // rate") or the event date landing on a WA public holiday.
     if (item.kind === "operational") {
       result.category = "Operational Staff";
       result.matchedName = "Operational Staff";
-      var oprates = (catalogue.operationalRates) || { weekday: 55, saturday: 55, sunday: 55 };
+      var oprates = (catalogue.operationalRates) || { weekday: 55, saturday: 55, sunday: 70, publicHoliday: 85 };
       var opCharged = item.unitPrice;
       var opExp, opLabel;
-      if (item.securityDay === "sunday") { opExp = oprates.sunday; opLabel = "Sunday"; }
+      var isPubHol = item.securityDay === "publicHoliday" ||
+        (typeof eventDate === "string" && catalogue.publicHolidays && catalogue.publicHolidays[eventDate]);
+      if (isPubHol) {
+        opExp = oprates.publicHoliday; opLabel = "a public holiday";
+      } else if (item.securityDay === "sunday") { opExp = oprates.sunday; opLabel = "Sunday"; }
       else if (item.securityDay === "saturday") { opExp = oprates.saturday; opLabel = "Saturday"; }
       else if (item.securityDay === "weekday") { opExp = oprates.weekday; opLabel = "a weekday (Mon–Fri)"; }
       else {
         var odow = dayOfWeek(eventDate);
         if (odow == null) {
           opExp = oprates.weekday;
-          opLabel = "any day";  // all days are the same rate for now
+          opLabel = "a standard day";
         } else {
           opExp = odow === 0 ? oprates.sunday : odow === 6 ? oprates.saturday : oprates.weekday;
           opLabel = WEEKDAY_NAMES[odow] + (odow === 0 || odow === 6 ? "" : " (weekday)");

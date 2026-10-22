@@ -527,10 +527,21 @@
   // officer-hour; the day comes from the event date on the BEO/SOC.
   var SECURITY_RATES = { weekday: 63, saturday: 75, sunday: 86 };
 
-  // Operational staff — charged per staff-hour, like security. Weekday $55/hour,
-  // Sunday $70/hour. Saturday rate still to be confirmed (held at the weekday
-  // rate until provided).
-  var OPERATIONAL_RATES = { weekday: 55, saturday: 55, sunday: 70 };
+  // Operational staff — charged per staff-hour, like security. Standard $55/hour
+  // (weekdays and Saturday), Sunday $70/hour, public holiday $85/hour.
+  var OPERATIONAL_RATES = { weekday: 55, saturday: 55, sunday: 70, publicHoliday: 85 };
+
+  // WA statewide public holidays (gazetted days and weekend substitutes),
+  // covering the price book's validity. Used to apply the public-holiday staff
+  // rate when the event falls on one — even if the BEO line doesn't say so.
+  var WA_PUBLIC_HOLIDAYS = {
+    "2026-01-01": 1, "2026-01-26": 1, "2026-03-02": 1, "2026-04-03": 1, "2026-04-05": 1,
+    "2026-04-06": 1, "2026-04-25": 1, "2026-04-27": 1, "2026-06-01": 1, "2026-09-28": 1,
+    "2026-12-25": 1, "2026-12-26": 1, "2026-12-28": 1,
+    "2027-01-01": 1, "2027-01-26": 1, "2027-03-01": 1, "2027-03-26": 1, "2027-03-28": 1,
+    "2027-03-29": 1, "2027-04-25": 1, "2027-04-26": 1, "2027-06-07": 1, "2027-09-27": 1,
+    "2027-12-25": 1, "2027-12-27": 1, "2027-12-28": 1
+  };
 
   // Half-hour beverage-package pricing. A package can run in half-hour steps:
   // the whole-hour tier below it plus one half-hour increment (e.g. a 2.5-hour
@@ -566,6 +577,7 @@
     nonMenuHints: NON_MENU_HINTS,
     securityRates: SECURITY_RATES,
     operationalRates: OPERATIONAL_RATES,
+    publicHolidays: WA_PUBLIC_HOLIDAYS,
     beverageHalfHour: BEVERAGE_HALF_HOUR,
     packageInclusions: PACKAGE_INCLUSIONS,
     wineTier: WINE_TIER,

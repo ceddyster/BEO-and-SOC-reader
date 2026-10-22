@@ -1311,6 +1311,19 @@ var opSunUnder = engine.checkDocument(engine.parseBeo(
   catalogue), catalogue).items.find(function (r) { return r.matchedName === "Operational Staff"; });
 ok(opSunUnder && opSunUnder.priceStatus === "undercharged" && opSunUnder.expectedPrice === 70,
   "operational Sunday charged weekday $55 flagged undercharged vs $70 (got " + (opSunUnder && opSunUnder.priceStatus) + ")");
+// Public holiday operational rate is $85/staff-hour (from the line wording).
+var opPH = engine.checkDocument(engine.parseBeo(
+  "Miscellaneous\n4 Operational staff hours - Public Holiday rate (1 x Staff 09:00 - 13:00) @ $85.00 person, per hour\n",
+  catalogue), catalogue).items.find(function (r) { return r.matchedName === "Operational Staff"; });
+ok(opPH && opPH.priceStatus === "correct" && opPH.expectedPrice === 85,
+  "operational public holiday $85/hour correct (got " + (opPH && opPH.priceStatus) + "/" + (opPH && opPH.expectedPrice) + ")");
+// Public holiday detected from the EVENT DATE (Christmas Day) even if the line
+// doesn't say so — a $55 charge is flagged undercharged vs $85.
+var opPHdate = engine.checkDocument(engine.parseBeo(
+  "Miscellaneous\n4 Operational staff hours (1 x Staff 09:00 - 13:00) @ $55.00 person, per hour\n",
+  catalogue), catalogue, "2026-12-25").items.find(function (r) { return r.matchedName === "Operational Staff"; });
+ok(opPHdate && opPHdate.expectedPrice === 85 && opPHdate.priceStatus === "undercharged",
+  "operational on a WA public holiday (25 Dec) → $85 expected, $55 undercharged (got " + (opPHdate && opPHdate.expectedPrice) + "/" + (opPHdate && opPHdate.priceStatus) + ")");
 
 // Sunday → $86/hour.
 var secSun = engine.checkDocument(engine.parseBeo(secBEO(6, "86.00"), catalogue), catalogue, "2026-10-18").items[0];

@@ -856,10 +856,21 @@
   // officer-hour; the day comes from the event date on the BEO/SOC.
   var SECURITY_RATES = { weekday: 63, saturday: 75, sunday: 86 };
 
-  // Operational staff — charged per staff-hour, like security. Weekday $55/hour,
-  // Sunday $70/hour. Saturday rate still to be confirmed (held at the weekday
-  // rate until provided).
-  var OPERATIONAL_RATES = { weekday: 55, saturday: 55, sunday: 70 };
+  // Operational staff — charged per staff-hour, like security. Standard $55/hour
+  // (weekdays and Saturday), Sunday $70/hour, public holiday $85/hour.
+  var OPERATIONAL_RATES = { weekday: 55, saturday: 55, sunday: 70, publicHoliday: 85 };
+
+  // WA statewide public holidays (gazetted days and weekend substitutes),
+  // covering the price book's validity. Used to apply the public-holiday staff
+  // rate when the event falls on one — even if the BEO line doesn't say so.
+  var WA_PUBLIC_HOLIDAYS = {
+    "2026-01-01": 1, "2026-01-26": 1, "2026-03-02": 1, "2026-04-03": 1, "2026-04-05": 1,
+    "2026-04-06": 1, "2026-04-25": 1, "2026-04-27": 1, "2026-06-01": 1, "2026-09-28": 1,
+    "2026-12-25": 1, "2026-12-26": 1, "2026-12-28": 1,
+    "2027-01-01": 1, "2027-01-26": 1, "2027-03-01": 1, "2027-03-26": 1, "2027-03-28": 1,
+    "2027-03-29": 1, "2027-04-25": 1, "2027-04-26": 1, "2027-06-07": 1, "2027-09-27": 1,
+    "2027-12-25": 1, "2027-12-27": 1, "2027-12-28": 1
+  };
 
   // Half-hour beverage-package pricing. A package can run in half-hour steps:
   // the whole-hour tier below it plus one half-hour increment (e.g. a 2.5-hour
@@ -895,6 +906,7 @@
     nonMenuHints: NON_MENU_HINTS,
     securityRates: SECURITY_RATES,
     operationalRates: OPERATIONAL_RATES,
+    publicHolidays: WA_PUBLIC_HOLIDAYS,
     beverageHalfHour: BEVERAGE_HALF_HOUR,
     packageInclusions: PACKAGE_INCLUSIONS,
     wineTier: WINE_TIER,
@@ -1762,7 +1774,8 @@
     re = /(\d+)\s+operational staff hours?[\s\S]{0,140}?@\s*\$?([\d,]+(?:\.\d{1,2})?)\s*(?:person\s*,?\s*)?(?:per\s+)?hour/gi;
     while ((m = re.exec(soft)) !== null) {
       var oph = parseInt(m[1], 10), oprate = parseMoney(m[2]);
-      var opDay = /\bsunday\b/i.test(m[0]) ? "sunday"
+      var opDay = /\bpublic\s*hol/i.test(m[0]) ? "publicHoliday"
+        : /\bsunday\b/i.test(m[0]) ? "sunday"
         : /\bsaturday\b/i.test(m[0]) ? "saturday"
         : /\b(mon|tue|wed|thu|fri|weekday|week\s*day)\w*\b/i.test(m[0]) ? "weekday" : null;
       var opJ = lineIndexOf(/\d+\s+operational staff hours?/i);
@@ -2020,22 +2033,28 @@
       return result;
     }
 
-    // Operational staff — charged per staff-hour at a day-of-week rate, like
-    // security. $55/hour every day for now (weekend rates TBC).
+    // Operational staff — charged per staff-hour. Standard $55 (weekdays &
+    // Saturday), Sunday $70, public holiday $85. Public holiday takes precedence
+    // over the day of week and comes from the BEO wording ("public holiday
+    // rate") or the event date landing on a WA public holiday.
     if (item.kind === "operational") {
       result.category = "Operational Staff";
       result.matchedName = "Operational Staff";
-      var oprates = (catalogue.operationalRates) || { weekday: 55, saturday: 55, sunday: 55 };
+      var oprates = (catalogue.operationalRates) || { weekday: 55, saturday: 55, sunday: 70, publicHoliday: 85 };
       var opCharged = item.unitPrice;
       var opExp, opLabel;
-      if (item.securityDay === "sunday") { opExp = oprates.sunday; opLabel = "Sunday"; }
+      var isPubHol = item.securityDay === "publicHoliday" ||
+        (typeof eventDate === "string" && catalogue.publicHolidays && catalogue.publicHolidays[eventDate]);
+      if (isPubHol) {
+        opExp = oprates.publicHoliday; opLabel = "a public holiday";
+      } else if (item.securityDay === "sunday") { opExp = oprates.sunday; opLabel = "Sunday"; }
       else if (item.securityDay === "saturday") { opExp = oprates.saturday; opLabel = "Saturday"; }
       else if (item.securityDay === "weekday") { opExp = oprates.weekday; opLabel = "a weekday (Mon–Fri)"; }
       else {
         var odow = dayOfWeek(eventDate);
         if (odow == null) {
           opExp = oprates.weekday;
-          opLabel = "any day";  // all days are the same rate for now
+          opLabel = "a standard day";
         } else {
           opExp = odow === 0 ? oprates.sunday : odow === 6 ? oprates.saturday : oprates.weekday;
           opLabel = WEEKDAY_NAMES[odow] + (odow === 0 || odow === 6 ? "" : " (weekday)");
