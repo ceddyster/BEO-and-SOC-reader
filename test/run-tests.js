@@ -792,6 +792,29 @@ ok(indVeg.matchedName === "Indian Buffet Vegetarian Option" && indVeg.expectedPr
 ok(indianR && indianR.matchedName === "Indian Buffet Package One",
   "a single over-limit course does not bump Package One to Two");
 
+section('"Lunch Set Menu One" matches the Plated Lunch menu, by course count');
+// CECP BEO 10-14-2026: the header "Lunch Set Menu One" isn't a price-book name
+// and its charge is split across a page break with the Program runsheet (which
+// has an "ARRIVAL TEA & COFFEE" line) interleaved. The charge must still take
+// the Lunch Set Menu header, not the stray arrival line, and 2 courses (main +
+// dessert) → Two Course $81.
+var lunchBeo = "Package Quantity Per Person Price\nMenu\n12:30 - 13:30 Lunch\nLunch Set Menu One\n" +
+  "Assorted bread rolls and butter\n~~~~~\nName Date Name Date\nProgram\n0800 Guests arrive\n" +
+  "ARRIVAL TEA & COFFEE & ORANGE JUICE\nCARAFES SERVED\n1230 Doors open\nMAIN COURSE\nChicken breast roll\n" +
+  "~~~~~\nDESSERT\nPavlova, mascarpone cream\n~~~~~\n90 guests @ $81.00 per person\n";
+var lunchR = engine.checkDocument(engine.parseBeo(lunchBeo, catalogue), catalogue).items.find(function (r) { return r.unitPrice === 81; });
+ok(lunchR && lunchR.matchedName === "Plated Lunch Menu One Two Course" && lunchR.priceStatus === "correct",
+  "Lunch Set Menu One (main + dessert) → Plated Lunch Menu One Two Course $81 (got " + (lunchR && lunchR.matchedName) + "/" + (lunchR && lunchR.priceStatus) + ")");
+ok(!engine.checkDocument(engine.parseBeo(lunchBeo, catalogue), catalogue).items.some(function (r) { return r.unitPrice === 81 && /Arrival/.test(r.matchedName || ""); }),
+  "the $81 charge is not matched to Arrival Tea and Coffee from the runsheet");
+// Three courses → Three Course $99.
+var lunch3 = engine.checkDocument(engine.parseBeo(
+  "Package Quantity Per Person Price\nMenu\n12:30 - 13:30 Lunch\nLunch Set Menu One\n" +
+  "ENTREE\nSeared scallops\n~~~~~\nMAIN COURSE\nChicken breast\n~~~~~\nDESSERT\nPavlova\n~~~~~\n90 guests @ $99.00 per person\n",
+  catalogue), catalogue).items.find(function (r) { return r.unitPrice === 99; });
+ok(lunch3 && lunch3.matchedName === "Plated Lunch Menu One Three Course" && lunch3.priceStatus === "correct",
+  "Lunch Set Menu One with 3 courses → Plated Lunch Menu One Three Course $99 (got " + (lunch3 && lunch3.matchedName) + ")");
+
 section("Youth / children's soft drink package → Children's beverages menu");
 // "Youth Soft Drink Package - 5 Hours" is the $12.50 Children's beverages menu,
 // not the adult $24 Soft Drink package the 5-hour tier would otherwise match.

@@ -1224,6 +1224,31 @@
         }
       }
 
+      // Plated lunch: "Lunch Set Menu One/Two" names the tier but not the course
+      // count. Two Course vs Three Course is set by how many courses are listed
+      // — count the ENTREE / MAIN / DESSERT sections in the block and point at
+      // the matching variant of the same tier ($81/$99 for One, $91/$109 for Two).
+      if (match.item.category === "Lunch Plated" && match.item.lunchTier && item.contextLines) {
+        var lblob = " " + normalize(item.contextLines.join("  ")) + " ";
+        var nCourses = (/ entree /.test(lblob) ? 1 : 0) +
+          (/ main course /.test(lblob) || / main /.test(lblob) ? 1 : 0) +
+          (/ dessert /.test(lblob) ? 1 : 0);
+        var wantCourse = nCourses >= 3 ? "Three Course" : "Two Course";
+        if (nCourses >= 2 && match.item.name.indexOf(wantCourse) === -1) {
+          var lWant = "Plated Lunch Menu " + (match.item.lunchTier === 1 ? "One" : "Two") + " " + wantCourse;
+          var lAlt = (catalogue.items || []).filter(function (x) { return x.name === lWant; })[0];
+          if (lAlt) {
+            result.notes.push("BEO lists " + nCourses + " courses — that's " + lAlt.name + " (" +
+              money(lAlt.price) + "pp). Checked against it by the courses served.");
+            match = { item: lAlt, score: match.score };
+            result.matchedName = lAlt.name;
+            result.expectedPrice = lAlt.price;
+            result.unit = lAlt.unit;
+            result.menuNote = lAlt.note || null;
+          }
+        }
+      }
+
       var base = match.item.price;
       var diff = round2(item.unitPrice - base);
       result.priceDiff = diff;
