@@ -1193,7 +1193,9 @@
     // Per-person food/beverage: "215 guests @ $90.00 per person"
     // Also accepts "N children @ $30.00 per child" for the children's menu.
     lines.forEach(function (line, i) {
-      var pm = softNorm(line).match(/(\d+)\s+(?:guests?|children|child|kids?|pax|people)\s*@\s*\$?([\d,]+(?:\.\d{1,2})?)\s*per\s+(?:person|child|guest|head)/);
+      // Accepts "82 guests @ $90 per person" and the variant "82 per guest @
+      // $175 per person" (an optional "per" sits between the count and the unit).
+      var pm = softNorm(line).match(/(\d+)\s+(?:per\s+)?(?:guests?|children|child|kids?|pax|people)\s*@\s*\$?([\d,]+(?:\.\d{1,2})?)\s*per\s+(?:person|child|guest|head)/);
       if (!pm) return;
       var qty = parseInt(pm[1], 10);
       var price = parseMoney(pm[2]);
@@ -1205,7 +1207,7 @@
       // steal the heading from the charge above it (two charges, one title).
       var blockStart = 0;
       for (var bs = i - 1; bs >= 0; bs--) {
-        if (/(\d+)\s+(?:guests?|children|child|kids?|pax|people)\s*@\s*\$?([\d,]+(?:\.\d{1,2})?)\s*per\s+(?:person|child|guest|head)/.test(softNorm(lines[bs]))) {
+        if (/(\d+)\s+(?:per\s+)?(?:guests?|children|child|kids?|pax|people)\s*@\s*\$?([\d,]+(?:\.\d{1,2})?)\s*per\s+(?:person|child|guest|head)/.test(softNorm(lines[bs]))) {
           blockStart = bs + 1; break;
         }
       }

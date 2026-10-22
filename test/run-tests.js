@@ -983,6 +983,21 @@ ok(wl && wl.priceStatus === "correct", "working lunch $44 correct (got " + (wl &
 ok(twoR.filter(function (r) { return /Coffee Break/.test(r.matchedName || ""); }).length === 1,
   "the coffee-break heading is used by exactly one charge, not two");
 
+section('A charge worded "N per guest @" is recognised (Chinese banquet + crew)');
+// BEO CECP 10-01-2026 #15: the banquet charge reads "82 per guest @ $175.00
+// per person" (an extra "per"). If it isn't parsed, the crew meal below it
+// reaches back and steals the Chinese Banquet heading, merging two charges.
+var perGuestBeo = "Package Quantity Per Person Price\nMenu\n18:30 - 23:59 Dinner Banquet\n" +
+  "Chinese Banquet Menu Two\nEntrée platter\nFour main courses\n82 per guest @ $175.00 per person\n" +
+  "20:45 - 21:30 Crew Catering\nCrew Catering - Set Menu\nChef's selection of main course\n6 guests @ $44.00 per person\n";
+var pgItems = engine.checkDocument(engine.parseBeo(perGuestBeo, catalogue), catalogue).items;
+var banq = pgItems.find(function (r) { return r.unitPrice === 175; });
+var crew = pgItems.find(function (r) { return r.unitPrice === 44; });
+ok(banq && banq.matchedName === "Chinese Banquet Menu Two" && banq.qty === 82 && banq.priceStatus === "correct",
+  '"82 per guest @ $175" → Chinese Banquet Menu Two, 82 guests, correct (got ' + (banq && banq.matchedName) + "/" + (banq && banq.qty) + ")");
+ok(crew && /Crew Set Menu/.test(crew.matchedName || "") && crew.priceStatus === "correct",
+  "the crew meal is its own charge → Crew Set Menu $44 correct, not merged into the banquet (got " + (crew && crew.matchedName) + ")");
+
 section("A strong item name is not discarded as a section divider");
 // "Sandwich Buffet Menu One" starts with the section word "Sandwich" but is the
 // item itself — it must still be matched, not skipped as a course divider.
