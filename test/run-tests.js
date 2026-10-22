@@ -769,6 +769,29 @@ ok(indianR && indianR.expectedPrice === 129, "Indian Buffet Package One priced a
 ok(!indianItems.some(function (r) { return r.matchedName === "Crew Fresh Fruit Platter"; }),
   "no phantom Crew Fresh Fruit Platter charge from the dessert line");
 
+section("Indian buffet tier is chosen by the dishes selected");
+// Package Two: 3 entrées, 4 salads, 3 meat/fish, 3 veg → $150.
+var indTwo = engine.checkDocument(engine.parseBeo(
+  "Package Quantity Per Person Price\nMenu\n18:00 Dinner Buffet\nIndian Buffet Menu\n" +
+  "Onion bhaji\nLamb curry puff\nVegetarian samosa\nKachumbar\nAloo chana chaat\nCucumber mint raita\nGrilled paneer salad\n" +
+  "Butter chicken\nLamb rogan josh\nChicken chettinad\nDum aloo\nKadai subzi\nVegetable jalfrezi\n" +
+  "Mattar paneer\nDal tadka\nJeera pilaf\nGulab jamun\nGarlic naan\nPlain paratha\n100 guests @ $150.00 per person\n",
+  catalogue), catalogue).items[0];
+ok(indTwo.matchedName === "Indian Buffet Package Two" && indTwo.expectedPrice === 150 && indTwo.priceStatus === "correct",
+  "3 entrée / 4 salad / 3 meat-fish / 3 veg → Package Two $150 (got " + indTwo.matchedName + "/" + indTwo.expectedPrice + ")");
+// Vegetarian option: no meat/fish, 4 veg → $126.
+var indVeg = engine.checkDocument(engine.parseBeo(
+  "Package Quantity Per Person Price\nMenu\n18:00 Dinner Buffet\nIndian Buffet Menu\n" +
+  "Onion bhaji\nVegetarian samosa\nKachumbar\nAloo chana chaat\nCucumber mint raita\n" +
+  "Dum aloo\nKadai subzi\nVegetable jalfrezi\nNavratan vegetable korma\nMattar paneer\nDal tadka\nJeera pilaf\n" +
+  "Gulab jamun\nGarlic naan\nPlain paratha\n100 guests @ $126.00 per person\n",
+  catalogue), catalogue).items[0];
+ok(indVeg.matchedName === "Indian Buffet Vegetarian Option" && indVeg.expectedPrice === 126 && indVeg.priceStatus === "correct",
+  "no meat/fish + 4 veg → Vegetarian Option $126 (got " + indVeg.matchedName + "/" + indVeg.expectedPrice + ")");
+// Package One stays One even with one course over its limit (not a Two majority).
+ok(indianR && indianR.matchedName === "Indian Buffet Package One",
+  "a single over-limit course does not bump Package One to Two");
+
 section("Youth / children's soft drink package → Children's beverages menu");
 // "Youth Soft Drink Package - 5 Hours" is the $12.50 Children's beverages menu,
 // not the adult $24 Soft Drink package the 5-hour tier would otherwise match.

@@ -1984,6 +1984,40 @@
         }
       }
 
+      // Indian buffet: Package One ($129), Package Two ($150) and the Vegetarian
+      // option ($126) share the "indianBuffet" composition but allow different
+      // numbers of dishes per course (Two has more entrées/salads/meat-fish/veg;
+      // the Vegetarian option has no meat/fish). BEOs usually just write "Indian
+      // Buffet Menu", so pick the package from what's actually chosen. Counts can
+      // be noisy, so require a clear majority of the four distinguishing courses
+      // to reach Package Two's level before upgrading; no meat/fish ⇒ Vegetarian.
+      if (match.item.category === "Dinner Indian" && match.item.composition && item.contextLines) {
+        var ic = analyzeComposition(item,
+          { composition: { set: "indianBuffet", limits: { "entrée": 99, salad: 99, "meat/fish": 99, veg: 99 } } },
+          catalogue);
+        if (ic && ic.counts) {
+          var ent = ic.counts["entrée"] || 0, sal = ic.counts["salad"] || 0,
+              mf = ic.counts["meat/fish"] || 0, vg = ic.counts["veg"] || 0;
+          var reachTwo = (ent >= 3 ? 1 : 0) + (sal >= 4 ? 1 : 0) + (mf >= 3 ? 1 : 0) + (vg >= 3 ? 1 : 0);
+          var wantName = (mf === 0 && vg > 0) ? "Indian Buffet Vegetarian Option"
+            : (reachTwo >= 3) ? "Indian Buffet Package Two"
+            : "Indian Buffet Package One";
+          if (wantName !== match.item.name) {
+            var iAlt = (catalogue.items || []).filter(function (x) { return x.name === wantName; })[0];
+            if (iAlt) {
+              result.notes.push("BEO selections (" + ent + " entrée, " + sal + " salad, " + mf +
+                " meat/fish, " + vg + " veg) point to " + iAlt.name + " (" + money(iAlt.price) +
+                "pp) — checked against it rather than the BEO's generic “Indian Buffet Menu”.");
+              match = { item: iAlt, score: match.score };
+              result.matchedName = iAlt.name;
+              result.expectedPrice = iAlt.price;
+              result.unit = iAlt.unit;
+              result.menuNote = iAlt.note || null;
+            }
+          }
+        }
+      }
+
       var base = match.item.price;
       var diff = round2(item.unitPrice - base);
       result.priceDiff = diff;
