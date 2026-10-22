@@ -177,8 +177,18 @@
   .cat-head { font-family: var(--display); font-size: 12px; text-transform: uppercase; letter-spacing: .05em;
     color: var(--accent); margin: 14px 0 4px; }
 
-  /* Distribution: overview rows that expand in place to the full BEO check */
-  table.beo-list td.bx-caret { color: var(--muted); width: 1.2em; text-align: center; }
+  /* Distribution: overview rows that expand in place to the full BEO check.
+     Fixed layout keeps the expand cell (colspan=6) at the panel width, so the
+     BEO's own charge table scrolls inside it instead of stretching the whole
+     overview table and clipping the Status column / "View full BEO" button. */
+  table.beo-list { table-layout: fixed; }
+  table.beo-list th:nth-child(1), table.beo-list td.bx-caret { width: 26px; color: var(--muted); text-align: center; }
+  table.beo-list th:nth-child(2) { width: 88px; }   /* BEO # */
+  table.beo-list th:nth-child(4) { width: 112px; }  /* Date */
+  table.beo-list th:nth-child(5) { width: 58px; }   /* Lines */
+  table.beo-list th:nth-child(6) { width: 140px; }  /* Status */
+  table.beo-list td:nth-child(3) { white-space: normal; overflow-wrap: anywhere; } /* Event name wraps */
+  table.beo-list td:nth-child(6) .chip { white-space: normal; }  /* long status wraps, never clips */
   tr.beo-row { cursor: pointer; }
   tr.beo-row:hover td { background: var(--surface-2); }
   tr.beo-row.open td { background: var(--surface-2); font-weight: 600; }
@@ -186,6 +196,13 @@
   .beo-body { padding: 6px 14px 18px; }
   .beo-body .banner { margin-top: 12px; }
   .beo-body .block:first-of-type { margin-top: 14px; }
+  /* The expanded BEO's own tables scroll horizontally within the panel. */
+  .beo-body .tscroll { overflow-x: auto; max-width: 100%; }
+  /* Charge table: the Item column takes the slack; the numeric columns and
+     Status shrink to their content so they never leave a big empty gap. */
+  table.check-table th:not(:first-child), table.check-table td:not(:first-child) {
+    width: 1%; white-space: nowrap; }
+  table.check-table td:first-child { white-space: normal; }
 
   /* Click a check row to reveal the matching BEO section */
   tr.item-row.has-src { cursor: pointer; }
@@ -3556,7 +3573,7 @@
       });
       sec.querySelector("h2").appendChild(btn);
     }
-    var html = '<div class="tscroll"><table><thead><tr>' +
+    var html = '<div class="tscroll"><table class="check-table"><thead><tr>' +
       "<th>Item</th><th class='num'>Qty</th><th class='num'>Charged</th>" +
       "<th class='num'>Menu price</th><th class='num'>Line total</th><th>Status</th>" +
       "</tr></thead><tbody>";
