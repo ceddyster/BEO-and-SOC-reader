@@ -2366,7 +2366,7 @@
         explainCoffeeBreak(result, item, match.item, base, diff, cbInfo);
       } else if (compInfo && compInfo.total > 0) {
         explainComposition(result, item, match.item, base, diff, compInfo);
-      } else if (match.item.composable && diff > 0.005) {
+      } else if (match.item.composable && ((item.alternatingCourses || 0) > 0 || diff > 0.005)) {
         composableExplain(result, item, match.item, base, diff);
       } else if (Math.abs(diff) <= 0.005) {
         result.priceStatus = "correct";
@@ -2430,30 +2430,47 @@
     var altCourses = item.alternatingCourses || 0;
     var altPrice = cat.altPrice || 10;
     var altAmount = round2(altCourses * altPrice);
-    var remainder = round2(diff - altAmount);
+    // Alternating courses the description shows are REQUIRED add-ons, so they
+    // raise the expected price: expected = base + (alternating courses × rate).
+    var expected = round2(base + altAmount);
+    var charged = item.unitPrice;
+    var d = round2(charged - expected);
+    result.expectedPrice = expected;
+    result.priceDiff = d;
+    result.priceImpact = (item.qty != null) ? round2(d * item.qty) : null;
     result._explained = true;
 
-    if (altCourses > 0 && Math.abs(remainder) <= 0.005) {
-      // Fully explained by the alternating courses the BEO actually shows.
+    var altTxt = altCourses > 0
+      ? (" + " + altCourses + " alternating course" + (altCourses > 1 ? "s" : "") + " (+" + money(altAmount) + ")")
+      : "";
+    var baseLine = cat.name + " " + money(base) + altTxt + (altCourses > 0 ? " = " + money(expected) : "") + " per person";
+
+    if (Math.abs(d) <= 0.005) {
+      // Charged equals base plus the alternating courses — correct.
       result.priceStatus = "correct";
-      result.notes.push("Correct: base " + cat.name + " " + money(base) + " + " + altCourses +
-        " alternating course" + (altCourses > 1 ? "s" : "") + " (+" + money(altAmount) + ") = " +
-        money(item.unitPrice) + " per person.");
+      if (result.status !== "math-error") result.status = "ok";
+      result.notes.push("Correct: " + baseLine + ".");
       return;
     }
-
+    if (d < -0.005) {
+      // Charged less than base + the alternating courses shown — undercharged.
+      result.priceStatus = "undercharged";
+      if (result.status !== "math-error") result.status = "undercharged";
+      result.notes.push(baseLine + "; charged " + money(charged) + " (under by " + money(Math.abs(d)) +
+        (item.qty != null ? " each, " + money(Math.abs(result.priceImpact)) + " across " + item.qty : "") + ").");
+      if (altCourses > 0) result.notes.push("The alternating-service cost (" + money(altPrice) +
+        "pp per alternating course, " + altCourses + " shown) should be included.");
+      return;
+    }
+    // d > 0: charged above base + the alternating courses — explain the excess.
     result.priceStatus = "review";
     if (result.status !== "math-error") result.status = "review";
-    var note = "Charged " + money(item.unitPrice) + " is " + money(diff) + " above the base " +
-      cat.name + " (" + money(base) + ").";
-    if (altCourses > 0) {
-      note += " " + altCourses + " alternating course" + (altCourses > 1 ? "s" : "") +
-        " accounts for " + money(altAmount) + ", leaving " + money(remainder) + ".";
-    }
+    var remainder = d;
+    var note = "Charged " + money(charged) + " is " + money(remainder) + " above " + baseLine + ".";
     var hints = [];
     var altN = remainder / altPrice;
     if (Math.abs(altN - Math.round(altN)) < 0.001 && Math.round(altN) > 0) {
-      hints.push(Math.round(altN) + " alternating course" + (Math.round(altN) > 1 ? "s" : "") +
+      hints.push(Math.round(altN) + " more alternating course" + (Math.round(altN) > 1 ? "s" : "") +
         " (" + money(altPrice) + "pp each)");
     }
     if (cat.addCoursePrice) {

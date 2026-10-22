@@ -972,6 +972,18 @@ var altR = engine.checkDocument(engine.parseBeo(
   catalogue), catalogue).items[0];
 ok(altR.matchedName === "Plated Dinner Menu One" && altR.priceStatus === "correct" && /alternating/.test(altR.notes.join(" ")),
   "base $96 + 1 alternating course (+$10) = $106 correct, from the items (got " + altR.priceStatus + ")");
+// Alternating courses are required add-ons: they RAISE the expected price, so a
+// charge at only the base price is undercharged (CECP BEO 10-21-2026: 2
+// alternating courses but charged $96 base → expected $116).
+var altUnder = engine.checkDocument(engine.parseBeo(
+  "Package Quantity Per Person Price\nMenu\n18:50 - 20:50 Dinner\nDinner Set Menu One\n" +
+  "ENTREE\nKingfish\nALTERNATING WITH\nBeef tataki\n~~~~~\nMAIN COURSE\nEye fillet\nALTERNATING WITH\nBarramundi\n" +
+  "~~~~~\nDESSERT STATION/PLATTERS\nChefs selection\n~~~~~\n121 guests @ $96.00 per person\n",
+  catalogue), catalogue).items[0];
+ok(altUnder.matchedName === "Plated Dinner Menu One" && altUnder.expectedPrice === 116,
+  "2 alternating courses → expected $96 + $20 = $116 (got " + (altUnder && altUnder.expectedPrice) + ")");
+ok(altUnder.priceStatus === "undercharged" && altUnder.priceImpact === -2420,
+  "charged $96 is undercharged by $20pp, -$2,420 across 121 (got " + altUnder.priceStatus + "/" + altUnder.priceImpact + ")");
 
 section("Beverage packages price half-hour increments (2–6 hrs)");
 function bevHalf(name, charge) {
