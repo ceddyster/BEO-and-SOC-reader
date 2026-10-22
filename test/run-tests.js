@@ -888,6 +888,16 @@ var cSub = engine.checkDocument(engine.parseBeo(
 ok(cSub.expectedPrice === 56 && cSub.priceStatus === "correct",
   "5 canapés (4 standard + 1 substantial) = $39 + $17 = $56 correct (got " + cSub.expectedPrice + "/" + cSub.priceStatus + ")");
 ok(/substantial/i.test(cSub.matchedName || ""), "the substantial enhancement is named in the match (got " + cSub.matchedName + ")");
+// Even with NO "Substantial Canapes" heading, a substantial dish is identified
+// by matching the canapé menu (the Pork belly dish is a substantial selection).
+var cSubNoHdr = engine.checkDocument(engine.parseBeo(
+  "Package Quantity Per Person Price\nMenu\n15:40 - 16:40 Reception\nCocktail Reception - 1 Hour\n5 canapes served per person\n" +
+  "~~~~~\nCOLD CANAPES\nTeriyaki chicken sushi rolls\nSmoked salmon profiterole\n" +
+  "~~~~~\nHOT CANAPES\nVietnamese duck spring rolls\nMasala spiced potato curry puff\n" +
+  "Pork belly, coriander, chilli, mint, flat noodles,\nVietnamese dressing\n~~~~~\n245 guests @ $56.00 per person\n",
+  catalogue), catalogue).items[0];
+ok(cSubNoHdr.expectedPrice === 56 && cSubNoHdr.priceStatus === "correct",
+  "substantial canapé found via the menu list (no heading) → $56 correct (got " + cSubNoHdr.expectedPrice + "/" + cSubNoHdr.priceStatus + ")");
 
 section("Header-first model: a priced line is never dropped (flagged instead)");
 // "Non-alcoholic Sparkling …" with the amount on its own "1 @ $30.00 per bottle"

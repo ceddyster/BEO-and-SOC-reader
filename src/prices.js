@@ -543,6 +543,23 @@
     "wa premium": { baseName: "WA Premium Package", halfHour: 3.5, minHours: 2, maxHours: 6 }
   };
 
+  // Canapé classification. "Substantial" canapés are a separate Enhancement
+  // ($17 per selection) with their own unique dish list — distinct from the
+  // standard Cold / Hot / Dessert selections. Each entry is a distinctive
+  // phrase from a substantial dish on the 2026 Canapés menu, so a reception
+  // whose canapés are listed WITHOUT a "Substantial Canapes" heading can still
+  // be identified by matching the dish names against this list.
+  var CANAPE_SUBSTANTIAL = [
+    "rogan josh almond",              // Lamb rogan josh, almond, sultana, turmeric pilau rice
+    "sushi rice soy butter",          // Salmon, miso sauce, sushi rice, soy butter, jalapeño salsa
+    "vienna brioche hotdog",          // Mini Vienna brioche hotdog, tomato chutney, American mustard
+    "flat noodles vietnamese",        // Pork belly, coriander, chilli, mint, flat noodles, Vietnamese dressing
+    "calabrese sausage rigatoni",     // Calabrese sausage rigatoni, fresh parmesan, San Marzano tomato, peas
+    "brisket fajita",                 // Pulled beef brisket fajita, charred corn, piquillo pepper salsa
+    "mexican rice black beans",       // Smoked chicken, Mexican rice, black beans, corn, coriander
+    "halloumi cheese spiced root"     // Halloumi cheese, spiced root vegetables, saffron cous cous
+  ];
+
   var API = {
     meta: CATALOGUE_META,
     items: ITEMS,
@@ -554,7 +571,8 @@
     wineTier: WINE_TIER,
     packageSurcharges: PACKAGE_SURCHARGES,
     breakfastSelections: BREAKFAST_SELECTIONS,
-    compositionSets: COMPOSITION_SETS
+    compositionSets: COMPOSITION_SETS,
+    canapeSubstantial: CANAPE_SUBSTANTIAL
   };
 
   if (typeof module !== "undefined" && module.exports) {

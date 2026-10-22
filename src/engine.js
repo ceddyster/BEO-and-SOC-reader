@@ -1039,10 +1039,13 @@
       var canapeTiers = (catalogue.items || []).filter(function (x) { return x.category === "Canapes" && x.canapes; });
       var subItem = (catalogue.items || []).filter(function (x) { return x.name === "Substantial Enhancement"; })[0];
       var subPrice = subItem ? subItem.price : 17;
-      // Count the dishes listed under a "SUBSTANTIAL CANAPES" section (wrapped
-      // dish lines — a continuation ends the previous line with a comma or starts
-      // lower-case — count as one).
-      var substantialN = 0;
+      // Count substantial canapés two ways and take the larger. (1) Dishes listed
+      // under a "SUBSTANTIAL CANAPES" section header (wrapped dish lines — a
+      // continuation ends the previous line with a comma or starts lower-case —
+      // count as one). (2) When the BEO gives no such header, identify them from
+      // the menu: a canapé whose name matches a substantial dish on the 2026
+      // Canapés menu is substantial, however the BEO groups it.
+      var headingN = 0;
       (function () {
         var inSec = false, cont = false;
         (item.contextLines || []).forEach(function (raw) {
@@ -1054,9 +1057,14 @@
           if (/\bcanap[eé]s?\b/i.test(t) && t.length < 28) { inSec = false; return; } // next section header
           if (/^\*/.test(t) || /denotes/i.test(t)) return;                        // footnote
           if (cont || /^[a-z(]/.test(t)) { cont = /,$/.test(t); return; }          // continuation of a wrapped dish
-          substantialN++; cont = /,$/.test(t);
+          headingN++; cont = /,$/.test(t);
         });
       })();
+      var menuBlob = " " + normalize((item.contextLines || []).join("  ")) + " ";
+      var menuN = (catalogue.canapeSubstantial || []).filter(function (sig) {
+        return menuBlob.indexOf(" " + normalize(sig) + " ") !== -1 || menuBlob.indexOf(normalize(sig)) !== -1;
+      }).length;
+      var substantialN = Math.max(headingN, menuN);
       var baseCount = (item.canapes || 0) - substantialN;
       var cTier = canapeTiers.filter(function (x) { return x.canapes === baseCount; })[0];
       if (!cTier) {
