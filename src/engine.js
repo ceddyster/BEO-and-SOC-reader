@@ -1283,7 +1283,8 @@
     var summary = {
       total: checked.length,
       correct: 0, undercharged: 0, overcharged: 0, mathErrors: 0, nonMenu: 0, unmatched: 0, review: 0,
-      chargedTotal: 0, expectedTotal: 0, variance: 0, issues: 0
+      chargedTotal: 0, expectedTotal: 0, variance: 0, issues: 0,
+      underchargedAmount: 0, overchargedAmount: 0
     };
     checked.forEach(function (r) {
       if (r.status === "math-error") summary.mathErrors++;
@@ -1304,6 +1305,10 @@
         ? round2(r.qty * r.expectedPrice)
         : charged;
       summary.expectedTotal = round2(summary.expectedTotal + expectedLine);
+      // Dollar size of each over/undercharge (charged minus expected on the line).
+      var lineVar = round2(charged - expectedLine);
+      if (r.priceStatus === "overcharged") summary.overchargedAmount = round2(summary.overchargedAmount + lineVar);
+      else if (r.priceStatus === "undercharged") summary.underchargedAmount = round2(summary.underchargedAmount - lineVar);
     });
     summary.variance = round2(summary.chargedTotal - summary.expectedTotal);
     summary.issues = summary.undercharged + summary.overcharged + summary.mathErrors + summary.unmatched;

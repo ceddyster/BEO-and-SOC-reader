@@ -62,6 +62,17 @@ ok(report.summary.correct === 1, "summary: 1 correct");
 ok(report.summary.chargedTotal === 42964.65,
   "summary: charged total $42,964.65 (got " + report.summary.chargedTotal + ")");
 
+section("Summary totals: undercharged/overcharged dollar amounts & variance");
+// One undercharge (80 × ($11−$8) = $240) and one overcharge (10 × ($90−$62) = $280).
+var totDoc = engine.checkDocument(engine.parseBeo(
+  "Menu\n08:00 - 09:00 Arrival\nArrival Tea and Coffee\n80 guests @ $8.00 per person\n" +
+  "12:00 - 13:00 Lunch\nLunch Buffet Menu One\nGarden salad\n10 guests @ $90.00 per person\n",
+  catalogue), catalogue).summary;
+ok(totDoc.underchargedAmount === 240, "total undercharged = $240 (got " + totDoc.underchargedAmount + ")");
+ok(totDoc.overchargedAmount === 280, "total overcharged = $280 (got " + totDoc.overchargedAmount + ")");
+ok(totDoc.variance === 40, "variance = charged − expected = overcharged − undercharged = $40 (got " + totDoc.variance + ")");
+ok(totDoc.variance === engine.round2(totDoc.overchargedAmount - totDoc.underchargedAmount), "variance reconciles with over − under amounts");
+
 section("Math-error detection");
 var badRows = [["10", "Dinner Buffet Menu One", "$90.00", "", "$950.00"]];
 var badReport = engine.checkDocument(engine.parseSocRows(badRows), catalogue);

@@ -164,6 +164,10 @@
   .totals dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 18px; font-weight: 600; }
   .totals dd.flag { color: var(--bad); }
   .totals dd.good { color: var(--ok); }
+  .totals.wide { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  @media (max-width: 860px) { .totals.wide { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 560px) { .totals.wide { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 380px) { .totals.wide { grid-template-columns: 1fr; } }
 
   details.prices { margin-top: 22px; border: 1px solid var(--border); border-radius: var(--radius);
     background: var(--surface); }
@@ -2182,7 +2186,8 @@
     var summary = {
       total: checked.length,
       correct: 0, undercharged: 0, overcharged: 0, mathErrors: 0, nonMenu: 0, unmatched: 0, review: 0,
-      chargedTotal: 0, expectedTotal: 0, variance: 0, issues: 0
+      chargedTotal: 0, expectedTotal: 0, variance: 0, issues: 0,
+      underchargedAmount: 0, overchargedAmount: 0
     };
     checked.forEach(function (r) {
       if (r.status === "math-error") summary.mathErrors++;
@@ -2203,6 +2208,10 @@
         ? round2(r.qty * r.expectedPrice)
         : charged;
       summary.expectedTotal = round2(summary.expectedTotal + expectedLine);
+      // Dollar size of each over/undercharge (charged minus expected on the line).
+      var lineVar = round2(charged - expectedLine);
+      if (r.priceStatus === "overcharged") summary.overchargedAmount = round2(summary.overchargedAmount + lineVar);
+      else if (r.priceStatus === "undercharged") summary.underchargedAmount = round2(summary.underchargedAmount - lineVar);
     });
     summary.variance = round2(summary.chargedTotal - summary.expectedTotal);
     summary.issues = summary.undercharged + summary.overcharged + summary.mathErrors + summary.unmatched;
@@ -2970,6 +2979,9 @@
       pill("ok", clean + " clean") + "</div></div>";
     out.appendChild(div);
 
+    // Money totals across the whole distribution, above the BEO list.
+    renderDistTotals(out, checked);
+
     // One list: an overview table where each row expands in place to that BEO's
     // full line-by-line check (accordion — only one open at a time).
     var sec = block("BEOs", segs.length + " BEOs · each checked on its own date · click a row to open it");
@@ -3507,12 +3519,41 @@
     var sec = block("Totals", "priced lines compared to the menu book");
     var varClass = Math.abs(s.variance) < 0.005 ? "good" : "flag";
     var varText = (s.variance < 0 ? "−" : s.variance > 0 ? "+" : "") + money(Math.abs(s.variance));
-    sec.querySelector(".body").innerHTML = '<div class="totals">' +
+    sec.querySelector(".body").innerHTML = '<div class="totals wide">' +
       "<div><dt>Charged total</dt><dd>" + money(s.chargedTotal) + "</dd></div>" +
-      "<div><dt>Expected at menu prices</dt><dd>" + money(s.expectedTotal) + "</dd></div>" +
+      "<div><dt>Expected total</dt><dd>" + money(s.expectedTotal) + "</dd></div>" +
+      "<div><dt>Total undercharged</dt><dd class='" + ((s.underchargedAmount || 0) > 0.005 ? "flag" : "") + "'>" + money(s.underchargedAmount || 0) + "</dd></div>" +
+      "<div><dt>Total overcharged</dt><dd class='" + ((s.overchargedAmount || 0) > 0.005 ? "flag" : "") + "'>" + money(s.overchargedAmount || 0) + "</dd></div>" +
       "<div><dt>Variance</dt><dd class='" + varClass + "'>" + esc(varText) + "</dd></div>" +
       "</div><p class='note'>“Expected” uses menu prices for matched items and the charged amount " +
       "for non-menu lines (AV, security, attrition), so the variance isolates menu mispricing.</p>";
+    out.appendChild(sec);
+  }
+
+  // Distribution-wide totals, summed across every BEO in the distribution.
+  function renderDistTotals(out, checked) {
+    var charged = 0, expected = 0, under = 0, over = 0;
+    checked.forEach(function (c) {
+      var s = c.report.summary;
+      charged += s.chargedTotal || 0;
+      expected += s.expectedTotal || 0;
+      under += s.underchargedAmount || 0;
+      over += s.overchargedAmount || 0;
+    });
+    var variance = charged - expected;
+    if (Math.abs(variance) < 0.005) variance = 0;
+    var varClass = variance === 0 ? "good" : "flag";
+    var varText = (variance < 0 ? "−" : variance > 0 ? "+" : "") + money(Math.abs(variance));
+    var sec = block("Totals", "all " + checked.length + " BEOs · priced lines vs the menu book");
+    sec.querySelector(".body").innerHTML = '<div class="totals wide">' +
+      "<div><dt>Charged total</dt><dd>" + money(charged) + "</dd></div>" +
+      "<div><dt>Expected total</dt><dd>" + money(expected) + "</dd></div>" +
+      "<div><dt>Total undercharged</dt><dd class='" + (under > 0.005 ? "flag" : "") + "'>" + money(under) + "</dd></div>" +
+      "<div><dt>Total overcharged</dt><dd class='" + (over > 0.005 ? "flag" : "") + "'>" + money(over) + "</dd></div>" +
+      "<div><dt>Variance</dt><dd class='" + varClass + "'>" + esc(varText) + "</dd></div>" +
+      "</div><p class='note'>“Expected” uses menu prices for matched items and the charged amount for " +
+      "non-menu lines (AV, security, attrition), so the variance isolates menu mispricing. " +
+      "Undercharged and overcharged are the dollar size of each, summed across all BEOs.</p>";
     out.appendChild(sec);
   }
 
