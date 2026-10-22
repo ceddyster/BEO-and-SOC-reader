@@ -1028,40 +1028,71 @@
     // Cocktail reception: priced by the NUMBER of canapés per person (4 → 1 hr
     // $39, 6 → 2 hr $58, 10 → 3 hr $75, 12 → 4 hr $88). Match on the count the
     // BEO actually lists — never fuzzily on a number in the header, so "2
-    // canapés" can't be read as the "Two Hour" tier. A count the menu doesn't
-    // offer is flagged for confirmation, not forced onto the nearest tier.
+    // canapés" can't be read as the "Two Hour" tier. "Substantial" canapés are
+    // an Enhancement (+$17 per selection), NOT part of the standard count: so
+    // the standard tier = total canapés − substantial, and the substantials are
+    // added on top. When the raw count doesn't land on a tier, this split is
+    // what makes a "5 canapé" reception resolve (4 standard + 1 substantial).
+    // Only when neither the count nor the count-minus-enhancements fits is it flagged.
     if (item.kind === "canape") {
       result.category = "Canapes";
       var canapeTiers = (catalogue.items || []).filter(function (x) { return x.category === "Canapes" && x.canapes; });
-      var cTier = canapeTiers.filter(function (x) { return x.canapes === item.canapes; })[0];
+      var subItem = (catalogue.items || []).filter(function (x) { return x.name === "Substantial Enhancement"; })[0];
+      var subPrice = subItem ? subItem.price : 17;
+      // Count the dishes listed under a "SUBSTANTIAL CANAPES" section (wrapped
+      // dish lines — a continuation ends the previous line with a comma or starts
+      // lower-case — count as one).
+      var substantialN = 0;
+      (function () {
+        var inSec = false, cont = false;
+        (item.contextLines || []).forEach(function (raw) {
+          var t = String(raw).replace(/\s+/g, " ").trim();
+          if (!t) return;
+          if (/substantial\s+canap/i.test(t)) { inSec = true; cont = false; return; }
+          if (!inSec) return;
+          if (/^~+$/.test(t)) { inSec = false; return; }                        // divider ends the section
+          if (/\bcanap[eé]s?\b/i.test(t) && t.length < 28) { inSec = false; return; } // next section header
+          if (/^\*/.test(t) || /denotes/i.test(t)) return;                        // footnote
+          if (cont || /^[a-z(]/.test(t)) { cont = /,$/.test(t); return; }          // continuation of a wrapped dish
+          substantialN++; cont = /,$/.test(t);
+        });
+      })();
+      var baseCount = (item.canapes || 0) - substantialN;
+      var cTier = canapeTiers.filter(function (x) { return x.canapes === baseCount; })[0];
       if (!cTier) {
         var offered = canapeTiers.map(function (x) { return x.canapes; }).sort(function (a, b) { return a - b; });
         result.matchedName = "Cocktail Reception (" + item.canapes + " canapés)";
         result.priceStatus = "review";
         if (result.status !== "math-error") result.status = "review";
         result._explained = true;
-        result.notes.push(item.canapes + " canapés per person isn't a standard reception tier — the menu offers " +
-          offered.join(" / ") + " canapés (1–4 hours at $39 / $58 / $75 / $88). Charged " + money(item.unitPrice) +
-          "pp — confirm against the quote.");
+        result.notes.push(item.canapes + " canapés per person" +
+          (substantialN ? " (" + substantialN + " substantial)" : "") +
+          " doesn't match a standard reception — the menu offers " + offered.join(" / ") +
+          " standard canapés (1–4 hours at $39 / $58 / $75 / $88), plus substantial canapés at " +
+          money(subPrice) + "pp each. Charged " + money(item.unitPrice) + "pp — confirm against the quote.");
         return result;
       }
-      result.matchedName = cTier.name;
-      result.expectedPrice = cTier.price;
+      var subAmount = round2(substantialN * subPrice);
+      var cExp = round2(cTier.price + subAmount);
+      result.matchedName = cTier.name + (substantialN ? " + " + substantialN + " substantial canapé" + (substantialN > 1 ? "s" : "") : "");
+      result.expectedPrice = cExp;
       result.unit = cTier.unit;
       result.menuNote = cTier.note || null;
-      var cdiff = round2((item.unitPrice || 0) - cTier.price);
+      var cdiff = round2((item.unitPrice || 0) - cExp);
       result.priceDiff = cdiff;
       result.priceImpact = item.qty != null ? round2(cdiff * item.qty) : null;
       result._explained = true;
+      var calc = cTier.name + " (" + baseCount + " canapés) " + money(cTier.price) +
+        (substantialN ? " + " + substantialN + " substantial (+" + money(subAmount) + ")" : "") +
+        (substantialN ? " = " + money(cExp) : "") + "pp";
       if (Math.abs(cdiff) <= 0.005) {
         result.priceStatus = "correct";
         if (result.status !== "math-error") result.status = "ok";
-        result.notes.push(cTier.name + " (" + item.canapes + " canapés) — menu price " + money(cTier.price) + "pp. Correct.");
+        result.notes.push(calc + ". Correct.");
       } else {
         result.priceStatus = cdiff < 0 ? "undercharged" : "overcharged";
         if (result.status !== "math-error") result.status = result.priceStatus;
-        result.notes.push(cTier.name + " (" + item.canapes + " canapés) menu price " + money(cTier.price) +
-          "pp; charged " + money(item.unitPrice) + "pp (" + (cdiff < 0 ? "under" : "over") + " by " +
+        result.notes.push(calc + "; charged " + money(item.unitPrice) + "pp (" + (cdiff < 0 ? "under" : "over") + " by " +
           money(Math.abs(cdiff)) + "pp" + (item.qty != null ? ", " + money(Math.abs(result.priceImpact)) + " across " + item.qty : "") + ").");
       }
       if (cTier.minGuests && item.qty != null && item.qty < cTier.minGuests) {

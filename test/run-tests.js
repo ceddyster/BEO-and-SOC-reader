@@ -874,6 +874,20 @@ var cBad = engine.checkDocument(engine.parseBeo(
   catalogue), catalogue).items[0];
 ok(cBad.priceStatus === "review" && cBad.matchedName !== "Cocktail Reception Two Hour",
   "2 canapés isn't a standard tier → flagged for review, not the 2-hour tier (got " + cBad.matchedName + "/" + cBad.priceStatus + ")");
+// Substantial canapés are an Enhancement (+$17/selection), not part of the
+// standard count. A 5-canapé reception with 1 substantial = 4 standard (1 hr
+// $39) + 1 substantial (+$17) = $56 (CECP BEO 09-30-2026). When the raw count
+// doesn't fit a tier, the checker subtracts the enhancement selections.
+var cSub = engine.checkDocument(engine.parseBeo(
+  "Package Quantity Per Person Price\nMenu\n15:40 - 16:40 Networking Reception\nCocktail Reception - 1 Hour\n" +
+  "5 canapes served per person\n~~~~~\nCOLD CANAPES\nTeriyaki chicken sushi rolls\nSmoked salmon profiterole\n" +
+  "~~~~~\nHOT CANAPES\nVietnamese duck spring rolls\nMasala spiced potato curry puff\n" +
+  "~~~~~\nSUBSTANTIAL CANAPES\nPork belly, coriander, chilli, mint, flat noodles,\nVietnamese dressing\n~~~~~\n" +
+  "245 guests @ $56.00 per person\n",
+  catalogue), catalogue).items[0];
+ok(cSub.expectedPrice === 56 && cSub.priceStatus === "correct",
+  "5 canapés (4 standard + 1 substantial) = $39 + $17 = $56 correct (got " + cSub.expectedPrice + "/" + cSub.priceStatus + ")");
+ok(/substantial/i.test(cSub.matchedName || ""), "the substantial enhancement is named in the match (got " + cSub.matchedName + ")");
 
 section("Header-first model: a priced line is never dropped (flagged instead)");
 // "Non-alcoholic Sparkling …" with the amount on its own "1 @ $30.00 per bottle"
