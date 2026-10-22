@@ -472,7 +472,7 @@
         }
       }
 
-      var altCourses = 0, kind = "per-person", nameOut, itemGroup = grp, serviceHours, bpm, forceMatch = null;
+      var altCourses = 0, kind = "per-person", nameOut, itemGroup = grp, serviceHours, bpm, forceMatch = null, canapeN = null;
       if (platters.length >= 2) {
         // Multi-item platter selection — priced as the sum of the chosen platters.
         nameOut = platters.map(function (p) { return p.name; }).join(" + ");
@@ -486,6 +486,8 @@
         forceMatch = bfMenu;
       } else if (canapCount) {
         nameOut = "Cocktail Reception " + canapCount + " Canapes";
+        kind = "canape";
+        canapeN = parseInt(canapCount, 10);
         itemGroup = "food"; // canapés are a food (Canapés menu) even at a drinks reception
       } else if (isMinSpend) {
         // A per-person minimum-spend / on-consumption placeholder — not a fixed
@@ -572,7 +574,7 @@
       var headJ = platters.length >= 2 ? platters[0].j
         : (bfMenu && bfHeadJ >= 0 ? bfHeadJ : (isMinSpend ? minSpendJ : (best ? best.j : null)));
       pushUnique({ qty: qty, name: nameOut, unitPrice: price, lineTotal: round2(qty * price),
-        kind: kind, alternatingCourses: altCourses, group: itemGroup, contextLines: contextLines,
+        kind: kind, alternatingCourses: altCourses, canapes: canapeN, group: itemGroup, contextLines: contextLines,
         platterItems: platters.length >= 2 ? platters.map(function (p) { return p.item; }) : null,
         forceMatch: forceMatch,
         serviceHours: serviceHours, anchor: anchor, mealTime: mealTime,
@@ -581,15 +583,36 @@
         confident: !!best || !!bfMenu || kind !== "per-person" || /canap/i.test(nameOut), source: "BEO" });
     });
 
-    // On-consumption beverages: "Leeuwin Estate Sparkling Brut @ $75.00 per bottle"
+    // On-consumption beverages: "Leeuwin Estate Sparkling Brut @ $75.00 per
+    // bottle". The amount can also sit on its own line under the drink —
+    // "1 Edenvale Sparkling ... @ $.00 per bottle" (a $0 placeholder) then
+    // "1 @ $30.00 per bottle" — so a $0 line is skipped and a line that is only
+    // "N @ $X per bottle" takes its name (and the item leads, header-first) from
+    // the drink named just above it. Never drop a priced line: an item the price
+    // book doesn't carry still surfaces, to be flagged rather than vanish.
     lines.forEach(function (line, idx) {
-      var cm = line.match(/^(.*?)\s*@\s*\$([\d,]+(?:\.\d{1,2})?)\s*per\s+(bottle|glass|can|nip|jug|pint)\b/i);
+      var cm = line.match(/^(.*?)\s*@\s*\$\s*([\d,]*\.?\d+)\s*per\s+(bottle|glass|can|nip|jug|pint)\b/i);
       if (!cm) return;
-      var nm = cm[1].replace(/\s+/g, " ").trim().replace(/^[>•\-\s]+/, "");
-      if (nm.length < 2) return;
-      pushUnique({ qty: null, name: nm, unitPrice: parseMoney(cm[2]),
+      var cprice = parseMoney(cm[2]);
+      if (!(cprice > 0)) return; // "$.00" placeholder — the real price is on another line
+      var pre = cm[1].replace(/\s+/g, " ").trim().replace(/^[>•\-\s]+/, "");
+      var cqty = null, qm = pre.match(/^(\d+)\s*(.*)$/);
+      if (qm) { cqty = parseInt(qm[1], 10); pre = qm[2].trim(); }
+      // Name not on this line (just a quantity) → take it from the drink named
+      // just above, stripped of its own quantity and any "@ $.. per .." placeholder.
+      if (pre.length < 2) {
+        for (var u = idx - 1; u >= Math.max(0, idx - 3) && pre.length < 2; u--) {
+          var up = lines[u].replace(/\s+/g, " ").trim()
+            .replace(/@\s*\$[\d.,]*\s*per\s+\w+.*$/i, "").replace(/^[>•\-\s]+/, "").replace(/^\d+\s+/, "").trim();
+          if (/[a-z]/i.test(up) && up.length >= 2 &&
+              !/per\s+(person|guest|head)|package\b|quantity|price\b|^menu$|^beverages?$/i.test(up)) pre = up;
+        }
+      }
+      if (pre.length < 2) return;
+      pushUnique({ qty: cqty, name: pre, unitPrice: cprice,
+        lineTotal: cqty != null ? round2(cqty * cprice) : null,
         beoUnit: cm[3].toLowerCase(), kind: "consumption", group: "beverage",
-        sourceExcerpt: excerpt(idx, idx), sourceLine: idx, headLine: idx, source: "BEO" });
+        sourceExcerpt: excerpt(idx - 1, idx), sourceLine: idx, headLine: idx, source: "BEO" });
     });
 
     // Minimum / event spend: "1 @ $5,400.00 event spend"
@@ -998,6 +1021,51 @@
           " per person; charged " + money(item.unitPrice) + "pp (" + (pdiff < 0 ? "under" : "over") +
           " by " + money(Math.abs(pdiff)) + "pp" +
           (item.qty != null ? ", " + money(Math.abs(result.priceImpact)) + " across " + item.qty + " guests" : "") + ").");
+      }
+      return result;
+    }
+
+    // Cocktail reception: priced by the NUMBER of canapés per person (4 → 1 hr
+    // $39, 6 → 2 hr $58, 10 → 3 hr $75, 12 → 4 hr $88). Match on the count the
+    // BEO actually lists — never fuzzily on a number in the header, so "2
+    // canapés" can't be read as the "Two Hour" tier. A count the menu doesn't
+    // offer is flagged for confirmation, not forced onto the nearest tier.
+    if (item.kind === "canape") {
+      result.category = "Canapes";
+      var canapeTiers = (catalogue.items || []).filter(function (x) { return x.category === "Canapes" && x.canapes; });
+      var cTier = canapeTiers.filter(function (x) { return x.canapes === item.canapes; })[0];
+      if (!cTier) {
+        var offered = canapeTiers.map(function (x) { return x.canapes; }).sort(function (a, b) { return a - b; });
+        result.matchedName = "Cocktail Reception (" + item.canapes + " canapés)";
+        result.priceStatus = "review";
+        if (result.status !== "math-error") result.status = "review";
+        result._explained = true;
+        result.notes.push(item.canapes + " canapés per person isn't a standard reception tier — the menu offers " +
+          offered.join(" / ") + " canapés (1–4 hours at $39 / $58 / $75 / $88). Charged " + money(item.unitPrice) +
+          "pp — confirm against the quote.");
+        return result;
+      }
+      result.matchedName = cTier.name;
+      result.expectedPrice = cTier.price;
+      result.unit = cTier.unit;
+      result.menuNote = cTier.note || null;
+      var cdiff = round2((item.unitPrice || 0) - cTier.price);
+      result.priceDiff = cdiff;
+      result.priceImpact = item.qty != null ? round2(cdiff * item.qty) : null;
+      result._explained = true;
+      if (Math.abs(cdiff) <= 0.005) {
+        result.priceStatus = "correct";
+        if (result.status !== "math-error") result.status = "ok";
+        result.notes.push(cTier.name + " (" + item.canapes + " canapés) — menu price " + money(cTier.price) + "pp. Correct.");
+      } else {
+        result.priceStatus = cdiff < 0 ? "undercharged" : "overcharged";
+        if (result.status !== "math-error") result.status = result.priceStatus;
+        result.notes.push(cTier.name + " (" + item.canapes + " canapés) menu price " + money(cTier.price) +
+          "pp; charged " + money(item.unitPrice) + "pp (" + (cdiff < 0 ? "under" : "over") + " by " +
+          money(Math.abs(cdiff)) + "pp" + (item.qty != null ? ", " + money(Math.abs(result.priceImpact)) + " across " + item.qty : "") + ").");
+      }
+      if (cTier.minGuests && item.qty != null && item.qty < cTier.minGuests) {
+        result.notes.push("Below the " + cTier.minGuests + "-guest minimum for " + cTier.name + " — confirm.");
       }
       return result;
     }
@@ -1431,12 +1499,38 @@
       }
     });
 
+    // Mislabel check: when every wine listed belongs to a HIGHER-tier package
+    // than the one named (e.g. a "Crown Reserve" package whose wines are all WA
+    // Premium selections), that's a likely labelling error — flag it rather than
+    // quietly pricing the higher wines as add-ons. Needs at least two such wines
+    // so a single legitimate upsell wine doesn't trip it.
+    var pkgTier = /wa\s*premium/i.test(family) ? "wapremium"
+      : /deluxe/i.test(family) ? "deluxe"
+      : /reserve/i.test(family) ? "reserve" : null;
+    var tierRank = { reserve: 0, deluxe: 1, wapremium: 2 };
+    var mislabel = null;
+    if (pkgTier) {
+      var foundTiers = [];
+      ["Sparkling", "White", "Red"].forEach(function (col) {
+        winesByColor[col].forEach(function (nm) {
+          var t = (catalogue.wineTier || {})[nm] || "other";
+          if (t !== "other") foundTiers.push(t);
+        });
+      });
+      if (foundTiers.length >= 2 && foundTiers.every(function (t) { return tierRank[t] > tierRank[pkgTier]; })) {
+        var hi = foundTiers.sort(function (a, b) { return tierRank[b] - tierRank[a]; })[0];
+        var hiName = hi === "wapremium" ? "WA Premium" : hi === "deluxe" ? "Crown Deluxe" : hi;
+        mislabel = "every wine listed is a " + hiName + " selection, but the package is labelled " + family +
+          " — this looks mislabelled. Confirm whether it should be the " + hiName + " package (the price and inclusions differ).";
+      }
+    }
+
     var beerSurcharge = round2(extraBeers * catalogue.packageSurcharges.extraBeer);
     return {
       addon: round2(beerSurcharge + extraWineSurcharge),
       extraBeers: extraBeers, beerSurcharge: beerSurcharge,
       extraWineCount: extraWineCount, extraWineSurcharge: round2(extraWineSurcharge),
-      flagWines: flagWines,
+      flagWines: flagWines, mislabel: mislabel,
       detectedBeers: beers.length,
       detectedWines: winesByColor.Sparkling.length + winesByColor.White.length + winesByColor.Red.length
     };
@@ -1466,6 +1560,16 @@
     if (info.extraBeers) bd.push(info.extraBeers + " extra beer/cider (+" + money(info.beerSurcharge) + "pp)");
     if (info.extraWineCount) bd.push(info.extraWineCount + " extra wine (+" + money(info.extraWineSurcharge) + "pp)");
     var addonTxt = bd.join(" and ");
+
+    // The header names one package but the wines all belong to a higher one —
+    // a likely mislabel. Flag before anything else; the price can't be trusted
+    // against the named package when the contents disagree with it.
+    if (info.mislabel) {
+      result.priceStatus = "review";
+      if (result.status !== "math-error") result.status = "review";
+      result.notes.push(catItem.name + ": " + info.mislabel);
+      return;
+    }
 
     // Wines that aren't a valid package add-on — always needs a human check.
     if (info.flagWines && info.flagWines.length) {

@@ -146,10 +146,10 @@
     { category: "Day Delegate", name: "Day Delegate Arrival Coffee and Tea", price: 8, unit: "pp", mustInclude: ["arrival"], note: "Optional arrival coffee & tea add-on ($8 per person).", aliases: ["Arrival Coffee and Tea", "Arrival Tea and Coffee"] },
 
     // ---------- CANAPÉS / COCKTAIL RECEPTION ----------
-    { category: "Canapes", name: "Cocktail Reception One Hour", price: 39, unit: "pp", minGuests: 30, note: "1 hour / select four canapés per person.", aliases: ["Cocktail Reception 4 Canapes", "Cocktail Reception Four Canapes"] },
-    { category: "Canapes", name: "Cocktail Reception Two Hour", price: 58, unit: "pp", minGuests: 30, note: "2 hours / select six canapés per person.", aliases: ["Cocktail Reception 6 Canapes", "Cocktail Reception Six Canapes"] },
-    { category: "Canapes", name: "Cocktail Reception Three Hour", price: 75, unit: "pp", minGuests: 30, note: "3 hours / select ten canapés per person.", aliases: ["Cocktail Reception 10 Canapes", "Cocktail Reception Ten Canapes"] },
-    { category: "Canapes", name: "Cocktail Reception Four Hour", price: 88, unit: "pp", minGuests: 30, note: "4 hours / select twelve canapés per person.", aliases: ["Cocktail Reception 12 Canapes", "Cocktail Reception Twelve Canapes"] },
+    { category: "Canapes", name: "Cocktail Reception One Hour", price: 39, unit: "pp", minGuests: 30, canapes: 4, note: "1 hour / select four canapés per person.", aliases: ["Cocktail Reception 4 Canapes", "Cocktail Reception Four Canapes"] },
+    { category: "Canapes", name: "Cocktail Reception Two Hour", price: 58, unit: "pp", minGuests: 30, canapes: 6, note: "2 hours / select six canapés per person.", aliases: ["Cocktail Reception 6 Canapes", "Cocktail Reception Six Canapes"] },
+    { category: "Canapes", name: "Cocktail Reception Three Hour", price: 75, unit: "pp", minGuests: 30, canapes: 10, note: "3 hours / select ten canapés per person.", aliases: ["Cocktail Reception 10 Canapes", "Cocktail Reception Ten Canapes"] },
+    { category: "Canapes", name: "Cocktail Reception Four Hour", price: 88, unit: "pp", minGuests: 30, canapes: 12, note: "4 hours / select twelve canapés per person.", aliases: ["Cocktail Reception 12 Canapes", "Cocktail Reception Twelve Canapes"] },
     { category: "Canapes", name: "Substantial Enhancement", price: 17, unit: "pp_per_selection" },
     { category: "Canapes", name: "Carvery Station", price: 42, unit: "pp_per_selection" },
     { category: "Canapes", name: "Oyster Station Three Pieces", price: 26, unit: "pp" },

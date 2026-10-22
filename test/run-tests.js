@@ -859,6 +859,62 @@ ok(farBevR && farBevR.matchedName === "Crown Deluxe Package - 5.5 Hours",
 ok(farBevR && farBevR.expectedPrice === 82.5 && farBevR.priceStatus === "undercharged",
   "5.5h Deluxe priced at $82.50 (80 + 2.50), $79.50 undercharged (got " + (farBevR && farBevR.expectedPrice) + "/" + (farBevR && farBevR.priceStatus) + ")");
 
+section("Header-first model: cocktail reception priced by canapé count");
+// Priced by the NUMBER of canapés, matched on the count — never fuzzily on a
+// number in the header. A 6-canapé reception is the 2-hour tier ($58).
+var cByCount = engine.checkDocument(engine.parseBeo(
+  "Package Quantity Per Person Price\nMenu\n18:00 Pre-Event Drinks\nCocktail Reception - 2 hours\n6 canapes served per person\nScallop\n82 guests @ $58.00 per person\n",
+  catalogue), catalogue).items[0];
+ok(cByCount.matchedName === "Cocktail Reception Two Hour" && cByCount.priceStatus === "correct",
+  "6 canapés → Cocktail Reception Two Hour $58 correct (got " + cByCount.matchedName + "/" + cByCount.priceStatus + ")");
+// A count the menu doesn't offer (2 canapés) is FLAGGED, not forced onto the
+// "Two Hour" tier just because of the number 2 (CECP BEO 55616 #1).
+var cBad = engine.checkDocument(engine.parseBeo(
+  "Package Quantity Per Person Price\nMenu\n18:00 Pre-Event Drinks\nCocktail Reception - 30 mins\n2 canapes served per person\nScallop\n82 guests @ $25.00 per person\n",
+  catalogue), catalogue).items[0];
+ok(cBad.priceStatus === "review" && cBad.matchedName !== "Cocktail Reception Two Hour",
+  "2 canapés isn't a standard tier → flagged for review, not the 2-hour tier (got " + cBad.matchedName + "/" + cBad.priceStatus + ")");
+
+section("Header-first model: a priced line is never dropped (flagged instead)");
+// "Non-alcoholic Sparkling …" with the amount on its own "1 @ $30.00 per bottle"
+// line and a "$.00" placeholder above (CECP BEO 55616 #5). The item isn't in the
+// price book, so it must surface as a flagged no-match, not vanish.
+var sparkItems = engine.checkDocument(engine.parseBeo(
+  "Package Quantity Per Person Price\nBeverage\n18:00 Toast\nNon-alcoholic Sparkling for Wedding Couple to Toast\n" +
+  "1 Edenvale Sparkling Cuvee Non-alcoholic @ $.00 per bottle\n1 @ $30.00 per bottle\n",
+  catalogue), catalogue).items;
+var spark = sparkItems.find(function (r) { return /Edenvale/i.test(r.name); });
+ok(spark && spark.unitPrice === 30 && spark.qty === 1,
+  "the $30/bottle sparkling is parsed (name from the line above), qty 1 (got " + (spark && spark.unitPrice) + "/" + (spark && spark.qty) + ")");
+ok(spark && (spark.priceStatus === "no-match" || spark.priceStatus === "not-checked"),
+  "not in the price book → flagged, not dropped (got " + (spark && spark.priceStatus) + ")");
+ok(!sparkItems.some(function (r) { return r.unitPrice === 0; }), "the $0.00 placeholder line is not a check");
+
+section("Header-first model: items override a mislabelled beverage package");
+// Header says Crown Reserve but every wine is WA Premium → flag the mislabel.
+var misR = engine.checkDocument(engine.parseBeo(
+  "Package Quantity Per Person Price\nBeverage\n18:00 - 23:00 Dinner\nCrown Reserve Package - 5 Hours\n" +
+  "Leeuwin Estate Sparkling Brut\nLeeuwin Estate Art Series Sauvignon Blanc\nLeeuwin Estate Art Series Shiraz\n80 guests @ $92.00 per person\n",
+  catalogue), catalogue).items.find(function (r) { return /Reserve/.test(r.matchedName || ""); });
+ok(misR && misR.priceStatus === "review" && /mislabel/i.test(misR.notes.join(" ")),
+  "Crown Reserve package with all WA Premium wines → flagged as mislabelled (got " + (misR && misR.priceStatus) + ")");
+// A correctly-labelled Crown Deluxe package with its own wines is not flagged.
+var okPkg = engine.checkDocument(engine.parseBeo(
+  "Package Quantity Per Person Price\nBeverage\n18:00 - 23:00 Dinner\nCrown Deluxe Package - 5 Hours\n" +
+  "Veuve Tailhan Blanc de Blancs Brut NV\nVasse Felix Filius Chardonnay\nVasse Felix Filius Shiraz\n80 guests @ $80.00 per person\n",
+  catalogue), catalogue).items.find(function (r) { return /Deluxe/.test(r.matchedName || ""); });
+ok(okPkg && okPkg.priceStatus === "correct", "a correctly-labelled Deluxe package is not mislabel-flagged (got " + (okPkg && okPkg.priceStatus) + ")");
+
+section("Header-first model: alternating service read from the items");
+// The header is just "Plated Dinner Menu One" ($96); the alternating main (+$10)
+// is only in the items, so a header-only check would miss it.
+var altR = engine.checkDocument(engine.parseBeo(
+  "Package Quantity Per Person Price\nMenu\n19:00 - 23:00 Dinner\nPlated Dinner Menu One\nENTREE\nPork\n" +
+  "MAIN COURSE\nEye fillet\nalternating with\nBarramundi\nDESSERT\nDelice\n80 guests @ $106.00 per person\n",
+  catalogue), catalogue).items[0];
+ok(altR.matchedName === "Plated Dinner Menu One" && altR.priceStatus === "correct" && /alternating/.test(altR.notes.join(" ")),
+  "base $96 + 1 alternating course (+$10) = $106 correct, from the items (got " + altR.priceStatus + ")");
+
 section("Beverage packages price half-hour increments (2–6 hrs)");
 function bevHalf(name, charge) {
   return engine.checkDocument(engine.parseBeo(
