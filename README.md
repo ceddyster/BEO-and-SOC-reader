@@ -242,3 +242,30 @@ The matcher is built for BEO wording, which differs from the price-book wording:
 
 If a document uses wording the matcher still doesn't recognise, the line is shown as
 `unmatched` so it's never silently passed — add an alias in `src/prices.js` to teach it.
+
+### How the BEO and SOC are paired
+
+Pairing a BEO line to its SOC line is a different problem from matching a line to the price
+book: here **both** strings are free wording for the *same* charge, and the SOC (the billing
+document) routinely carries more detail than the BEO heading. So reconciliation pairs lines in
+three tiers, most reliable first:
+
+1. **Same price-book item.** Each side's line is matched to the catalogue with the *same
+   alias-aware matcher* the price check uses; two lines that resolve to the same menu item are
+   paired even when worded differently.
+2. **Same operational category.** Audio-visual, security, room hire and other non-menu charges
+   are paired by the `nonMenuHints` category they fall in — so "Audio visual" (BEO) meets
+   "Audio visual supplied by Encore Event Technologies" (SOC) — provided their numbers don't
+   conflict.
+3. **A forgiving name comparison.** A short, specific name wholly contained in a longer
+   descriptive one scores high (so "Security officer hours" pairs with "Security officer hours
+   (6 x guards 1600 - 2230)" and "Wi-Fi Package" with "Wi-Fi Package - Basic - 4MB"), while
+   numbers that genuinely *conflict* still keep lines apart ("Menu One" never pairs with "Menu
+   Two", "6 Hours" never with "5 Hours").
+
+To bridge wording the two documents share but the catalogue doesn't, each BEO line also offers
+its **block heading** — the item name the Crown system prints above the dishes, which is the
+same text the SOC bills under. So a crew line parseBeo names after its dish ("Chef's selection
+of main course") still pairs with the SOC's "Crew Catering - Set Menu", because the BEO block
+was headed that way. A line matched on wording alone is still fully price/qty/total-checked, so
+a genuine disagreement is reported, not hidden by the looser pairing.

@@ -589,7 +589,7 @@
     var eventDate = (beoHeader && beoHeader.eventDate) || E.parseEventDate(state.beoText || state.socText || "");
     var report = E.checkDocument(primary.items, CAT, eventDate);
     var recon = (beoItems && beoItems.length && socItems && socItems.length)
-      ? E.reconcile(beoItems, socItems) : null;
+      ? E.reconcile(beoItems, socItems, CAT) : null;
 
     var singleSpan = state.pdf ? [1, state.pdf.numPages] : null;
     renderReportInto(out, report, recon, primary.label, beoHeader, 0, singleSpan);

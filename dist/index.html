@@ -1238,6 +1238,63 @@
     return names;
   }
 
+  // -------------------------------------------- reconcile (BEO↔SOC) name matching
+  // Pairing a BEO line to its SOC line is a DIFFERENT problem from matching a
+  // line to the price book. Here both strings are free wording for the SAME
+  // charge, and the SOC routinely carries extra descriptive detail the BEO
+  // heading omits — "Audio visual supplied by Encore Event Technologies" vs
+  // "Audio visual", "Security officer hours (6 x guards 1600 - 2230)" vs
+  // "Security officer hours", "Wi-Fi Package - Basic - 4MB" vs "Wi-Fi Package".
+  // So the reconcile scorer is deliberately more forgiving than findMatch's
+  // scoreNames: a shorter name wholly contained in a longer one scores high, and
+  // numbers only block a pairing when they genuinely CONFLICT — so "Menu One"
+  // still never pairs with "Menu Two", but a plain "Security officer hours"
+  // pairs with the detailed SOC wording.
+  function numList(norm) { return (String(norm).match(/\d+/g) || []); }
+  function isSubMultiset(small, big) {
+    var counts = {};
+    big.forEach(function (n) { counts[n] = (counts[n] || 0) + 1; });
+    return small.every(function (n) { if (!counts[n]) return false; counts[n]--; return true; });
+  }
+  // Numbers are "compatible" when either side names none, or one side's numbers
+  // are a subset of the other's. Tier numbers that disagree — 1 vs 2, 5 vs 6 —
+  // are not subsets, so they still keep the two lines apart.
+  function numbersCompatible(da, db) {
+    var na = numList(da), nb = numList(db);
+    if (!na.length || !nb.length) return true;
+    return isSubMultiset(na, nb) || isSubMultiset(nb, na);
+  }
+  function reconcileNameScore(aName, bName) {
+    var da = normalize(aName), db = normalize(bName);
+    if (!da || !db) return 0;
+    if (da === db) return 1;
+    if (!numbersCompatible(da, db)) return 0;
+    var at = da.split(" ").filter(Boolean), bt = db.split(" ").filter(Boolean);
+    var setA = {}; at.forEach(function (t) { setA[t] = true; });
+    var hit = 0; bt.forEach(function (t) { if (setA[t]) hit++; });
+    if (!hit) return 0;
+    // Coverage of the SHORTER name's tokens: a short, specific name wholly
+    // contained in a longer descriptive one is a confident pairing.
+    var cover = hit / Math.min(at.length, bt.length);
+    // A single shared generic token (e.g. only "package") is weak — halve it
+    // unless the shorter name is a single token that's fully covered.
+    if (hit < 2 && Math.min(at.length, bt.length) > 1) cover *= 0.5;
+    return cover;
+  }
+  // Which operational (non-menu) category a name falls in, by the catalogue's
+  // own nonMenuHints — so "Audio visual" and "Audio visual supplied by Encore
+  // Event Technologies" share the key "audio visual" even though their wording
+  // barely overlaps. Returns the most specific (longest) matching hint, or null.
+  function nonMenuKey(name, catalogue) {
+    if (!catalogue) return null;
+    var n = " " + normalize(name) + " ", best = null;
+    (catalogue.nonMenuHints || []).forEach(function (h) {
+      var hn = normalize(h);
+      if (hn && n.indexOf(" " + hn + " ") !== -1 && (!best || hn.length > best.length)) best = hn;
+    });
+    return best;
+  }
+
   // Return { item, score } for the best catalogue match, or null.
   // When `group` ("food"|"beverage") is given, a match in that group is
   // preferred — a BEO Menu item is checked against the food price books and a
@@ -1698,10 +1755,32 @@
 
       var headJ = platters.length >= 2 ? platters[0].j
         : (bfMenu && bfHeadJ >= 0 ? bfHeadJ : (isMinSpend ? minSpendJ : (best ? best.j : null)));
+
+      // The block's own heading line — the Crown system prints the SAME item
+      // name here as it does on the SOC's billing line ("Crew Catering - Set
+      // Menu", "Dinner Set Menu One"), even when parseBeo names the item after
+      // the dish beneath it ("Chef's selection of main course"). Captured as a
+      // reconcile-only key so a BEO line still pairs to its SOC line when the two
+      // are worded differently. The heading is the first real title in the block,
+      // after its time anchor and venue line, that isn't a dish, charge or
+      // section header.
+      var beoHeading = null;
+      for (var hj = blockStart; hj < i; hj++) {
+        var hl = lines[hj].replace(/\s+/g, " ").trim();
+        if (hl.length < 3) continue;
+        if (/[@$]/.test(hl)) continue;                                   // a charge line
+        if (/^\d+\s+(?:guests?|children|child|kids?|pax|people)\b/i.test(hl)) continue;
+        if (/\d{1,2}:\d{2}\s*[-–—]\s*\d{1,2}:\d{2}/.test(hl)) continue;   // a time range
+        if (SECTION_RE.test(hl)) continue;                               // a sub-section / dish header
+        if (/^crown\b/i.test(hl) && hl.length < 28) continue;            // a venue line (Crown Ballroom …)
+        if (/^(existing|special setup|set theatre|room set|please refer|guest arrival|registration|teardown|client access|allocated seating)/i.test(hl)) continue;
+        beoHeading = hl; break;
+      }
+
       pushUnique({ qty: qty, name: nameOut, unitPrice: price, lineTotal: round2(qty * price),
         kind: kind, alternatingCourses: altCourses, canapes: canapeN, group: itemGroup, contextLines: contextLines,
         platterItems: platters.length >= 2 ? platters.map(function (p) { return p.item; }) : null,
-        forceMatch: forceMatch,
+        forceMatch: forceMatch, beoHeading: beoHeading,
         serviceHours: serviceHours, anchor: anchor, mealTime: mealTime,
         sourceExcerpt: excerptBlock(headJ != null ? headJ : i - 10, i),
         sourceLine: i, headLine: headJ,
@@ -3061,16 +3140,64 @@
   }
 
   // ------------------------------------------------------------- reconcile
-  // Compare a BEO's charges against a SOC's charges item by item.
-  function reconcile(beoItems, socItems) {
+  // Compare a BEO's charges against a SOC's charges item by item. `catalogue` is
+  // optional but recommended: with it, lines are paired on their price-book
+  // identity (so the BEO's "Chef's selection of main course" meets the SOC's
+  // "Crew Catering - Set Menu") and on their operational category, before
+  // falling back to a forgiving name comparison. Without it, only the name
+  // comparison is used.
+  function reconcile(beoItems, socItems, catalogue) {
     var rows = [];
     var usedSoc = {};
-    (beoItems || []).forEach(function (b) {
+    function canonName(name) {
+      if (!catalogue) return null;
+      var m = findMatch(name, catalogue, 0.72);
+      return m ? m.item.name : null;
+    }
+    // Each BEO line offers up to two names to pair on: the parsed item name and
+    // the block's own heading (the Crown item name that also appears on the SOC).
+    var beoMeta = (beoItems || []).map(function (b) {
+      var names = [b.name];
+      if (b.beoHeading && normalize(b.beoHeading) !== normalize(b.name)) names.push(b.beoHeading);
+      var canon = null, nm = null;
+      names.forEach(function (nm0) { canon = canon || canonName(nm0); });
+      names.forEach(function (nm0) { nm = nm || nonMenuKey(nm0, catalogue); });
+      return { names: names, canon: canon, nm: nm };
+    });
+    var socMeta = (socItems || []).map(function (s) {
+      return { canon: canonName(s.name), nm: nonMenuKey(s.name, catalogue) };
+    });
+    function totalGap(b, s) {
+      if (!b || !s || b.lineTotal == null || s.lineTotal == null) return Infinity;
+      return Math.abs(b.lineTotal - s.lineTotal);
+    }
+    function pairScore(bi, si) {
+      var s = socItems[si], bm = beoMeta[bi], sm = socMeta[si];
+      // Strongest: both resolve to the same price-book item (alias-aware), so
+      // differently-worded lines for the same charge still pair.
+      if (bm.canon && sm.canon && bm.canon === sm.canon) return 1;
+      // Same operational category (AV, security, room hire…) with no conflicting
+      // numbers — pairs the BEO's terse wording to the SOC's descriptive line.
+      if (bm.nm && sm.nm && bm.nm === sm.nm &&
+          numbersCompatible(normalize(bm.names.join(" ")), normalize(s.name))) return 0.95;
+      // Otherwise a forgiving name comparison — best of the BEO's candidate names
+      // (item name and block heading) against the SOC line.
+      var best = 0;
+      bm.names.forEach(function (n) { var sc = reconcileNameScore(n, s.name); if (sc > best) best = sc; });
+      return best;
+    }
+    (beoItems || []).forEach(function (b, bi) {
       var bestIdx = -1, bestScore = 0;
-      (socItems || []).forEach(function (s, idx) {
-        if (usedSoc[idx]) return;
-        var sc = scoreNames(b.name, s.name);
-        if (sc > bestScore) { bestScore = sc; bestIdx = idx; }
+      (socItems || []).forEach(function (s, si) {
+        if (usedSoc[si]) return;
+        var sc = pairScore(bi, si);
+        // On a tie, prefer the SOC line whose total is closest — keeps two
+        // same-category lines (e.g. Saturday vs Sunday security) from crossing.
+        if (sc > bestScore + 1e-9 ||
+            (bestIdx >= 0 && Math.abs(sc - bestScore) <= 1e-9 &&
+             totalGap(b, socItems[si]) < totalGap(b, socItems[bestIdx]))) {
+          bestScore = sc; bestIdx = si;
+        }
       });
       if (bestIdx >= 0 && bestScore >= 0.6) {
         usedSoc[bestIdx] = true;
@@ -3105,7 +3232,9 @@
 
   var API = {
     round2: round2, parseMoney: parseMoney, normalize: normalize, softNorm: softNorm,
-    scoreNames: scoreNames, findMatch: findMatch, looksNonMenu: looksNonMenu,
+    scoreNames: scoreNames, reconcileNameScore: reconcileNameScore,
+    numbersCompatible: numbersCompatible, nonMenuKey: nonMenuKey,
+    findMatch: findMatch, looksNonMenu: looksNonMenu,
     parseSocRows: parseSocRows, parseSocText: parseSocText,
     parseBeo: parseBeo, parseBeoHeader: parseBeoHeader, parseEventDate: parseEventDate, fmtDate: fmtDate,
     splitBeoDistribution: splitBeoDistribution,
@@ -3378,7 +3507,7 @@
     var eventDate = (beoHeader && beoHeader.eventDate) || E.parseEventDate(state.beoText || state.socText || "");
     var report = E.checkDocument(primary.items, CAT, eventDate);
     var recon = (beoItems && beoItems.length && socItems && socItems.length)
-      ? E.reconcile(beoItems, socItems) : null;
+      ? E.reconcile(beoItems, socItems, CAT) : null;
 
     var singleSpan = state.pdf ? [1, state.pdf.numPages] : null;
     renderReportInto(out, report, recon, primary.label, beoHeader, 0, singleSpan);

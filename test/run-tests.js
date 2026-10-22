@@ -1397,6 +1397,83 @@ ok(d3.matchedName === "Dinner Buffet Menu One" && d3.priceStatus === "correct", 
 var single = engine.splitBeoDistribution(fs.readFileSync(path.join(__dirname, "fixtures", "nab_beo.txt"), "utf8"));
 ok(single.length === 1, "a single (multi-page) BEO is one segment (got " + single.length + ")");
 
+section("Reconcile name scoring — SOC wording is more descriptive than the BEO");
+// The SOC routinely adds detail the BEO heading omits; those lines must still pair.
+ok(engine.reconcileNameScore("Security officer hours", "Security officer hours (6 x guards 1600 - 2230)") >= 0.6,
+  "security pairs despite the SOC's '(6 x guards 1600 - 2230)' detail");
+ok(engine.reconcileNameScore("Audio visual", "Audio visual supplied by Encore Event Technologies") >= 0.6,
+  "AV pairs despite the SOC's '…supplied by Encore…' suffix");
+ok(engine.reconcileNameScore("Wi-Fi Package", "Wi-Fi Package - Basic - 4MB") >= 0.6,
+  "Wi-Fi pairs despite the SOC's '- Basic - 4MB' detail");
+ok(engine.reconcileNameScore("Dinner Set Menu One", "Dinner Set Menu One") === 1, "identical names score 1");
+// …but genuinely different tiers/variants must NOT be fused.
+ok(engine.reconcileNameScore("Dinner Set Menu One", "Dinner Set Menu Two") === 0, "Menu One never pairs with Menu Two");
+ok(engine.reconcileNameScore("Crown Reserve Package - 6 Hours", "Crown Reserve Package - 5 Hours") === 0,
+  "6 Hour never pairs with 5 Hour");
+ok(engine.numbersCompatible("security officer hour", "security officer hour 6 x guards 1600 2230") === true,
+  "a plain name is compatible with the same name carrying extra numbers");
+ok(engine.numbersCompatible("menu 1", "menu 2") === false, "conflicting tier numbers are incompatible");
+
+section("Reconcile — captures the BEO block heading (the Crown item name)");
+// parseBeo names a crew line after its dish, but the SOC uses the block heading;
+// the heading is captured so the two still reconcile.
+var crewBeoItems = engine.parseBeo(
+  "Menu\n20:15 - 20:30 Photographer Meals\nCrown Green Room\nCrew Catering - Set Menu\n" +
+  "Chef's selection of main course\n2 guests @ $44.00 per person\n", catalogue);
+var crewItem = crewBeoItems.find(function (i) { return i.unitPrice === 44; });
+ok(crewItem && crewItem.beoHeading === "Crew Catering - Set Menu",
+  "BEO crew line carries heading 'Crew Catering - Set Menu' (got " + (crewItem && crewItem.beoHeading) + ")");
+
+section("Reconcile — the real Newman BEO↔SOC (differently-worded lines must pair)");
+// The real SOC table (BEO #55680 — Newman College Graduation & Mass).
+var newmanSoc = engine.parseSocRows([
+  ["Food & Beverage"],
+  ["Qty", "Name", "Price", "Discounts", "Total"],
+  ["586", "Dinner Set Menu One", "$96.00", "", "$56,256.00"],
+  ["1", "Food & Beverage Attrition", "$7,582.00", "", "$7,582.00"],
+  ["586", "Soft Drink Package - 4 Hours", "$22.00", "", "$12,892.00"],
+  ["2", "Crew Catering - Set Menu", "$44.00", "", "$88.00"],
+  ["Additional Revenue"],
+  ["Qty", "Name", "Price", "Discounts", "Total"],
+  ["1", "Audio visual supplied by Encore Event Technologies", "$14,881.43", "", "$14,881.43"],
+  ["39", "Security officer hours (6 x guards 1600 - 2230)", "$63.00", "", "$2,457.00"]
+]);
+// A BEO wording the same event, each line headed as the Crown system prints it.
+var newmanBeo = engine.parseBeo([
+  "Menu",
+  "18:15 - 21:45 Dinner", "Crown Ballroom", "Dinner Set Menu One",
+  "Assorted bread rolls and butter", "586 guests @ $96.00 per person",
+  "Food & Beverage Attrition", "Menu charges for reduction in guest numbers",
+  "1 guests @ $7,582.00 per person",
+  "20:15 - 20:30 Photographer Meals", "Crown Green Room", "Crew Catering - Set Menu",
+  "Chef's selection of main course", "2 guests @ $44.00 per person",
+  "Beverage", "18:15 - 21:45 Dinner", "Crown Ballroom", "Soft Drink Package - 4 Hours",
+  "Assorted soft drinks, orange juice and water", "586 guests @ $22.00 per person",
+  "Technical Requirement", "Audio visual supplied by Encore Event Technologies",
+  "Proposal number: 965543@ $14,881.43 per quote",
+  "39 Security officer hours (6 x guards 1600 - 2230) @ $63.00 per hour"
+].join("\n"), catalogue);
+var newmanRec = engine.reconcile(newmanBeo, newmanSoc, catalogue);
+function recPair(reSoc) {
+  return newmanRec.rows.find(function (r) { return r.soc && reSoc.test(r.soc.name); });
+}
+ok(recPair(/dinner set menu one/i).status === "match", "Dinner Set Menu One reconciles");
+ok(recPair(/soft drink package/i).status === "match", "Soft Drink Package reconciles");
+ok(recPair(/food & beverage attrition/i).status === "match", "Food & Beverage Attrition reconciles (BEO heading)");
+ok(recPair(/crew catering/i).status === "match", "Crew Catering - Set Menu reconciles (BEO heading vs dish wording)");
+ok(recPair(/security officer/i).status === "match", "Security reconciles despite the SOC's guard/time detail");
+ok(recPair(/audio visual/i).status === "match", "Audio visual reconciles despite the SOC's descriptive suffix");
+var newmanSocOnly = newmanRec.rows.filter(function (r) { return r.status === "soc-only"; }).length;
+ok(newmanSocOnly === 0, "no SOC line is left unmatched (got " + newmanSocOnly + " soc-only)");
+
+// A real price disagreement on a descriptively-worded line is still caught.
+var newmanSocBad = JSON.parse(JSON.stringify(newmanSoc));
+newmanSocBad.find(function (i) { return /security/i.test(i.name); }).unitPrice = 75;
+var newmanRecBad = engine.reconcile(newmanBeo, newmanSocBad, catalogue);
+var badSec = newmanRecBad.rows.find(function (r) { return r.soc && /security/i.test(r.soc.name); });
+ok(badSec && badSec.status === "mismatch" && /price/.test(badSec.diffs.join(" ")),
+  "a BEO/SOC price disagreement on security is flagged, not hidden by the looser pairing");
+
 console.log("\n----------------------------------------");
 console.log(passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);
