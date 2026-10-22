@@ -320,6 +320,14 @@
       }
       var floorA = Math.max(0, i - 40, blockStart);
       var floorW = Math.max(0, i - 90, blockStart);
+      // The heading can sit far above a long composed menu — a full banquet
+      // (Indian/Chinese buffet) runs well past the 90-line wide window, so a
+      // dessert dish deep in the menu (a "Seasonal fruit platter") would be the
+      // nearest catalogue match and wrongly become the charge's heading. The
+      // heading scan therefore reaches back to the START of this charge's own
+      // block (blockStart already floors it below the previous charge and the
+      // catering-table header), with a generous cap only as a safety bound.
+      var floorHead = Math.max(0, blockStart, i - 250);
       var winArr = lines.slice(floorA, i);
       var win = winArr.join("  ");
       var wideWin = lines.slice(floorW, i).join("  "); // page-split context (within this block)
@@ -331,7 +339,7 @@
       // wide window, and a preference for the NEAREST strong match so a weak
       // nearby line can't beat the real heading further up.
       var best = null, strong = null, strongPkg = null;
-      for (var j = i - 1; j >= floorW; j--) {
+      for (var j = i - 1; j >= floorHead; j--) {
         var cand = lines[j].replace(/\s+/g, " ").trim();
         if (cand.length < 3) continue;
         if (/[@$]/.test(cand)) continue;              // charge lines
@@ -993,12 +1001,21 @@
     }
 
     var per = item.beoUnit ? (" per " + item.beoUnit) : "";
+    // A youth / children's drinks package (e.g. "Youth Soft Drink Package - 5
+    // Hours", "Children's Juice") is the Children's beverages menu ($12.50 per
+    // child), NOT the adult Soft Drink package — pin it so the hours suffix can't
+    // pull it to an adult tier. Needs a child/youth word AND a drinks word.
+    var forceName = item.forceMatch;
+    if (!forceName && /\b(youth|child|children|childrens|kid|kids)\b/i.test(item.name || "") &&
+        /\b(soft\s*drink|juice|beverage|drinks?)\b/i.test(item.name || "")) {
+      forceName = "Children's Beverages";
+    }
     // forceMatch pins the catalogue item (e.g. a plated breakfast recognised by
     // structure, whose BEO heading doesn't match by name) so its composition and
     // price are still checked.
-    var match = item.forceMatch
+    var match = forceName
       ? (function () {
-          var it = (catalogue.items || []).filter(function (x) { return x.name === item.forceMatch; })[0];
+          var it = (catalogue.items || []).filter(function (x) { return x.name === forceName; })[0];
           return it ? { item: it, score: 1 } : null;
         })()
       : findMatch(item.name, catalogue, undefined, item.group);

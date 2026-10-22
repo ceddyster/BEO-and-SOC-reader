@@ -749,6 +749,37 @@ var arrUnder = engine.checkDocument(engine.parseSocRows([["80", "Arrival Tea and
 ok(arrUnder.expectedPrice === 11 && arrUnder.priceStatus === "undercharged" && arrUnder.priceImpact === -240,
   "non-DDP arrival @ $8 flagged undercharged vs $11, -$240 across 80 (got " + (arrUnder && arrUnder.priceStatus) + "/" + (arrUnder && arrUnder.priceImpact) + ")");
 
+section("A banquet dessert dish never becomes the charge heading");
+// A full Indian banquet runs well past the old 90-line heading window, so the
+// "Seasonal fruit platter" dessert deep in the menu was matched to the $12.50
+// Crew Fresh Fruit Platter and wrongly became the $129 charge's heading. The
+// heading must come from "Indian Buffet Menu" at the top of the block instead.
+var filler = [];
+for (var fi = 0; fi < 95; fi++) filler.push("Menu dish line " + fi);
+var indianBeo = "Package Quantity Per Person Price\nMenu\n" +
+  "17:00 - 18:00 Children's Buffet\nYouth Menu\n18 guests @ $64.50 per person\n" +
+  "18:00 - 22:00 Dinner Buffet\nIndian Buffet Menu\nPapadums, pickles\n" +
+  filler.join("\n") + "\n~~~~~\nDESSERT\nGulab jamun\nSeasonal fruit platter\n" +
+  "~~~~~\nFreshly brewed coffee and selection of teas\n209 guests @ $129.00 per person\n";
+var indianItems = engine.checkDocument(engine.parseBeo(indianBeo, catalogue), catalogue).items;
+var indianR = indianItems.filter(function (r) { return r.unitPrice === 129; })[0];
+ok(indianR && indianR.matchedName === "Indian Buffet Package One",
+  "$129 banquet → Indian Buffet Package One, not the fruit platter dessert (got " + (indianR && indianR.matchedName) + ")");
+ok(indianR && indianR.expectedPrice === 129, "Indian Buffet Package One priced at $129 (got " + (indianR && indianR.expectedPrice) + ")");
+ok(!indianItems.some(function (r) { return r.matchedName === "Crew Fresh Fruit Platter"; }),
+  "no phantom Crew Fresh Fruit Platter charge from the dessert line");
+
+section("Youth / children's soft drink package → Children's beverages menu");
+// "Youth Soft Drink Package - 5 Hours" is the $12.50 Children's beverages menu,
+// not the adult $24 Soft Drink package the 5-hour tier would otherwise match.
+var youthBev = engine.checkDocument(engine.parseSocRows([["18", "Youth Soft Drink Package - 5 Hours", "$12.50", "", "$225.00"]]), catalogue).items[0];
+ok(youthBev.matchedName === "Children's Beverages" && youthBev.expectedPrice === 12.5,
+  "youth soft drink package → Children's Beverages $12.50 (got " + youthBev.matchedName + "/" + youthBev.expectedPrice + ")");
+ok(youthBev.priceStatus === "correct", "youth soft drink @ $12.50 correct (got " + youthBev.priceStatus + ")");
+var adultBev = engine.checkDocument(engine.parseSocRows([["209", "Soft Drink Package - 5 Hours", "$24.00", "", "$5,016.00"]]), catalogue).items[0];
+ok(adultBev.matchedName === "Soft Drink Only Package - 5 Hour" && adultBev.priceStatus === "correct",
+  "adult soft drink package still matches the $24 adult 5-hour tier (got " + adultBev.matchedName + ")");
+
 section("Crew Packages price checks");
 var crewRows = [
   ["50", "Crew Set Menu Main Dinner", "$44.00", "", "$2,200.00"],

@@ -51,7 +51,7 @@
     { category: "Dinner Plated", name: "Plated Dinner Sides", price: 14, unit: "pp" },
 
     // ---------- DINNER — INDIAN ----------
-    { category: "Dinner Indian", name: "Indian Buffet Package One", price: 129, unit: "pp", minGuests: 50, composition: { set: "indianBuffet", limits: { "entrée": 2, salad: 3, "meat/fish": 2, veg: 2, paneer: 1, dahl: 1, rice: 1, dessert: 3, bread: 2 } }, note: "2 entrées, 3 salads, 2 meat/fish, 2 veg, 1 paneer, 1 dahl, 1 rice, 3 desserts, 2 breads." },
+    { category: "Dinner Indian", name: "Indian Buffet Package One", price: 129, unit: "pp", minGuests: 50, composition: { set: "indianBuffet", limits: { "entrée": 2, salad: 3, "meat/fish": 2, veg: 2, paneer: 1, dahl: 1, rice: 1, dessert: 3, bread: 2 } }, note: "2 entrées, 3 salads, 2 meat/fish, 2 veg, 1 paneer, 1 dahl, 1 rice, 3 desserts, 2 breads.", aliases: ["Indian Buffet Menu", "Indian Buffet", "Indian Buffet Menu One", "Indian Buffet Package 1"] },
     { category: "Dinner Indian", name: "Indian Buffet Package Two", price: 150, unit: "pp", minGuests: 50, composition: { set: "indianBuffet", limits: { "entrée": 3, salad: 4, "meat/fish": 3, veg: 3, paneer: 1, dahl: 1, rice: 1, dessert: 3, bread: 2 } }, note: "3 entrées, 4 salads, 3 meat/fish, 3 veg, 1 paneer, 1 dahl, 1 rice, 3 desserts, 2 breads." },
     { category: "Dinner Indian", name: "Indian Buffet Vegetarian Option", price: 126, unit: "pp", minGuests: 50, composition: { set: "indianBuffet", limits: { "entrée": 2, salad: 3, veg: 4, paneer: 1, dahl: 1, rice: 1, dessert: 3, bread: 2 } }, note: "2 entrées, 3 salads, 4 veg, 1 paneer, 1 dahl, 1 rice, 3 desserts, 2 breads." },
 
@@ -62,7 +62,7 @@
 
     // ---------- CHILDREN ----------
     { category: "Children", name: "Children's Main Course", price: 30, unit: "child", mustInclude: ["child", "children", "childrens", "kid", "kids"], composition: { set: "children", limits: { main: 1, dessert: 1 } }, note: "Select one main and one dessert per child (dessert included). $30 per child.", aliases: ["Childrens Menu Main Course", "Kids Main", "Children's Menu", "Childrens Menu"] },
-    { category: "Children", name: "Children's Beverages", price: 12.5, unit: "child", mustInclude: ["child", "children", "childrens", "kid", "kids"] },
+    { category: "Children", name: "Children's Beverages", price: 12.5, unit: "child", mustInclude: ["child", "children", "childrens", "kid", "kids", "youth"], note: "Youth/children's soft drinks & juice package — $12.50 per child.", aliases: ["Youth Soft Drink Package", "Youth Soft Drinks", "Children's Soft Drink Package", "Youth Beverages", "Children's Juice"] },
 
     // ---------- CHRISTMAS BUFFET (valid to 31 Dec 2026) ----------
     { category: "Christmas Buffet", name: "Christmas Buffet Menu One", price: 90, unit: "pp", minGuests: 50, validFrom: "2026-07-01", validTo: "2026-12-31", composition: { set: "dinnerBuffet", limits: { cold: 3, hot: 3, pasta: 1, side: 1, dessert: 2 } }, note: "3 cold, 3 hot, 1 pasta, 1 side, 2 desserts; incl. rolls, coffee & tea (max 2 hrs). Christmas menu — valid to 31 Dec 2026.", aliases: ["Buffet Christmas Menu One", "Christmas Menu One"] },
