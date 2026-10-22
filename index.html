@@ -876,7 +876,7 @@
       '<label class="src-check" style="margin-left:auto"><input type="checkbox"> Reviewed</label>' +
       '<button class="icon-btn bv-close" type="button" title="Close" aria-label="Close">✕</button></div>' +
       '<div class="bv-split"><div class="bv-pages"></div>' +
-      '<div class="bv-menu"><div class="bv-menu-cap"></div><img alt="Menu page"></div></div>';
+      '<div class="bv-menu"><div class="bv-menu-cap"></div><div class="bv-menu-pages"></div></div></div>';
     var vc = {
       viewer: viewer,
       pagesEl: viewer.querySelector(".bv-pages"),
@@ -885,7 +885,7 @@
       revLabel: viewer.querySelector(".src-check"),
       menuEl: viewer.querySelector(".bv-menu"),
       menuCap: viewer.querySelector(".bv-menu-cap"),
-      menuImg: viewer.querySelector(".bv-menu img")
+      menuPagesEl: viewer.querySelector(".bv-menu-pages")
     };
     viewer.querySelector(".bv-close").addEventListener("click", function () { viewer.hidden = true; });
     return vc;
@@ -915,16 +915,26 @@
     if (cat === "Day Delegate") {
       key = /\b(two|2)\b/i.test(r.matchedName || r.name || "") ? "day-delegate-two" : "day-delegate-one";
     }
-    if (!key || !(window.MENU_IMAGES && window.MENU_IMAGES[key])) return null;
+    if (!key || !(window.MENU_PAGES && window.MENU_PAGES[key] && window.MENU_PAGES[key].length)) return null;
     return { key: key, label: cat };
   }
 
-  // Show (or hide) the menu pane beside the BEO for a checked line.
+  // Show (or hide) the menu pane beside the BEO for a checked line — the WHOLE
+  // menu for that charge (every page), stacked and scrollable.
   function showMenu(vc, r) {
     var m = r ? menuForResult(r) : null;
-    if (!m) { vc.menuEl.classList.remove("on"); vc.menuImg.removeAttribute("src"); return; }
-    vc.menuImg.src = window.MENU_IMAGES[m.key];
-    vc.menuCap.innerHTML = "The menu this is checked against — <b>" + esc(m.label) + "</b>";
+    if (!m) { vc.menuEl.classList.remove("on"); vc.menuPagesEl.innerHTML = ""; return; }
+    var pages = window.MENU_PAGES[m.key];
+    vc.menuPagesEl.innerHTML = "";
+    pages.forEach(function (src, i) {
+      var img = document.createElement("img");
+      img.loading = "lazy";
+      img.alt = m.label + " menu — page " + (i + 1) + " of " + pages.length;
+      img.src = src;
+      vc.menuPagesEl.appendChild(img);
+    });
+    vc.menuCap.innerHTML = "The full menu this is checked against — <b>" + esc(m.label) + "</b> (" +
+      pages.length + " page" + (pages.length > 1 ? "s" : "") + ")";
     vc.menuEl.classList.add("on");
     vc.menuEl.scrollTop = 0;
   }
@@ -970,7 +980,7 @@
     toPage = toPage || state.pdf.numPages;
     var viewer = vc.viewer, pagesEl = vc.pagesEl;
     viewer.hidden = false;
-    if (vc.menuEl) { vc.menuEl.classList.remove("on"); vc.menuImg.removeAttribute("src"); }
+    if (vc.menuEl) { vc.menuEl.classList.remove("on"); vc.menuPagesEl.innerHTML = ""; }
     vc.titleEl.textContent = title || ("BEO — pages " + fromPage + "–" + toPage);
     var rev = vc.revEl;
     if (rowEl) {
