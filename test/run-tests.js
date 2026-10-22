@@ -984,6 +984,14 @@ ok(altUnder.matchedName === "Plated Dinner Menu One" && altUnder.expectedPrice =
   "2 alternating courses → expected $96 + $20 = $116 (got " + (altUnder && altUnder.expectedPrice) + ")");
 ok(altUnder.priceStatus === "undercharged" && altUnder.priceImpact === -2420,
   "charged $96 is undercharged by $20pp, -$2,420 across 121 (got " + altUnder.priceStatus + "/" + altUnder.priceImpact + ")");
+// Alternating courses are checked on plated LUNCH too (same composable logic):
+// Lunch Set Menu One Two Course $81 + 1 alternating (+$10) = $91.
+var lunchAlt = engine.checkDocument(engine.parseBeo(
+  "Package Quantity Per Person Price\nMenu\n12:30 Lunch\nLunch Set Menu One\n" +
+  "MAIN COURSE\nChicken\nALTERNATING WITH\nFish\n~~~~~\nDESSERT\nPavlova\n~~~~~\n90 guests @ $81.00 per person\n",
+  catalogue), catalogue).items[0];
+ok(lunchAlt.matchedName === "Plated Lunch Menu One Two Course" && lunchAlt.expectedPrice === 91 && lunchAlt.priceStatus === "undercharged",
+  "lunch 2-course + 1 alternating → expected $91, $81 undercharged (got " + lunchAlt.expectedPrice + "/" + lunchAlt.priceStatus + ")");
 
 section("Beverage packages price half-hour increments (2–6 hrs)");
 function bevHalf(name, charge) {
