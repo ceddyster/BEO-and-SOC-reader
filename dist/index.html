@@ -229,7 +229,8 @@
     background: rgba(0,0,0,.82); overflow: auto; cursor: zoom-out;
     padding: 24px; text-align: center; -webkit-overflow-scrolling: touch; }
   .menu-lightbox.on { display: block; }
-  .menu-lightbox img { display: inline-block; width: auto; max-width: min(1100px, 96vw);
+  .menu-lightbox-pages { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .menu-lightbox img { display: block; width: auto; max-width: min(1100px, 96vw);
     height: auto; border-radius: 6px; box-shadow: 0 6px 40px rgba(0,0,0,.5); background: #fff; cursor: zoom-out; }
   .menu-lightbox-hint { position: fixed; top: 12px; right: 16px; color: #fff; font-size: 12px;
     opacity: .75; pointer-events: none; }
@@ -3643,25 +3644,41 @@
   // A single shared click-to-zoom lightbox for menu pages. Clicking a menu
   // page opens it enlarged over the whole screen; clicking again (anywhere) or
   // pressing Escape closes it.
-  var menuLightbox = null, menuLightboxImg = null;
+  var menuLightbox = null, menuLightboxPages = null;
   function ensureMenuLightbox() {
     if (menuLightbox) return;
     menuLightbox = document.createElement("div");
     menuLightbox.className = "menu-lightbox";
-    menuLightbox.innerHTML = '<div class="menu-lightbox-hint">Click anywhere to close</div><img alt="">';
-    menuLightboxImg = menuLightbox.querySelector("img");
+    menuLightbox.innerHTML = '<div class="menu-lightbox-hint">Scroll to read the whole menu · click to close</div>' +
+      '<div class="menu-lightbox-pages"></div>';
+    menuLightboxPages = menuLightbox.querySelector(".menu-lightbox-pages");
     menuLightbox.addEventListener("click", closeMenuLightbox);
     document.body.appendChild(menuLightbox);
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape" && menuLightbox.classList.contains("on")) closeMenuLightbox();
     });
   }
-  function openMenuLightbox(src, alt) {
+  // Open the WHOLE menu enlarged (every page, stacked and scrollable), starting
+  // at the page that was clicked.
+  function openMenuLightbox(pages, startIndex, label) {
     ensureMenuLightbox();
-    menuLightboxImg.src = src;
-    menuLightboxImg.alt = alt || "Menu page";
-    menuLightbox.scrollTop = 0;
+    menuLightboxPages.innerHTML = "";
+    var targets = [];
+    pages.forEach(function (src, i) {
+      var img = document.createElement("img");
+      img.loading = "lazy";
+      img.alt = (label || "Menu") + " — page " + (i + 1) + " of " + pages.length;
+      img.src = src;
+      menuLightboxPages.appendChild(img);
+      targets.push(img);
+    });
     menuLightbox.classList.add("on");
+    menuLightbox.scrollTop = 0;
+    // Jump to the clicked page once it has a height to scroll to.
+    var jump = targets[startIndex || 0];
+    if (jump) requestAnimationFrame(function () {
+      menuLightbox.scrollTop = Math.max(0, jump.offsetTop - 24);
+    });
   }
   function closeMenuLightbox() {
     if (menuLightbox) menuLightbox.classList.remove("on");
@@ -3679,8 +3696,8 @@
       img.loading = "lazy";
       img.alt = m.label + " menu — page " + (i + 1) + " of " + pages.length;
       img.src = src;
-      img.title = "Click to enlarge";
-      img.addEventListener("click", function () { openMenuLightbox(src, img.alt); });
+      img.title = "Click to enlarge the whole menu";
+      img.addEventListener("click", function () { openMenuLightbox(pages, i, m.label); });
       vc.menuPagesEl.appendChild(img);
     });
     vc.menuCap.innerHTML = "The full menu this is checked against — <b>" + esc(m.label) + "</b> (" +
