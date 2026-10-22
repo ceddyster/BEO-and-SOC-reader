@@ -221,7 +221,8 @@
   .bv-menu-cap { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
     margin: 0 0 8px; font-weight: 600; }
   .bv-menu-cap b { color: var(--accent); font-weight: 700; }
-  .bv-menu img { display: block; width: 100%; height: auto; border: 1px solid var(--border);
+  .bv-menu img { display: block; width: 100%; height: auto; aspect-ratio: 745 / 1053;
+    border: 1px solid var(--border);
     border-radius: 6px; box-shadow: 0 1px 8px rgba(0,0,0,.18); background: #fff; cursor: zoom-in; }
   .bv-menu .note { margin-top: 8px; }
   /* Click-to-zoom lightbox: a menu page opens large over the whole screen. */
@@ -230,8 +231,9 @@
     padding: 24px; text-align: center; -webkit-overflow-scrolling: touch; }
   .menu-lightbox.on { display: block; }
   .menu-lightbox-pages { display: flex; flex-direction: column; align-items: center; gap: 14px; }
-  .menu-lightbox img { display: block; width: auto; max-width: min(1100px, 96vw);
-    height: auto; border-radius: 6px; box-shadow: 0 6px 40px rgba(0,0,0,.5); background: #fff; cursor: zoom-out; }
+  .menu-lightbox img { display: block; width: min(1100px, 96vw); max-width: 96vw;
+    height: auto; aspect-ratio: 745 / 1053; border-radius: 6px;
+    box-shadow: 0 6px 40px rgba(0,0,0,.5); background: #fff; cursor: zoom-out; }
   .menu-lightbox-hint { position: fixed; top: 12px; right: 16px; color: #fff; font-size: 12px;
     opacity: .75; pointer-events: none; }
   @media (max-width: 760px) { .bv-split { flex-direction: column; }
@@ -972,8 +974,31 @@
     if (menuLightbox) menuLightbox.classList.remove("on");
   }
 
+  // Which page of a menu best matches a checked line — the page whose text
+  // carries the matched item name and, strongly, its menu price. Lets the pane
+  // open straight to the relevant page rather than page 1.
+  function pickMenuPage(key, r) {
+    var texts = window.MENU_PAGE_TEXT && window.MENU_PAGE_TEXT[key];
+    if (!texts || !texts.length) return 0;
+    var name = ((r.matchedName || "") + " " + (r.name || "")).toLowerCase()
+      .replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+    var stop = { the: 1, and: 1, per: 1, menu: 1, with: 1, package: 1, hour: 1, hours: 1, person: 1, one: 1, two: 1, three: 1, four: 1 };
+    var toks = name.split(" ").filter(function (t) { return t.length >= 3 && !stop[t]; });
+    var priceTok = (r.expectedPrice != null) ? ("$" + Math.round(r.expectedPrice)) : null;
+    var best = 0, bestScore = 0;
+    texts.forEach(function (t, i) {
+      if (!t) return;
+      var sc = 0;
+      toks.forEach(function (tk) { if (t.indexOf(tk) !== -1) sc++; });
+      if (priceTok && t.indexOf(priceTok) !== -1) sc += 3;
+      if (sc > bestScore) { bestScore = sc; best = i; }
+    });
+    return bestScore > 0 ? best : 0;
+  }
+
   // Show (or hide) the menu pane beside the BEO for a checked line — the WHOLE
-  // menu for that charge (every page), stacked and scrollable.
+  // menu for that charge (every page), stacked and scrollable, opened to the
+  // page that matches the charge.
   function showMenu(vc, r) {
     var m = r ? menuForResult(r) : null;
     if (!m) { vc.menuEl.classList.remove("on"); vc.menuPagesEl.innerHTML = ""; return; }
@@ -988,10 +1013,20 @@
       img.addEventListener("click", function () { openMenuLightbox(pages, i, m.label); });
       vc.menuPagesEl.appendChild(img);
     });
+    var matchPage = pickMenuPage(m.key, r);
     vc.menuCap.innerHTML = "The full menu this is checked against — <b>" + esc(m.label) + "</b> (" +
-      pages.length + " page" + (pages.length > 1 ? "s" : "") + ")";
+      pages.length + " page" + (pages.length > 1 ? "s" : "") +
+      (matchPage > 0 ? ", opened to page " + (matchPage + 1) : "") + ")";
     vc.menuEl.classList.add("on");
-    vc.menuEl.scrollTop = 0;
+    vc.menuMatchPage = matchPage;
+    // Scroll to the matching page (image boxes reserve height via aspect-ratio,
+    // so offsets are right even before the lazy images load).
+    requestAnimationFrame(function () {
+      var target = vc.menuPagesEl.children[matchPage];
+      if (target) {
+        vc.menuEl.scrollTop += target.getBoundingClientRect().top - vc.menuEl.getBoundingClientRect().top;
+      } else { vc.menuEl.scrollTop = 0; }
+    });
   }
 
   // A standalone copy of a rendered page canvas, so each viewer owns its own DOM
