@@ -222,8 +222,17 @@
     margin: 0 0 8px; font-weight: 600; }
   .bv-menu-cap b { color: var(--accent); font-weight: 700; }
   .bv-menu img { display: block; width: 100%; height: auto; border: 1px solid var(--border);
-    border-radius: 6px; box-shadow: 0 1px 8px rgba(0,0,0,.18); background: #fff; }
+    border-radius: 6px; box-shadow: 0 1px 8px rgba(0,0,0,.18); background: #fff; cursor: zoom-in; }
   .bv-menu .note { margin-top: 8px; }
+  /* Click-to-zoom lightbox: a menu page opens large over the whole screen. */
+  .menu-lightbox { position: fixed; inset: 0; z-index: 100; display: none;
+    background: rgba(0,0,0,.82); overflow: auto; cursor: zoom-out;
+    padding: 24px; text-align: center; -webkit-overflow-scrolling: touch; }
+  .menu-lightbox.on { display: block; }
+  .menu-lightbox img { display: inline-block; width: auto; max-width: min(1100px, 96vw);
+    height: auto; border-radius: 6px; box-shadow: 0 6px 40px rgba(0,0,0,.5); background: #fff; cursor: zoom-out; }
+  .menu-lightbox-hint { position: fixed; top: 12px; right: 16px; color: #fff; font-size: 12px;
+    opacity: .75; pointer-events: none; }
   @media (max-width: 760px) { .bv-split { flex-direction: column; }
     .bv-pages, .bv-menu { flex: none; max-height: 70vh; }
     .bv-menu { border-left: none; border-top: 1px solid var(--border); } }
@@ -3631,6 +3640,33 @@
     return { key: key, label: cat };
   }
 
+  // A single shared click-to-zoom lightbox for menu pages. Clicking a menu
+  // page opens it enlarged over the whole screen; clicking again (anywhere) or
+  // pressing Escape closes it.
+  var menuLightbox = null, menuLightboxImg = null;
+  function ensureMenuLightbox() {
+    if (menuLightbox) return;
+    menuLightbox = document.createElement("div");
+    menuLightbox.className = "menu-lightbox";
+    menuLightbox.innerHTML = '<div class="menu-lightbox-hint">Click anywhere to close</div><img alt="">';
+    menuLightboxImg = menuLightbox.querySelector("img");
+    menuLightbox.addEventListener("click", closeMenuLightbox);
+    document.body.appendChild(menuLightbox);
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && menuLightbox.classList.contains("on")) closeMenuLightbox();
+    });
+  }
+  function openMenuLightbox(src, alt) {
+    ensureMenuLightbox();
+    menuLightboxImg.src = src;
+    menuLightboxImg.alt = alt || "Menu page";
+    menuLightbox.scrollTop = 0;
+    menuLightbox.classList.add("on");
+  }
+  function closeMenuLightbox() {
+    if (menuLightbox) menuLightbox.classList.remove("on");
+  }
+
   // Show (or hide) the menu pane beside the BEO for a checked line — the WHOLE
   // menu for that charge (every page), stacked and scrollable.
   function showMenu(vc, r) {
@@ -3643,6 +3679,8 @@
       img.loading = "lazy";
       img.alt = m.label + " menu — page " + (i + 1) + " of " + pages.length;
       img.src = src;
+      img.title = "Click to enlarge";
+      img.addEventListener("click", function () { openMenuLightbox(src, img.alt); });
       vc.menuPagesEl.appendChild(img);
     });
     vc.menuCap.innerHTML = "The full menu this is checked against — <b>" + esc(m.label) + "</b> (" +
