@@ -67,6 +67,18 @@
   var NUM_WORDS = { one: "1", two: "2", three: "3", four: "4", five: "5", six: "6",
     seven: "7", eight: "8", nine: "9", ten: "10", twelve: "12" };
 
+  // Substantial MEAL categories — a charge whose block names one of these takes
+  // it as the heading over any light-refreshment (arrival / coffee break) line
+  // interleaved from the runsheet. Excludes Day Delegate (whose arrival add-on
+  // is itself a light line) and Crew/Canapé snacks.
+  var MEAL_CATEGORIES = {
+    "Working Lunch": 1, "Lunch Buffet": 1, "Lunch Plated": 1,
+    "Dinner Buffet": 1, "Dinner Plated": 1, "Dinner Indian": 1,
+    "Chinese Banquet": 1, "Christmas Buffet": 1,
+    "Breakfast Buffet": 1, "Breakfast Plated": 1, "Breakfast Continental": 1,
+    "Breakfast Standup": 1, "Lunchbox": 1
+  };
+
   // Loose normalisation for matching names. Number words -> digits,
   // "hours" -> "hour", punctuation dropped, whitespace collapsed.
   function normalize(s) {
@@ -351,7 +363,7 @@
         if (/^\s*(entr[eé]{1,2}e?|main course|dessert)\b/i.test(lines[mj])) { blockHasMeal = true; break; }
       }
 
-      var best = null, strong = null, strongPkg = null;
+      var best = null, strong = null, strongPkg = null, strongFoodPkg = null;
       for (var j = i - 1; j >= floorHead; j--) {
         var cand = lines[j].replace(/\s+/g, " ").trim();
         if (cand.length < 3) continue;
@@ -392,12 +404,21 @@
           // strongPkg ends on the topmost package line.
           if (/^(pp|child)/.test(mm.item.unit || "")) {
             strongPkg = { score: mm.score, name: cand, j: j };
+            // A SUBSTANTIAL MEAL package (a lunch/dinner/breakfast/buffet/banquet,
+            // not a light refreshment or a snack item) outranks any coffee-break /
+            // arrival line in the block: a "Sandwich Buffet Menu One" charge must
+            // take its own heading even when an "ARRIVAL TEA & COFFEE" runsheet
+            // line is interleaved above it. (Crew snacks like "Mini gourmet
+            // quiches" are NOT meals, so a coffee break keeps its own heading.)
+            if (MEAL_CATEGORIES[mm.item.category]) {
+              strongFoodPkg = { score: mm.score, name: cand, j: j };
+            }
           }
         }
       }
-      // Prefer the topmost package heading; fall back to the nearest strong line
-      // (a standalone platter with no package above it), then to the best overall.
-      best = strongPkg || strong || best;
+      // Prefer a substantial food package, then the topmost package, then the
+      // nearest strong line (a standalone platter), then the best overall.
+      best = strongFoodPkg || strongPkg || strong || best;
 
       // Plated-breakfast detector. A block with the "FROM THE BAKERY" + "FROM THE
       // PAN" structure is a plated breakfast even when the heading is worded oddly

@@ -826,6 +826,25 @@ ok(mealFlag && !/Arrival|Tea and Coffee/.test(mealFlag.matchedName || "") &&
   (mealFlag.priceStatus === "no-match" || mealFlag.priceStatus === "review"),
   "a meal block with a stray arrival line is flagged, not matched to tea & coffee (got " + (mealFlag && mealFlag.matchedName) + "/" + (mealFlag && mealFlag.priceStatus) + ")");
 
+section("A meal package outranks an interleaved arrival/coffee-break line");
+// BEO 54990 in a distribution: a Program-runsheet "ARRIVAL TEA & COFFEE" line
+// landed above the "Sandwich Buffet Menu One" header in the reflow, so the $44
+// lunch charge was mis-matched to Arrival Tea & Coffee. A substantial meal
+// package (Working Lunch) must win over the light-refreshment line.
+var sbArrival = engine.checkDocument(engine.parseBeo(
+  "Package Quantity Per Person Price\nMenu\n12:30 - 13:20 Lunch Buffet\nARRIVAL TEA & COFFEE\n" +
+  "Sandwich Buffet Menu One\nPrepared on white, wholemeal and country grain bread\nChicken Caesar salad\n" +
+  "Black Forest ham, pickle relish\n~~~~~\n245 guests @ $44.00 per person\n",
+  catalogue), catalogue).items.find(function (r) { return r.unitPrice === 44; });
+ok(sbArrival && sbArrival.matchedName === "Working Lunch Menu One" && sbArrival.priceStatus === "correct",
+  "Sandwich Buffet $44 → Working Lunch Menu One, not the interleaved Arrival line (got " + (sbArrival && sbArrival.matchedName) + ")");
+// A genuine arrival charge (no meal package in the block) still matches arrival.
+var arrOnly = engine.checkDocument(engine.parseBeo(
+  "Package Quantity Per Person Price\nMenu\n08:00 - 08:30 Arrival\nArrival Tea and Coffee\n245 guests @ $11.00 per person\n",
+  catalogue), catalogue).items[0];
+ok(arrOnly.matchedName === "Arrival Tea and Coffee" && arrOnly.priceStatus === "correct",
+  "a standalone arrival charge still matches Arrival Tea and Coffee (got " + (arrOnly && arrOnly.matchedName) + ")");
+
 section("Youth / children's soft drink package → Children's beverages menu");
 // "Youth Soft Drink Package - 5 Hours" is the $12.50 Children's beverages menu,
 // not the adult $24 Soft Drink package the 5-hour tier would otherwise match.
