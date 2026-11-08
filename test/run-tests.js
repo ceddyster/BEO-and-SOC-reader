@@ -1102,6 +1102,16 @@ ok(selR && /Crew Sandwiches Platter/.test(selR.matchedName) && /Crew Fresh Fruit
   "names both matched platters");
 ok(selR && selR.priceImpact === -100, "total impact -$100 across 25 guests (got " + (selR && selR.priceImpact) + ")");
 
+// Sandwiches + sushi platter under one charge (BEO 55781): the sushi platter is
+// worded "Chef's selection sushi platter (M)" and must still be summed in —
+// $19.50 + $12.00 = $31.50.
+var sushiSel = engine.checkDocument(engine.parseBeo(
+  "Menu\n13:00 - 14:00 AV Crew Catering\nCrew Catering - Platters\nChef's selection of sandwiches\n" +
+  "Chef's selection sushi platter (M)\n9 guests @ $31.50 per person\n", catalogue), catalogue).items[0];
+ok(sushiSel && sushiSel.kind === "platter-selection" && sushiSel.expectedPrice === 31.5 && sushiSel.priceStatus === "correct",
+  "sandwiches + sushi platter summed to $31.50 correct (got " + (sushiSel && sushiSel.expectedPrice) + "/" + (sushiSel && sushiSel.priceStatus) + ")");
+ok(sushiSel && /Crew Sushi Platter/.test(sushiSel.matchedName || ""), "the sushi platter is named in the match (got " + (sushiSel && sushiSel.matchedName) + ")");
+
 // Per-person crew "Hot Food" with two separately-priced items under one charge
 // (BEO CECP 10-20-2026): Wedges $12pp + Assortment of mini quiches $16pp = $28pp.
 // The individual prices are NOT on the BEO; the checker sums the menu prices.
