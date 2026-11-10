@@ -1112,6 +1112,18 @@ ok(sushiSel && sushiSel.kind === "platter-selection" && sushiSel.expectedPrice =
   "sandwiches + sushi platter summed to $31.50 correct (got " + (sushiSel && sushiSel.expectedPrice) + "/" + (sushiSel && sushiSel.priceStatus) + ")");
 ok(sushiSel && /Crew Sushi Platter/.test(sushiSel.matchedName || ""), "the sushi platter is named in the match (got " + (sushiSel && sushiSel.matchedName) + ")");
 
+// A Coffee Break whose SWEET/SAVOURY items match crew snacks (mini muffins +
+// mini quiches) must stay Coffee Break Menu Two — NOT a crew-platter sum (the
+// items belong to the coffee break package). BEO 11-09-2026.
+var cbNotCrew = engine.checkDocument(engine.parseBeo(
+  "Menu\n10:15 - 10:50 Morning Tea\nCoffee Break Menu Two\nAssorted cookies\n~~~~~\nSWEET ITEMS\n" +
+  "Assortment of mini muffins\n~~~~~\nSAVOURY ITEMS\nMini gourmet quiches\n~~~~~\n360 guests @ $35.00 per person\n",
+  catalogue), catalogue).items[0];
+ok(cbNotCrew.matchedName === "Coffee Break Two" && cbNotCrew.kind !== "platter-selection",
+  "coffee break with muffins+quiches stays Coffee Break Two, not a crew platter sum (got " + cbNotCrew.matchedName + "/" + cbNotCrew.kind + ")");
+ok(cbNotCrew.expectedPrice === 37 && cbNotCrew.priceStatus === "undercharged",
+  "Coffee Break Two $37, $35 undercharged (got " + cbNotCrew.expectedPrice + "/" + cbNotCrew.priceStatus + ")");
+
 // Per-person crew "Hot Food" with two separately-priced items under one charge
 // (BEO CECP 10-20-2026): Wedges $12pp + Assortment of mini quiches $16pp = $28pp.
 // The individual prices are NOT on the BEO; the checker sums the menu prices.

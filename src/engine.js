@@ -363,7 +363,7 @@
         if (/^\s*(entr[eé]{1,2}e?|main course|dessert)\b/i.test(lines[mj])) { blockHasMeal = true; break; }
       }
 
-      var best = null, strong = null, strongPkg = null, strongFoodPkg = null;
+      var best = null, strong = null, strongPkg = null, strongFoodPkg = null, strongNonCrewPkg = null;
       for (var j = i - 1; j >= floorHead; j--) {
         var cand = lines[j].replace(/\s+/g, " ").trim();
         if (cand.length < 3) continue;
@@ -412,6 +412,12 @@
             // quiches" are NOT meals, so a coffee break keeps its own heading.)
             if (MEAL_CATEGORIES[mm.item.category]) {
               strongFoodPkg = { score: mm.score, name: cand, j: j };
+            }
+            // A non-crew package heading (Coffee Break, Working Lunch, a meal)
+            // means any crew-looking items below it are that package's
+            // selections, not a crew-platter sum. Keep the topmost.
+            if (mm.item.category !== "Crew Packages") {
+              strongNonCrewPkg = { score: mm.score, name: cand, j: j };
             }
           }
         }
@@ -509,7 +515,11 @@
       }
 
       var altCourses = 0, kind = "per-person", nameOut, itemGroup = grp, serviceHours, bpm, forceMatch = null, canapeN = null;
-      if (platters.length >= 2) {
+      // Only treat the crew-item lines as a multi-platter SUM when there is no
+      // non-crew package heading above them. A "Coffee Break Menu Two" with its
+      // SWEET/SAVOURY items (mini muffins, mini quiches) is a coffee break, not a
+      // crew platter selection — the items belong to that package.
+      if (platters.length >= 2 && !strongNonCrewPkg) {
         // Multi-item platter selection — priced as the sum of the chosen platters.
         nameOut = platters.map(function (p) { return p.name; }).join(" + ");
         kind = "platter-selection";
