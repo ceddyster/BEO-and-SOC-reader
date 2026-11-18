@@ -183,6 +183,13 @@
   .wb-detail b { color: var(--fg); }
   .wb-detail .wb-sample { font-family: var(--mono); font-size: 12px; }
   .wb-detail .warn { color: var(--warn); }
+  .wb-items { margin-top: 10px; }
+  .wb-items summary { cursor: pointer; color: var(--fg); font-weight: 600; }
+  .wb-items-tbl { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12px; }
+  .wb-items-tbl th, .wb-items-tbl td { text-align: left; padding: 3px 8px 3px 0; border-bottom: 1px solid var(--line, rgba(128,128,128,.2)); vertical-align: top; }
+  .wb-items-tbl th { color: var(--muted); font-weight: 600; }
+  .wb-items-tbl .wb-pr { font-family: var(--mono); white-space: nowrap; text-align: right; }
+  .wb-items-tbl .wb-un { color: var(--muted); white-space: nowrap; }
   .cat-head { font-family: var(--display); font-size: 12px; text-transform: uppercase; letter-spacing: .05em;
     color: var(--accent); margin: 14px 0 4px; }
 
@@ -442,9 +449,31 @@
     return null;
   }
 
-  // Parse a workbook ArrayBuffer into price items. Flexible: find a header row
-  // naming an item column and a price column; else take, per row, the longest
-  // text cell as the name and the first money-looking cell as the price.
+  // Parse a workbook ArrayBuffer into price items. Two strategies per sheet:
+  //  1. Flat price list — a header row naming an item column and a price column
+  //     (handles simple Item/Price CSV or Excel exports).
+  //  2. Formatted menu guide — no clean header; walk cells and extract only
+  //     (a) a menu title (one that matches a catalogue menu category) sitting
+  //     above a standalone price, and (b) self-contained inline priced add-ons,
+  //     filtered against a notes/rules blocklist. This avoids attaching a stray
+  //     price to the wrong dish, which would be dangerous in a pricing tool.
+  var WB_MENU_CATS = {
+    "Breakfast Plated": 1, "Breakfast Buffet": 1, "Breakfast Continental": 1,
+    "Breakfast Standup": 1, "Working Lunch": 1, "Lunch Buffet": 1, "Lunch Plated": 1,
+    "Dinner Buffet": 1, "Dinner Plated": 1, "Dinner Indian": 1, "Chinese Banquet": 1,
+    "Christmas Buffet": 1, "Lunchbox": 1, "Coffee Breaks": 1, "Day Delegate": 1, "Canapes": 1
+  };
+  var WB_PRICE_ONLY = /^\$?\s*[\d,]+(\.\d{1,2})?\s*(pp|per\s*person)?\s*$/i;
+  var WB_PRICE_TOK = /\$\s*[\d,]+(?:\.\d{1,2})?|\b[\d,]+\.\d{2}\b/;
+  var WB_NOTE_RE = /reduction|corkage|starting price|starting from|sales only|not online|built into|per package|less per|switch item|swap |shift across|seated fee|add on item$|additional item|additional course|alt drop|alternating service|custom menu|custom starting|outside below|client supplies|reserve up|up by|removed |substitute |maximum \d+ pax|budgeted|chef interaction|2 bowls per table|please select|minutes -|one hour -|two hours -|three hours -|four hours -|four hour -|eight hour -|half hour|premium chocolates pricing|#/i;
+  var WB_NAME_DROP = /^(select one|min \d|inclusive of|maximum|served for|plus \d|note:|amalgamate|from the|sweet|savoury|enhancement|break items|price without|\*)/i;
+
+  function wbMenuTitle(text) {
+    var m = window.BEOEngine && window.BEOEngine.findMatch
+      ? window.BEOEngine.findMatch(text, CAT, 0.8, undefined) : null;
+    return !!(m && /^(pp|child)/.test(m.item.unit || "") && WB_MENU_CATS[m.item.category]);
+  }
+
   function parseWorkbook(buf) {
     if (!window.XLSX) throw new Error("spreadsheet reader not loaded");
     var wb = XLSX.read(new Uint8Array(buf), { type: "array" });
@@ -452,10 +481,21 @@
     var NAME_RE = /\b(item|items|name|description|desc|menu\s*item|product|dish|particulars?)\b/;
     var PRICE_RE = /\b(price|rate|amount|cost|charge|unit\s*price|sell|rrp|\$)\b/;
     var UNIT_RE = /\b(unit|uom|per|measure|size)\b/;
+    function add(name, price, unitText, src) {
+      name = String(name == null ? "" : name).replace(/\s+/g, " ").trim()
+        .replace(/[\s\-:,]+$/, "").trim();
+      if (name.length < 3 || !/[a-z]{3}/i.test(name) || price == null || price <= 0) return;
+      if (WB_NAME_DROP.test(name)) return;
+      var key = name.toLowerCase();
+      if (seen[key]) return; seen[key] = 1;
+      items.push({ category: "Workbook", name: name, price: price,
+        unit: wbUnitFrom(unitText) || "pp", source: src || "workbook" });
+    }
     (wb.SheetNames || []).forEach(function (sn) {
-      var ws = wb.Sheets[sn]; if (!ws) return;
+      var ws = wb.Sheets[sn]; if (!ws || !ws["!ref"]) return;
       var rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: "" });
       if (!rows.length) return;
+      // Strategy 1: flat price list with a header row.
       var hdr = -1, nameCol = -1, priceCol = -1, unitCol = -1;
       for (var r = 0; r < Math.min(rows.length, 25); r++) {
         var low = rows[r].map(function (c) { return String(c == null ? "" : c).toLowerCase().trim(); });
@@ -467,35 +507,39 @@
         }
         if (nc >= 0 && pc >= 0 && nc !== pc) { hdr = r; nameCol = nc; priceCol = pc; unitCol = uc; break; }
       }
-      function add(name, price, unitText) {
-        name = String(name == null ? "" : name).replace(/\s+/g, " ").trim();
-        if (name.length < 2 || !/[a-z]/i.test(name) || price == null || price <= 0) return;
-        var key = name.toLowerCase();
-        if (seen[key]) return; seen[key] = 1;
-        items.push({ category: "Workbook", name: name, price: price,
-          unit: wbUnitFrom(unitText) || "pp", source: "workbook" });
-      }
       if (hdr >= 0) {
         for (var r2 = hdr + 1; r2 < rows.length; r2++) {
           var row = rows[r2] || [];
           add(row[nameCol], wbParseMoney(row[priceCol]),
-            (unitCol >= 0 ? row[unitCol] : "") + " " + row[priceCol]);
+            (unitCol >= 0 ? row[unitCol] : "") + " " + row[priceCol], "workbook");
         }
-      } else {
-        rows.forEach(function (row) {
-          var texts = [], nums = [];
-          (row || []).forEach(function (c) {
-            var s = String(c == null ? "" : c).trim();
-            if (!s) return;
-            var m = wbParseMoney(c);
-            if (m != null && (typeof c === "number" || /[\d]/.test(s)) && !/[a-z]{3,}/i.test(s)) nums.push(m);
-            else if (/[a-z]{3,}/i.test(s)) texts.push(s);
-          });
-          if (texts.length && nums.length) {
-            texts.sort(function (a, b) { return b.length - a.length; });
-            add(texts[0], nums[0], texts[0]);
+        return;
+      }
+      // Strategy 2: formatted menu guide — cell-by-cell, column-aware.
+      var R = XLSX.utils.decode_range(ws["!ref"]);
+      for (var col = R.s.c; col <= R.e.c; col++) {
+        for (var rr = R.s.r; rr <= R.e.r; rr++) {
+          var cell = ws[XLSX.utils.encode_cell({ r: rr, c: col })]; if (!cell) continue;
+          var v = String(cell.v == null ? "" : cell.v).replace(/\s+/g, " ").trim(); if (!v) continue;
+          if (WB_PRICE_ONLY.test(v)) {
+            var price = wbParseMoney(v); if (price == null || price <= 0) continue;
+            var title = null;
+            for (var up = rr - 1; up >= Math.max(R.s.r, rr - 30) && !title; up--) {
+              var uc2 = ws[XLSX.utils.encode_cell({ r: up, c: col })]; if (!uc2) continue;
+              var uv = String(uc2.v == null ? "" : uc2.v).replace(/\s+/g, " ").trim();
+              if (!uv || WB_PRICE_ONLY.test(uv) || uv.length > 55) continue;
+              if (wbMenuTitle(uv)) title = uv;
+            }
+            if (title) add(title, price, v, "menu");
+          } else if (WB_PRICE_TOK.test(v) && /[a-z]{4,}/i.test(v) && !WB_NOTE_RE.test(v)) {
+            var pm = v.match(WB_PRICE_TOK); var p2 = wbParseMoney(pm[0]);
+            if (p2 == null || p2 <= 0) continue;
+            var label = v.replace(WB_PRICE_TOK, "")
+              .replace(/\bper\s*person\b|\bpp\b|\bper\s*bowl\b|\bper\s*hour\b|\beach\b/ig, " ")
+              .replace(/\s+/g, " ").trim();
+            if (label.length >= 14) add(label, p2, v, "addon");
           }
-        });
+        }
       }
     });
     return items;
@@ -534,13 +578,18 @@
     $("wbRemoveBtn").hidden = !state.workbookItems;
     if (state.workbookItems && state.workbookItems.length) {
       chip.hidden = false; chip.textContent = state.workbookItems.length + " items";
-      var sample = state.workbookItems.slice(0, 3).map(function (it) {
-        return esc(it.name.slice(0, 40)) + " " + money(it.price); }).join(" · ");
+      var rowsHtml = state.workbookItems.map(function (it) {
+        return '<tr><td class="wb-nm">' + esc(it.name) + '</td>' +
+          '<td class="wb-pr">' + money(it.price) + '</td>' +
+          '<td class="wb-un">' + esc(it.unit || "pp") + '</td></tr>';
+      }).join("");
       detail.innerHTML = "<b>Linked:</b> " + esc(state.workbookName || "workbook") + " — <b>" +
         state.workbookItems.length + "</b> priced items, checked alongside the menu." +
-        '<div class="wb-sample">e.g. ' + sample + "</div>" +
-        '<div style="margin-top:6px">Does that look right? If the count or sample is off, the column' +
-        " layout may differ — tell Cedric's assistant the workbook's column names.</div>";
+        '<div style="margin-top:6px">Check the list below matches the workbook. If an item is' +
+        " missing or a price looks wrong, tell Cedric's assistant and it can be adjusted.</div>" +
+        '<details class="wb-items"><summary>Show items read (' + state.workbookItems.length + ')</summary>' +
+        '<table class="wb-items-tbl"><thead><tr><th>Item</th><th>Price</th><th>Unit</th></tr></thead>' +
+        '<tbody>' + rowsHtml + '</tbody></table></details>';
     } else {
       chip.hidden = true;
       detail.innerHTML = error ? '<span class="warn">' + esc(error) + "</span>" : "";
