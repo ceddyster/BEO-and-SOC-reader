@@ -1180,6 +1180,16 @@
       if (cTier.minGuests && item.qty != null && item.qty < cTier.minGuests) {
         result.notes.push("Below the " + cTier.minGuests + "-guest minimum for " + cTier.name + " — confirm.");
       }
+      // An "additional half hour" extends the reception's duration; its rate
+      // tapers at higher packages, so don't price it automatically — flag for
+      // review so it's confirmed by hand.
+      var extHalf = /additional\s+half\s*hour|extra\s+half\s*hour|additional\s+30\s*min(?:ute)?s?|\+\s*half\s*hour|half\s*hour\s+extension/i;
+      if (extHalf.test(item.name || "") || (item.contextLines || []).some(function (l) { return extHalf.test(String(l)); })) {
+        if (result.status !== "math-error") result.status = "review";
+        result.priceStatus = "review";
+        result.notes.push("An additional half-hour has been added to this reception — that duration surcharge " +
+          "(around $10pp, tapering at higher packages) isn't priced automatically. Confirm it by hand.");
+      }
       return result;
     }
 
@@ -1373,7 +1383,17 @@
     } else if (item.kind === "custom") {
       if (result.status !== "math-error") result.status = "review";
       result.priceStatus = "review";
-      result.notes.push("Custom / bespoke package — no standard menu price. Confirm the agreed price manually.");
+      var startNote = "";
+      var starts = catalogue.customStartPrices || {};
+      var cblob = (item.name + " " + (item.contextLines || []).join(" ")).toLowerCase();
+      if (/lunch/.test(cblob) && starts["Lunch Plated"] != null) {
+        startNote = " A custom plated lunch starts at " + money(starts["Lunch Plated"]) +
+          " per person — confirm the charge is at or above that.";
+      } else if (/dinner/.test(cblob) && starts["Dinner Plated"] != null) {
+        startNote = " A custom plated dinner starts at " + money(starts["Dinner Plated"]) +
+          " per person — confirm the charge is at or above that.";
+      }
+      result.notes.push("Custom / bespoke package — no standard menu price. Confirm the agreed price manually." + startNote);
     } else if (looksNonMenu(item.name, catalogue) || item.kind === "non-menu") {
       if (result.status === "ok") result.status = "non-menu";
       result.priceStatus = "not-checked";
@@ -1458,6 +1478,19 @@
         hints.push(Math.round(addN) + " additional course" + (Math.round(addN) > 1 ? "s" : "") +
           " (" + money(cat.addCoursePrice) + "pp)");
       }
+    }
+    // A course shift (swapping a course to a different option, e.g. a cheese
+    // platter for dessert) is +$18pp on Plated Lunch — another reading of the
+    // excess when it isn't the additional-course price.
+    if (cat.shiftCoursePrice && cat.shiftCoursePrice !== cat.addCoursePrice) {
+      var shN = remainder / cat.shiftCoursePrice;
+      if (Math.abs(shN - Math.round(shN)) < 0.001 && Math.round(shN) > 0) {
+        hints.push(Math.round(shN) + " course shift" + (Math.round(shN) > 1 ? "s" : "") +
+          " (" + money(cat.shiftCoursePrice) + "pp)");
+      }
+    } else if (cat.shiftCoursePrice && hints.length) {
+      // Same rate as an additional course — note the shift as an alternative.
+      hints[hints.length - 1] += " or course shift";
     }
     if (hints.length) note += " The extra " + money(remainder) + " matches " + hints.join(" or ") + " — confirm the menu composition.";
     else note += " The extra " + money(remainder) + " isn't a standard add-on — please check.";

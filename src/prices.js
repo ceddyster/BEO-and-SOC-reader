@@ -78,11 +78,12 @@
     { category: "Lunch Buffet", name: "Lunch Buffet Item Swap Surcharge", price: 16, unit: "pp", note: "Swapping any items" },
 
     // ---------- LUNCH — PLATED ----------
-    { category: "Lunch Plated", name: "Plated Lunch Menu One Two Course", price: 81, unit: "pp", minGuests: 30, composable: true, altPrice: 10, addCoursePrice: 18, lunchTier: 1, aliases: ["Lunch Set Menu One", "Lunch Set Menu One Two Course", "Set Lunch Menu One", "Lunch Plated Menu One", "Plated Lunch Menu One"] },
-    { category: "Lunch Plated", name: "Plated Lunch Menu One Three Course", price: 99, unit: "pp", minGuests: 30, composable: true, altPrice: 10, addCoursePrice: 18, lunchTier: 1, aliases: ["Lunch Set Menu One Three Course"] },
-    { category: "Lunch Plated", name: "Plated Lunch Menu Two Two Course", price: 91, unit: "pp", minGuests: 30, composable: true, altPrice: 10, addCoursePrice: 18, lunchTier: 2, aliases: ["Lunch Set Menu Two", "Lunch Set Menu Two Two Course", "Set Lunch Menu Two", "Lunch Plated Menu Two", "Plated Lunch Menu Two"] },
-    { category: "Lunch Plated", name: "Plated Lunch Menu Two Three Course", price: 109, unit: "pp", minGuests: 30, composable: true, altPrice: 10, addCoursePrice: 18, lunchTier: 2, aliases: ["Lunch Set Menu Two Three Course"] },
+    { category: "Lunch Plated", name: "Plated Lunch Menu One Two Course", price: 81, unit: "pp", minGuests: 30, composable: true, altPrice: 10, addCoursePrice: 18, shiftCoursePrice: 18, lunchTier: 1, aliases: ["Lunch Set Menu One", "Lunch Set Menu One Two Course", "Set Lunch Menu One", "Lunch Plated Menu One", "Plated Lunch Menu One"] },
+    { category: "Lunch Plated", name: "Plated Lunch Menu One Three Course", price: 99, unit: "pp", minGuests: 30, composable: true, altPrice: 10, addCoursePrice: 18, shiftCoursePrice: 18, lunchTier: 1, aliases: ["Lunch Set Menu One Three Course"] },
+    { category: "Lunch Plated", name: "Plated Lunch Menu Two Two Course", price: 91, unit: "pp", minGuests: 30, composable: true, altPrice: 10, addCoursePrice: 18, shiftCoursePrice: 18, lunchTier: 2, aliases: ["Lunch Set Menu Two", "Lunch Set Menu Two Two Course", "Set Lunch Menu Two", "Lunch Plated Menu Two", "Plated Lunch Menu Two"] },
+    { category: "Lunch Plated", name: "Plated Lunch Menu Two Three Course", price: 109, unit: "pp", minGuests: 30, composable: true, altPrice: 10, addCoursePrice: 18, shiftCoursePrice: 18, lunchTier: 2, aliases: ["Lunch Set Menu Two Three Course"] },
     { category: "Lunch Plated", name: "Plated Lunch Additional Course", price: 18, unit: "pp" },
+    { category: "Lunch Plated", name: "Plated Lunch Course Shift", price: 18, unit: "pp", note: "Shift a course across to a different option (incl. a cheese-platter dessert course), +$18 per person.", aliases: ["Shift across a course", "Shift a course", "Course option shift", "Shift course option", "Shift across a course option"] },
     { category: "Lunch Plated", name: "Plated Lunch Alternating Service", price: 10, unit: "pp_per_course" },
 
     // ---------- LUNCH — WORKING ----------
@@ -593,6 +594,7 @@
     packageInclusions: PACKAGE_INCLUSIONS,
     wineTier: WINE_TIER,
     packageSurcharges: PACKAGE_SURCHARGES,
+    customStartPrices: { "Lunch Plated": 110, "Dinner Plated": 145 },
     breakfastSelections: BREAKFAST_SELECTIONS,
     compositionSets: COMPOSITION_SETS,
     canapeSubstantial: CANAPE_SUBSTANTIAL

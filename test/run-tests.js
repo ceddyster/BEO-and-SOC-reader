@@ -1498,6 +1498,29 @@ var c6 = canapeExp(6, 58);
 ok(c6.expectedPrice === 58 && c6.matchedName === "Cocktail Reception Two Hour",
   "exact 6-canapé tier still $58 with no 'additional' wording");
 
+section("Plated Lunch: course shift, custom menu, additional half hour");
+var shift = engine.checkDocument(
+  [{ name: "Shift across a course", qty: 40, unitPrice: 18 }], catalogue, "2026-07-15").items[0];
+ok(shift.matchedName === "Plated Lunch Course Shift" && shift.expectedPrice === 18 && shift.priceStatus === "correct",
+  "course-shift option matches at $18pp");
+var custLunch = engine.checkDocument(
+  [{ kind: "custom", name: "Custom Lunch Menu", qty: 40, unitPrice: 120 }], catalogue, "2026-07-15").items[0];
+ok(custLunch.priceStatus === "review" && /starts at \$110/.test(custLunch.notes.join(" ")),
+  "custom plated lunch -> review, cites $110 starting price");
+var custDinner = engine.checkDocument(
+  [{ kind: "custom", name: "Custom Dinner Menu", qty: 40, unitPrice: 160 }], catalogue, "2026-07-15").items[0];
+ok(/starts at \$145/.test(custDinner.notes.join(" ")), "custom plated dinner cites $145 starting price");
+var ahh = engine.checkDocument(
+  [{ kind: "canape", name: "Cocktail Reception Two Hour", qty: 50, unitPrice: 58, canapes: 6,
+     contextLines: ["Additional half hour"] }], catalogue, "2026-07-15").items[0];
+ok(ahh.priceStatus === "review" && /additional half-hour/i.test(ahh.notes.join(" ")),
+  "canapé reception + additional half hour -> flagged for review");
+var plExcess = engine.checkDocument(
+  [{ kind: "per-person", name: "Plated Lunch Menu One", qty: 40, unitPrice: 99, composable: true }],
+  catalogue, "2026-07-15").items[0];
+ok(/additional course .*or course shift/i.test(plExcess.notes.join(" ")),
+  "an $18 excess on a plated lunch names both additional course and course shift");
+
 console.log("\n----------------------------------------");
 console.log(passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);
