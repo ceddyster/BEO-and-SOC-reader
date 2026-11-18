@@ -1133,6 +1133,7 @@
           money(subPrice) + "pp each. Charged " + money(item.unitPrice) + "pp — confirm against the quote.");
         return result;
       }
+      if (cTier.packageOnly) result._packageOnly = true;
       var subAmount = round2(substantialN * subPrice);
       var cExp = round2(cTier.price + subAmount);
       result.matchedName = cTier.name + (substantialN ? " + " + substantialN + " substantial canapé" + (substantialN > 1 ? "s" : "") : "");
@@ -1198,6 +1199,7 @@
       result.unit = match.item.unit;
       result.category = match.item.category;
       result.menuNote = match.item.note || null;
+      if (match.item.packageOnly) result._packageOnly = true;
 
       if (match.item.price == null) {
         // Package whose price isn't fixed in the menu (e.g. Day Delegate).
@@ -1533,6 +1535,32 @@
         if (!isDDP) r.notes.push("The $11 rate is for an arrival service under 2 hours; a longer tea & coffee " +
           "service is the 4-hour ($22) or 8-hour ($28) menu — confirm the duration.");
       });
+    }
+
+    // "Packages only" items (the 30-minute / 2-canapé reception) are built into
+    // a package — they can ride a lunch or dinner that has a proper menu, but
+    // cannot be sold on their own with no course following. If this document has
+    // no meal menu (or Day Delegate package) for it to accompany, flag it, even
+    // when the per-person price itself is right.
+    var packageOnly = checked.filter(function (r) { return r._packageOnly; });
+    if (packageOnly.length) {
+      var hasMeal = checked.some(function (r) {
+        return (r.category && MEAL_CATEGORIES[r.category]) || /Day Delegate/.test(r.category || "");
+      });
+      if (!hasMeal) {
+        packageOnly.forEach(function (r) {
+          r.priceStatus = "review";
+          if (r.status !== "math-error") r.status = "review";
+          r.notes.push("Built into packages only — the " + (r.matchedName || "30-minute canapé reception") +
+            " can't be sold on its own. This booking has no lunch or dinner menu for it to accompany, so it " +
+            "can't stand alone with no course following. Confirm it's part of a package.");
+        });
+      } else {
+        packageOnly.forEach(function (r) {
+          r.notes.push("Built into packages only — valid here because this booking also has a meal menu for it " +
+            "to accompany.");
+        });
+      }
     }
 
     var summary = {

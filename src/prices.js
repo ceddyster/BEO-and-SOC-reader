@@ -155,6 +155,7 @@
     { category: "Enhancements", name: "Gourmet Cheese Platter", price: 18, unit: "each", aliases: ["Gourmet cheese platter figs celery muscatels", "Gourmet cheese platter with figs", "Gourmet cheese platter, figs, celery, muscatels, walnut currant bread"] },
 
     // ---------- CANAPÉS / COCKTAIL RECEPTION ----------
+    { category: "Canapes", name: "Cocktail Reception Half Hour", price: 25, unit: "pp", minGuests: 30, canapes: 2, packageOnly: true, note: "30 minutes / select two canapés per person. Built into packages only — cannot be bought separately; must accompany a lunch or dinner menu.", aliases: ["Cocktail Reception 30 Minutes", "Cocktail Reception 30 Minute", "Cocktail Reception Two Canapes", "Cocktail Reception 2 Canapes", "Canapes 30 Minutes"] },
     { category: "Canapes", name: "Cocktail Reception One Hour", price: 39, unit: "pp", minGuests: 30, canapes: 4, note: "1 hour / select four canapés per person.", aliases: ["Cocktail Reception 4 Canapes", "Cocktail Reception Four Canapes"] },
     { category: "Canapes", name: "Cocktail Reception Two Hour", price: 58, unit: "pp", minGuests: 30, canapes: 6, note: "2 hours / select six canapés per person.", aliases: ["Cocktail Reception 6 Canapes", "Cocktail Reception Six Canapes"] },
     { category: "Canapes", name: "Cocktail Reception Three Hour", price: 75, unit: "pp", minGuests: 30, canapes: 10, note: "3 hours / select ten canapés per person.", aliases: ["Cocktail Reception 10 Canapes", "Cocktail Reception Ten Canapes"] },

@@ -1460,6 +1460,26 @@ ok(standup && standup.item.price === 35, "standup tropical fruit platter still $
 var crewCheese = engine.findMatch("Crew Cheese Platter with Crackers", catalogue, undefined, undefined);
 ok(crewCheese && crewCheese.item.price === 24, "crew cheese platter still $24 (not the $18 add-on)");
 
+section("30-minute / 2-canapé reception is packages-only ($25pp)");
+var halfAlone = engine.checkDocument(
+  [{ name: "Cocktail Reception 30 Minutes", qty: 40, unitPrice: 25, canapes: 2 }], catalogue, "2026-07-15");
+ok(halfAlone.items[0].matchedName === "Cocktail Reception Half Hour" && halfAlone.items[0].expectedPrice === 25,
+  "half-hour reception matches at $25pp");
+ok(halfAlone.items[0].priceStatus === "review" &&
+  /can't be sold on its own|packages only/i.test(halfAlone.items[0].notes.join(" ")),
+  "sold alone (no meal) -> flagged, can't stand alone");
+var halfWithMeal = engine.checkDocument([
+  { name: "Dinner Buffet Menu One", qty: 40, unitPrice: 90 },
+  { name: "Cocktail Reception 30 Minutes", qty: 40, unitPrice: 25, canapes: 2 }
+], catalogue, "2026-07-15");
+ok(halfWithMeal.items[1].priceStatus === "correct",
+  "with a dinner menu -> $25 accepted as correct");
+// The standalone 1-4 hour receptions are NOT packages-only.
+var oneHourAlone = engine.checkDocument(
+  [{ name: "Cocktail Reception One Hour", qty: 40, unitPrice: 39, canapes: 4 }], catalogue, "2026-07-15");
+ok(oneHourAlone.items[0].priceStatus === "correct",
+  "1-hour reception can still be sold on its own at $39");
+
 console.log("\n----------------------------------------");
 console.log(passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);
