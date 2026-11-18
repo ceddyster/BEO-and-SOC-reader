@@ -161,6 +161,7 @@
     { category: "Canapes", name: "Cocktail Reception Three Hour", price: 75, unit: "pp", minGuests: 30, canapes: 10, note: "3 hours / select ten canapés per person.", aliases: ["Cocktail Reception 10 Canapes", "Cocktail Reception Ten Canapes"] },
     { category: "Canapes", name: "Cocktail Reception Four Hour", price: 88, unit: "pp", minGuests: 30, canapes: 12, note: "4 hours / select twelve canapés per person.", aliases: ["Cocktail Reception 12 Canapes", "Cocktail Reception Twelve Canapes"] },
     { category: "Canapes", name: "Substantial Enhancement", price: 17, unit: "pp_per_selection" },
+    { category: "Canapes", name: "Additional Canape Selection", price: 10, unit: "pp_per_selection", note: "Each standard canapé beyond the reception's included count (+$10 per person).", aliases: ["Additional item selection", "Additional canape", "Extra canape selection"] },
     { category: "Canapes", name: "Carvery Station", price: 42, unit: "pp_per_selection" },
     { category: "Canapes", name: "Oyster Station Three Pieces", price: 26, unit: "pp" },
     { category: "Canapes", name: "Oyster Station Six Pieces", price: 52, unit: "pp" },

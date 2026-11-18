@@ -1480,6 +1480,24 @@ var oneHourAlone = engine.checkDocument(
 ok(oneHourAlone.items[0].priceStatus === "correct",
   "1-hour reception can still be sold on its own at $39");
 
+section("Additional canapés beyond a reception tier (+$10pp each)");
+function canapeExp(canapes, charged) {
+  return engine.checkDocument(
+    [{ kind: "canape", name: "Cocktail Reception", qty: 50, unitPrice: charged, canapes: canapes }],
+    catalogue, "2026-07-15").items[0];
+}
+var c7 = canapeExp(7, 68);
+ok(c7.expectedPrice === 68 && c7.priceStatus === "correct",
+  "Two Hour (6, $58) + 1 extra canapé = $68 (got $" + c7.expectedPrice + ")");
+var c5 = canapeExp(5, 49);
+ok(c5.expectedPrice === 49, "One Hour (4, $39) + 1 extra = $49 (got $" + c5.expectedPrice + ")");
+var c8 = canapeExp(8, 70);
+ok(c8.expectedPrice === 78 && c8.priceStatus === "undercharged",
+  "6-tier + 2 extra = $78; $70 charged flagged undercharged (got $" + c8.expectedPrice + ")");
+var c6 = canapeExp(6, 58);
+ok(c6.expectedPrice === 58 && c6.matchedName === "Cocktail Reception Two Hour",
+  "exact 6-canapé tier still $58 with no 'additional' wording");
+
 console.log("\n----------------------------------------");
 console.log(passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

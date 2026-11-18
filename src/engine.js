@@ -1120,6 +1120,23 @@
       var substantialN = Math.max(headingN, menuN);
       var baseCount = (item.canapes || 0) - substantialN;
       var cTier = canapeTiers.filter(function (x) { return x.canapes === baseCount; })[0];
+      // Additional standard canapés beyond a reception's included count are
+      // +$10pp each (e.g. Two Hour 6 canapés $58, +1 extra = $68). When the
+      // count doesn't land on a tier, fall back to the nearest LOWER standard
+      // reception (never the packages-only half-hour) plus that many extras.
+      var addItem = (catalogue.items || []).filter(function (x) { return x.name === "Additional Canape Selection"; })[0];
+      var addPrice = addItem ? addItem.price : 10;
+      var extraN = 0, extraAmount = 0;
+      if (!cTier && baseCount > 0) {
+        var lowerTier = canapeTiers
+          .filter(function (x) { return !x.packageOnly && x.canapes <= baseCount; })
+          .sort(function (a, b) { return b.canapes - a.canapes; })[0];
+        if (lowerTier) {
+          cTier = lowerTier;
+          extraN = baseCount - lowerTier.canapes;
+          extraAmount = round2(extraN * addPrice);
+        }
+      }
       if (!cTier) {
         var offered = canapeTiers.map(function (x) { return x.canapes; }).sort(function (a, b) { return a - b; });
         result.matchedName = "Cocktail Reception (" + item.canapes + " canapés)";
@@ -1135,8 +1152,10 @@
       }
       if (cTier.packageOnly) result._packageOnly = true;
       var subAmount = round2(substantialN * subPrice);
-      var cExp = round2(cTier.price + subAmount);
-      result.matchedName = cTier.name + (substantialN ? " + " + substantialN + " substantial canapé" + (substantialN > 1 ? "s" : "") : "");
+      var cExp = round2(cTier.price + subAmount + extraAmount);
+      result.matchedName = cTier.name +
+        (extraN ? " + " + extraN + " additional canapé" + (extraN > 1 ? "s" : "") : "") +
+        (substantialN ? " + " + substantialN + " substantial canapé" + (substantialN > 1 ? "s" : "") : "");
       result.expectedPrice = cExp;
       result.unit = cTier.unit;
       result.menuNote = cTier.note || null;
@@ -1144,9 +1163,10 @@
       result.priceDiff = cdiff;
       result.priceImpact = item.qty != null ? round2(cdiff * item.qty) : null;
       result._explained = true;
-      var calc = cTier.name + " (" + baseCount + " canapés) " + money(cTier.price) +
+      var calc = cTier.name + " (" + cTier.canapes + " canapés) " + money(cTier.price) +
+        (extraN ? " + " + extraN + " additional (+" + money(extraAmount) + ")" : "") +
         (substantialN ? " + " + substantialN + " substantial (+" + money(subAmount) + ")" : "") +
-        (substantialN ? " = " + money(cExp) : "") + "pp";
+        ((extraN || substantialN) ? " = " + money(cExp) : "") + "pp";
       if (Math.abs(cdiff) <= 0.005) {
         result.priceStatus = "correct";
         if (result.status !== "math-error") result.status = "ok";
