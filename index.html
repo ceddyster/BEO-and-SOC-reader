@@ -174,6 +174,15 @@
   details.prices > summary { cursor: pointer; padding: 13px 18px; font-weight: 600; font-family: var(--display);
     font-size: 14px; }
   details.prices .body { padding: 0 18px 14px; }
+  details.prices.wb { margin-top: 14px; }
+  .wb-chip { margin-left: 8px; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 6px;
+    color: var(--ok); background: var(--ok-bg); vertical-align: middle; }
+  .wb-help { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 6px 0 12px; max-width: 72ch; }
+  .wb-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .wb-detail { margin-top: 10px; font-size: 13px; color: var(--muted); }
+  .wb-detail b { color: var(--fg); }
+  .wb-detail .wb-sample { font-family: var(--mono); font-size: 12px; }
+  .wb-detail .warn { color: var(--warn); }
   .cat-head { font-family: var(--display); font-size: 12px; text-transform: uppercase; letter-spacing: .05em;
     color: var(--accent); margin: 14px 0 4px; }
 
@@ -313,6 +322,23 @@
     <span class="muted-note" id="needInternet">Needs internet on first load (reads PDF/Word in-browser).</span>
   </div>
 
+  <details class="prices wb" id="wbPanel">
+    <summary>Link a price workbook (optional)<span class="wb-chip" id="wbChip" hidden></span></summary>
+    <div class="body">
+      <p class="wb-help">Link an Excel (.xlsx/.xls) or CSV price workbook — e.g. a file on a mapped work drive.
+      Its item names and prices are checked <b>alongside</b> the 2026 menu, which helps match items the menu
+      words differently. The file is read in your browser; nothing is uploaded. Where your browser allows it,
+      the link is remembered and re-read each visit.</p>
+      <div class="wb-actions">
+        <button class="btn" id="wbLinkBtn" type="button">🔗 Link workbook…</button>
+        <button class="btn" id="wbReconnectBtn" type="button" hidden>Reconnect linked file</button>
+        <button class="btn" id="wbRemoveBtn" type="button" hidden>Remove</button>
+        <input type="file" id="wbInput" accept=".xlsx,.xls,.csv" hidden>
+      </div>
+      <div class="wb-detail" id="wbDetail"></div>
+    </div>
+  </details>
+
   <div id="status" role="status" aria-live="polite"></div>
 
   <div id="results" hidden></div>
@@ -326,6 +352,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://unpkg.com/mammoth@1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="src/prices.js"></script>
 <script src="src/menu-images.js"></script>
 <script src="src/engine.js"></script>
@@ -338,9 +365,17 @@
       "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   }
 
-  var state = { beoText: null, beoName: null, socRows: null, socText: null, socName: null };
+  var state = { beoText: null, beoName: null, socRows: null, socText: null, socName: null,
+    workbookItems: null, workbookName: null };
   var $ = function (id) { return document.getElementById(id); };
   var money = E.money;
+
+  // The catalogue used for checking = the 2026 menu book + any linked workbook
+  // items. (The displayed price list and menu images stay the menu book.)
+  function activeCatalogue() {
+    if (!state.workbookItems || !state.workbookItems.length) return CAT;
+    return Object.assign({}, CAT, { items: CAT.items.concat(state.workbookItems) });
+  }
 
   // ---- theme toggle (per-viewer convenience) ----
   try {
@@ -379,6 +414,240 @@
   $("runBtn").addEventListener("click", run);
   $("resetBtn").addEventListener("click", reset);
   $("copyBtn").addEventListener("click", copySummary);
+
+  // ---------------------------------------------------------- Price workbook
+  // Link an Excel/CSV price workbook; its item/price rows are merged into the
+  // catalogue used for checking. Where the browser supports the File System
+  // Access API the chosen file's handle is remembered (IndexedDB) and re-read
+  // each visit; otherwise the parsed rows are cached in localStorage.
+  var WB_CACHE_KEY = "beoWorkbookV1";
+  var hasFSAccess = typeof window.showOpenFilePicker === "function";
+
+  function wbParseMoney(v) {
+    if (typeof v === "number") return isFinite(v) ? v : null;
+    var s = String(v == null ? "" : v).replace(/[^0-9.\-]/g, "");
+    if (!s || s === "-" || s === ".") return null;
+    var n = parseFloat(s);
+    return isFinite(n) ? Math.round(n * 100) / 100 : null;
+  }
+  function wbUnitFrom(text) {
+    var t = String(text || "").toLowerCase();
+    if (/per\s*person|per\s*head|per\s*guest|\bpp\b|p\/p/.test(t)) return "pp";
+    if (/per\s*hour|\bhr\b|hour/.test(t)) return "hour";
+    if (/per\s*bottle|\bbottle\b/.test(t)) return "bottle";
+    if (/per\s*glass|\bglass\b/.test(t)) return "glass";
+    if (/each|platter|per\s*item|per\s*platter/.test(t)) return "each";
+    return null;
+  }
+
+  // Parse a workbook ArrayBuffer into price items. Flexible: find a header row
+  // naming an item column and a price column; else take, per row, the longest
+  // text cell as the name and the first money-looking cell as the price.
+  function parseWorkbook(buf) {
+    if (!window.XLSX) throw new Error("spreadsheet reader not loaded");
+    var wb = XLSX.read(new Uint8Array(buf), { type: "array" });
+    var items = [], seen = {};
+    var NAME_RE = /\b(item|items|name|description|desc|menu\s*item|product|dish|particulars?)\b/;
+    var PRICE_RE = /\b(price|rate|amount|cost|charge|unit\s*price|sell|rrp|\$)\b/;
+    var UNIT_RE = /\b(unit|uom|per|measure|size)\b/;
+    (wb.SheetNames || []).forEach(function (sn) {
+      var ws = wb.Sheets[sn]; if (!ws) return;
+      var rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: "" });
+      if (!rows.length) return;
+      var hdr = -1, nameCol = -1, priceCol = -1, unitCol = -1;
+      for (var r = 0; r < Math.min(rows.length, 25); r++) {
+        var low = rows[r].map(function (c) { return String(c == null ? "" : c).toLowerCase().trim(); });
+        var nc = -1, pc = -1, uc = -1;
+        for (var ci = 0; ci < low.length; ci++) {
+          if (nc < 0 && NAME_RE.test(low[ci])) nc = ci;
+          if (pc < 0 && PRICE_RE.test(low[ci])) pc = ci;
+          if (uc < 0 && UNIT_RE.test(low[ci])) uc = ci;
+        }
+        if (nc >= 0 && pc >= 0 && nc !== pc) { hdr = r; nameCol = nc; priceCol = pc; unitCol = uc; break; }
+      }
+      function add(name, price, unitText) {
+        name = String(name == null ? "" : name).replace(/\s+/g, " ").trim();
+        if (name.length < 2 || !/[a-z]/i.test(name) || price == null || price <= 0) return;
+        var key = name.toLowerCase();
+        if (seen[key]) return; seen[key] = 1;
+        items.push({ category: "Workbook", name: name, price: price,
+          unit: wbUnitFrom(unitText) || "pp", source: "workbook" });
+      }
+      if (hdr >= 0) {
+        for (var r2 = hdr + 1; r2 < rows.length; r2++) {
+          var row = rows[r2] || [];
+          add(row[nameCol], wbParseMoney(row[priceCol]),
+            (unitCol >= 0 ? row[unitCol] : "") + " " + row[priceCol]);
+        }
+      } else {
+        rows.forEach(function (row) {
+          var texts = [], nums = [];
+          (row || []).forEach(function (c) {
+            var s = String(c == null ? "" : c).trim();
+            if (!s) return;
+            var m = wbParseMoney(c);
+            if (m != null && (typeof c === "number" || /[\d]/.test(s)) && !/[a-z]{3,}/i.test(s)) nums.push(m);
+            else if (/[a-z]{3,}/i.test(s)) texts.push(s);
+          });
+          if (texts.length && nums.length) {
+            texts.sort(function (a, b) { return b.length - a.length; });
+            add(texts[0], nums[0], texts[0]);
+          }
+        });
+      }
+    });
+    return items;
+  }
+
+  function applyWorkbook(items, name, persistCache) {
+    state.workbookItems = items && items.length ? items : null;
+    state.workbookName = state.workbookItems ? name : null;
+    if (persistCache) {
+      try {
+        if (state.workbookItems) localStorage.setItem(WB_CACHE_KEY,
+          JSON.stringify({ name: name, items: items, at: Date.now() }));
+        else localStorage.removeItem(WB_CACHE_KEY);
+      } catch (e) {}
+    }
+    renderWbUI();
+  }
+
+  function readFileToWorkbook(file, persistCache, note) {
+    setStatus("Reading workbook: " + file.name + " …");
+    return file.arrayBuffer().then(function (buf) {
+      var items;
+      try { items = parseWorkbook(buf); }
+      catch (e) { renderWbUI("Couldn't read that workbook: " + e.message); setStatus("", true); return; }
+      applyWorkbook(items, file.name, persistCache);
+      setStatus(items.length
+        ? ("Workbook linked: " + items.length + " priced item" + (items.length > 1 ? "s" : "") + ". " +
+           (note || "") + " Re-run the check to use it.")
+        : "No priced items were found in that workbook — check the column headings.", !items.length);
+      $("wbPanel").open = true;
+    });
+  }
+
+  function renderWbUI(error) {
+    var chip = $("wbChip"), detail = $("wbDetail");
+    $("wbRemoveBtn").hidden = !state.workbookItems;
+    if (state.workbookItems && state.workbookItems.length) {
+      chip.hidden = false; chip.textContent = state.workbookItems.length + " items";
+      var sample = state.workbookItems.slice(0, 3).map(function (it) {
+        return esc(it.name.slice(0, 40)) + " " + money(it.price); }).join(" · ");
+      detail.innerHTML = "<b>Linked:</b> " + esc(state.workbookName || "workbook") + " — <b>" +
+        state.workbookItems.length + "</b> priced items, checked alongside the menu." +
+        '<div class="wb-sample">e.g. ' + sample + "</div>" +
+        '<div style="margin-top:6px">Does that look right? If the count or sample is off, the column' +
+        " layout may differ — tell Cedric's assistant the workbook's column names.</div>";
+    } else {
+      chip.hidden = true;
+      detail.innerHTML = error ? '<span class="warn">' + esc(error) + "</span>" : "";
+    }
+  }
+
+  // --- File System Access handle persistence (IndexedDB) ---
+  function idb() {
+    return new Promise(function (res, rej) {
+      var r = indexedDB.open("beoWorkbook", 1);
+      r.onupgradeneeded = function () { r.result.createObjectStore("h"); };
+      r.onsuccess = function () { res(r.result); };
+      r.onerror = function () { rej(r.error); };
+    });
+  }
+  function idbSet(key, val) {
+    return idb().then(function (db) {
+      return new Promise(function (res, rej) {
+        var tx = db.transaction("h", "readwrite"); tx.objectStore("h").put(val, key);
+        tx.oncomplete = function () { res(); }; tx.onerror = function () { rej(tx.error); };
+      });
+    });
+  }
+  function idbGet(key) {
+    return idb().then(function (db) {
+      return new Promise(function (res) {
+        var g = db.transaction("h", "readonly").objectStore("h").get(key);
+        g.onsuccess = function () { res(g.result); }; g.onerror = function () { res(null); };
+      });
+    });
+  }
+  function idbDel(key) {
+    return idb().then(function (db) {
+      return new Promise(function (res) {
+        var tx = db.transaction("h", "readwrite"); tx.objectStore("h").delete(key);
+        tx.oncomplete = function () { res(); }; tx.onerror = function () { res(); };
+      });
+    }).catch(function () {});
+  }
+
+  function linkViaHandle(handle, note) {
+    return handle.getFile().then(function (file) {
+      return readFileToWorkbook(file, false, note).then(function () {
+        return idbSet("file", handle);
+      });
+    });
+  }
+
+  $("wbLinkBtn").addEventListener("click", function () {
+    if (hasFSAccess) {
+      window.showOpenFilePicker({
+        types: [{ description: "Price workbook", accept: {
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"],
+          "application/vnd.ms-excel": [".xls"], "text/csv": [".csv"] } }],
+        multiple: false
+      }).then(function (handles) {
+        return linkViaHandle(handles[0], "It will re-read automatically next visit.");
+      }).catch(function (e) {
+        if (!e || e.name === "AbortError") return;      // user cancelled
+        $("wbInput").click();                            // blocked (e.g. in an iframe) → plain picker
+      });
+    } else {
+      $("wbInput").click();
+    }
+  });
+  $("wbInput").addEventListener("change", function () {
+    if (this.files[0]) readFileToWorkbook(this.files[0], true, "");
+    this.value = "";
+  });
+  $("wbReconnectBtn").addEventListener("click", function () {
+    idbGet("file").then(function (handle) {
+      if (!handle) { renderWbUI("The link was lost — please link the workbook again."); return; }
+      handle.requestPermission({ mode: "read" }).then(function (p) {
+        if (p === "granted") { $("wbReconnectBtn").hidden = true; return linkViaHandle(handle, ""); }
+        renderWbUI("Permission to read the file was declined.");
+      });
+    });
+  });
+  $("wbRemoveBtn").addEventListener("click", function () {
+    applyWorkbook(null, null, true);
+    idbDel("file");
+    setStatus("Workbook unlinked. Charges now check against the menu only.");
+  });
+
+  // On load: try to restore a linked/cached workbook.
+  (function restoreWorkbook() {
+    if (hasFSAccess) {
+      idbGet("file").then(function (handle) {
+        if (!handle) return restoreFromCache();
+        if (handle.queryPermission) {
+          handle.queryPermission({ mode: "read" }).then(function (p) {
+            if (p === "granted") linkViaHandle(handle, "");
+            else { $("wbReconnectBtn").hidden = false; restoreFromCache(true); }
+          });
+        } else { $("wbReconnectBtn").hidden = false; restoreFromCache(true); }
+      }).catch(restoreFromCache);
+    } else { restoreFromCache(); }
+    function restoreFromCache(quiet) {
+      try {
+        var raw = localStorage.getItem(WB_CACHE_KEY);
+        if (!raw) return;
+        var c = JSON.parse(raw);
+        if (c && c.items && c.items.length) {
+          applyWorkbook(c.items, c.name, false);
+          if (!quiet) { /* cached silently */ }
+        }
+      } catch (e) {}
+    }
+  })();
 
   function wireDrop(dropId, inputId, handler) {
     var drop = $(dropId), input = $(inputId);
@@ -544,7 +813,8 @@
   }
 
   function reset() {
-    state = { beoText: null, beoName: null, socRows: null, socText: null, socName: null };
+    state = { beoText: null, beoName: null, socRows: null, socText: null, socName: null,
+      workbookItems: state.workbookItems, workbookName: state.workbookName };  // keep the linked workbook
     ["dropBeo", "dropSoc"].forEach(function (d) { $(d).classList.remove("loaded"); });
     ["beoName", "socName"].forEach(function (n) { $(n).hidden = true; });
     $("beoInput").value = ""; $("socInput").value = "";
@@ -570,7 +840,8 @@
       return;
     }
 
-    var beoItems = state.beoText ? E.parseBeo(state.beoText, CAT) : null;
+    var CATX = activeCatalogue();
+    var beoItems = state.beoText ? E.parseBeo(state.beoText, CATX) : null;
     var beoHeader = state.beoText ? E.parseBeoHeader(state.beoText) : null;
     var socItems = state.socRows ? E.parseSocRows(state.socRows)
       : (state.socText ? E.parseSocText(state.socText) : null);
@@ -587,7 +858,7 @@
     }
 
     var eventDate = (beoHeader && beoHeader.eventDate) || E.parseEventDate(state.beoText || state.socText || "");
-    var report = E.checkDocument(primary.items, CAT, eventDate);
+    var report = E.checkDocument(primary.items, CATX, eventDate);
     var recon = (beoItems && beoItems.length && socItems && socItems.length)
       ? E.reconcile(beoItems, socItems) : null;
 
@@ -622,10 +893,11 @@
   // report in a collapsible section.
   function renderDistribution(out, segs) {
     var meta = state.beoLineMeta || [];
+    var dCat = activeCatalogue();
     var checked = segs.map(function (seg, i) {
       var header = E.parseBeoHeader(seg.text);
-      var items = E.parseBeo(seg.text, CAT);
-      var report = E.checkDocument(items, CAT, header.eventDate);
+      var items = E.parseBeo(seg.text, dCat);
+      var report = E.checkDocument(items, dCat, header.eventDate);
       var hard = report.summary.issues;
       // This BEO's page range within the whole distribution PDF.
       var endLine = (i + 1 < segs.length) ? segs[i + 1].startLine : meta.length;
@@ -823,7 +1095,11 @@
         var flag = /under by|over by|should be|No menu match|unaccounted|isn't a standard/i.test(n) ? " flag" : "";
         return '<div class="note' + flag + '">' + esc(n) + "</div>";
       }).join("");
-      var against = r.category ? '<div class="note against">Checked against the ' + esc(r.category) + " menu.</div>" : "";
+      var against = r.category
+        ? '<div class="note against">' + (r.category === "Workbook"
+            ? "Checked against the linked workbook."
+            : "Checked against the " + esc(r.category) + " menu.") + "</div>"
+        : "";
       var uid = ++rowUid;
       resultByUid[uid] = r;
       // Prefer locating the line on the actual rendered BEO; fall back to a
