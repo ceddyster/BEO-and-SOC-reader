@@ -325,10 +325,12 @@
   <details class="prices wb" id="wbPanel">
     <summary>Link a price workbook (optional)<span class="wb-chip" id="wbChip" hidden></span></summary>
     <div class="body">
-      <p class="wb-help">Link an Excel (.xlsx/.xls) or CSV price workbook — e.g. a file on a mapped work drive.
-      Its item names and prices are checked <b>alongside</b> the 2026 menu, which helps match items the menu
-      words differently. The file is read in your browser; nothing is uploaded. Where your browser allows it,
-      the link is remembered and re-read each visit.</p>
+      <p class="wb-help">Link an Excel (.xlsx/.xls) or CSV price workbook. Its item names and prices are checked
+      <b>alongside</b> the 2026 menu, which helps match items the menu words differently. The file is read in
+      your browser; nothing is uploaded. Where your browser allows it, the link is remembered and re-read each
+      visit.<br><b>SharePoint file?</b> In SharePoint click <b>Sync</b> (or “Add shortcut to OneDrive”) so it
+      appears in File Explorer under OneDrive, right-click it → <b>“Always keep on this device”</b>, then link
+      that local copy here — OneDrive keeps it up to date. A browser can’t open a SharePoint link directly.</p>
       <div class="wb-actions">
         <button class="btn" id="wbLinkBtn" type="button">🔗 Link workbook…</button>
         <button class="btn" id="wbReconnectBtn" type="button" hidden>Reconnect linked file</button>
