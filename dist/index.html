@@ -3378,10 +3378,38 @@
     renderWbUI();
   }
 
+  // A SharePoint/OneDrive "shortcut" is a tiny .url/.lnk file that only holds a
+  // web address, not the spreadsheet. Detect it so we can explain, rather than
+  // silently reporting "no items".
+  function wbLooksLikeShortcut(file, buf) {
+    if (/\.(url|lnk|website)$/i.test(file.name || "")) return true;
+    var head = new Uint8Array(buf, 0, Math.min(buf.byteLength, 512));
+    // Real .xlsx starts with "PK" (ZIP); real .xls with the OLE magic D0 CF.
+    if (head.length >= 2 && (head[0] === 0x50 && head[1] === 0x4B)) return false;
+    if (head.length >= 2 && (head[0] === 0xD0 && head[1] === 0xCF)) return false;
+    var txt = "";
+    for (var i = 0; i < head.length; i++) txt += String.fromCharCode(head[i]);
+    if (/\[InternetShortcut\]|^\s*URL\s*=\s*https?:/im.test(txt)) return true;
+    // Small non-spreadsheet file that is mostly a URL → treat as a shortcut.
+    if (buf.byteLength < 4096 && /https?:\/\//i.test(txt) && !/,/.test(txt)) return true;
+    return false;
+  }
+
   function readFileToWorkbook(file, persistCache, note) {
     setStatus("Reading workbook: " + file.name + " …");
     return file.arrayBuffer().then(function (buf) {
       var items;
+      if (wbLooksLikeShortcut(file, buf)) {
+        renderWbUI("That's a OneDrive/SharePoint shortcut (a 1 KB link), not the " +
+          "spreadsheet itself — so there's no menu data to read. Open the file in " +
+          "Excel and use File → Save a Copy to save a real .xlsx into Documents " +
+          "or Downloads, then link that; or in SharePoint click Sync (not “Add " +
+          "shortcut”) and link the synced copy. The right file shows Type " +
+          "“Microsoft Excel Worksheet”, around 20 KB — not “Internet Shortcut”.");
+        setStatus("That file is a shortcut, not the workbook — see the note below.", true);
+        $("wbPanel").open = true;
+        return;
+      }
       try { items = parseWorkbook(buf); }
       catch (e) { renderWbUI("Couldn't read that workbook: " + e.message); setStatus("", true); return; }
       applyWorkbook(items, file.name, persistCache);
