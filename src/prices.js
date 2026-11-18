@@ -71,8 +71,8 @@
     { category: "Christmas Buffet", name: "Christmas Buffet Additional Course", price: 16, unit: "pp", validFrom: "2026-07-01", validTo: "2026-12-31" },
 
     // ---------- LUNCH — BUFFET ----------
-    { category: "Lunch Buffet", name: "Lunch Buffet Menu One", price: 62, unit: "pp", minGuests: 30, note: "Daily set menu (cold savoury, salad, hot dishes, dessert); incl. rolls, coffee & tea (max 1 hr)." },
-    { category: "Lunch Buffet", name: "Lunch Buffet Menu Two", price: 69, unit: "pp", minGuests: 30, note: "Menu One plus a sandwich and extra dessert/fruit platter." },
+    { category: "Lunch Buffet", name: "Lunch Buffet Menu One", price: 62, unit: "pp", minGuests: 30, note: "Daily set menu (cold savoury, salad, hot dishes, dessert); incl. rolls, coffee & tea (max 1 hr).", aliases: ["Daily Lunch Buffet One", "Daily Lunch Buffet Menu One"] },
+    { category: "Lunch Buffet", name: "Lunch Buffet Menu Two", price: 69, unit: "pp", minGuests: 30, note: "Menu One plus a sandwich and extra dessert/fruit platter.", aliases: ["Daily Lunch Buffet Two", "Daily Lunch Buffet Menu Two"] },
     { category: "Lunch Buffet", name: "Lunch Buffet Menu Three", price: 88, unit: "pp", minGuests: 30, composition: { set: "lunchBuffet", limits: { sandwich: 1, "cold savoury": 1, salad: 1, hot: 3, dessert: 3 } }, note: "Custom build: 1 sandwich, 1 cold savoury, 1 salad, 3 hot dishes, 3 desserts." },
     { category: "Lunch Buffet", name: "Lunch Buffet Seated Surcharge", price: 12, unit: "pp", note: "Menu served seated" },
     { category: "Lunch Buffet", name: "Lunch Buffet Item Swap Surcharge", price: 16, unit: "pp", note: "Swapping any items" },
@@ -102,7 +102,7 @@
       breakfast: { bakery: 2, continental: 1, pan: 1 },
       note: "Both bakery items, 1 continental, 1 from the pan; incl. coffee, tea & juice.",
       aliases: ["Breakfast Plated Menu Two", "Plated Breakfast Two", "Breakfast Set Menu Two", "Breakfast Set Two"] },
-    { category: "Breakfast Buffet", name: "Breakfast Buffet", price: 59.5, unit: "pp", minGuests: 30 },
+    { category: "Breakfast Buffet", name: "Breakfast Buffet", price: 59.5, unit: "pp", minGuests: 30, aliases: ["Buffet Breakfast", "Breakfast Buffet Menu"] },
     { category: "Breakfast Continental", name: "Continental Breakfast", price: 48.5, unit: "pp", minGuests: 30 },
     { category: "Breakfast Standup", name: "Standup Breakfast Egg and Bacon Sliders", price: 30, unit: "pp_per_selection", minGuests: 30 },
     { category: "Breakfast Standup", name: "Standup Breakfast Sliced Tropical Fruit Platter", price: 35, unit: "pp_per_selection" },
@@ -120,7 +120,7 @@
     { category: "Coffee Breaks", name: "Arrival Tea and Coffee", price: 11, unit: "pp", mustInclude: ["arrival"], note: "Arrival tea & coffee for non–Day Delegate events (under 2 hrs). Day Delegate events use the $8 arrival add-on instead.", aliases: ["Arrival Coffee and Tea", "Arrival Tea & Coffee", "Arrival Tea & Coffee Served", "Arrival Tea and Coffee Served"] },
     { category: "Coffee Breaks", name: "Barista Coffee Cart Half Day", price: 495, unit: "flat" },
     { category: "Coffee Breaks", name: "Barista Coffee Cart Full Day", price: 640, unit: "flat" },
-    { category: "Coffee Breaks", name: "Individual Coffee", price: 6.5, unit: "each" },
+    { category: "Coffee Breaks", name: "Individual Coffee", price: 6.5, unit: "each", aliases: ["Individual coffee cup", "Individual Coffee Cup", "Coffee on consumption"] },
 
     // ---------- CREW PACKAGES ----------
     { category: "Crew Packages", name: "Crew Hot Breakfast Plate", price: 31, unit: "pp", note: "Chef's selection; plated functions only, served after function service.", aliases: ["Chefs Selection Hot Breakfast Plate", "Crew Breakfast Plate"] },
@@ -144,6 +144,15 @@
     { category: "Day Delegate", name: "Day Delegate Package One", price: null, unit: "pp", minGuests: 30, priceVaries: true, note: "Includes morning tea, lunch, afternoon tea, main plenary room hire, mints & water, lectern & mic, notepads & pens. Breaks: select one sweet OR savoury item each (max 30 min); lunch is a daily set menu (max 1 hr). Price varies — confirm against the quote.", aliases: ["Day Delegate One", "DDP One", "Day Delegate Package 1"] },
     { category: "Day Delegate", name: "Day Delegate Package Two", price: null, unit: "pp", minGuests: 30, priceVaries: true, note: "As Package One, plus a sandwich and an extra dessert / fruit platter at lunch. Price varies — confirm against the quote.", aliases: ["Day Delegate Two", "DDP Two", "Day Delegate Package 2"] },
     { category: "Day Delegate", name: "Day Delegate Arrival Coffee and Tea", price: 8, unit: "pp", mustInclude: ["arrival"], note: "Optional arrival coffee & tea add-on ($8 per person).", aliases: ["Arrival Coffee and Tea", "Arrival Tea and Coffee"] },
+
+    // ---------- FY27 MENU-GUIDE ENHANCEMENTS ----------
+    // Standalone priced add-ons taken from the FY27 Banquets Menus Guide. All
+    // menu packages above already carry the matching FY27 prices; these are the
+    // extra à-la-carte enhancement items the guide lists on their own.
+    { category: "Enhancements", name: "Additional Salad Selection", price: 9, unit: "pp", aliases: ["Salad addition per selection", "Salad addition", "Additional salad per selection", "Extra salad selection"] },
+    { category: "Enhancements", name: "Whole Seasonal Fruit Bowl", price: 48, unit: "each", aliases: ["Selection of whole seasonal fruit bowl 16 pieces", "Whole seasonal fruit bowl", "Seasonal fruit bowl", "Whole fruit bowl 16 pieces"] },
+    { category: "Enhancements", name: "Sliced Tropical Fruit Platter with Berries", price: 15, unit: "each", aliases: ["Sliced tropical fruit platter with local seasonal berries", "Sliced tropical fruit platter with berries", "Tropical fruit platter with berries"] },
+    { category: "Enhancements", name: "Gourmet Cheese Platter", price: 18, unit: "each", aliases: ["Gourmet cheese platter figs celery muscatels", "Gourmet cheese platter with figs", "Gourmet cheese platter, figs, celery, muscatels, walnut currant bread"] },
 
     // ---------- CANAPÉS / COCKTAIL RECEPTION ----------
     { category: "Canapes", name: "Cocktail Reception One Hour", price: 39, unit: "pp", minGuests: 30, canapes: 4, note: "1 hour / select four canapés per person.", aliases: ["Cocktail Reception 4 Canapes", "Cocktail Reception Four Canapes"] },

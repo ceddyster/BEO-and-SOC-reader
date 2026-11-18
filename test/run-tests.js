@@ -1438,6 +1438,28 @@ ok(d3.matchedName === "Dinner Buffet Menu One" && d3.priceStatus === "correct", 
 var single = engine.splitBeoDistribution(fs.readFileSync(path.join(__dirname, "fixtures", "nab_beo.txt"), "utf8"));
 ok(single.length === 1, "a single (multi-page) BEO is one segment (got " + single.length + ")");
 
+section("FY27 menu-guide wording (aliases) and enhancement add-ons");
+[
+  ["Buffet Breakfast", "Breakfast Buffet", 59.5],
+  ["Daily Lunch Buffet One", "Lunch Buffet Menu One", 62],
+  ["Daily Lunch Buffet Two", "Lunch Buffet Menu Two", 69],
+  ["Individual coffee cup", "Individual Coffee", 6.5],
+  ["Salad addition per selection", "Additional Salad Selection", 9],
+  ["Selection of whole seasonal fruit bowl 16 pieces", "Whole Seasonal Fruit Bowl", 48],
+  ["Sliced tropical fruit platter with local seasonal berries", "Sliced Tropical Fruit Platter with Berries", 15],
+  ["Gourmet cheese platter, figs, celery, muscatels, walnut currant bread", "Gourmet Cheese Platter", 18]
+].forEach(function (t) {
+  var m = engine.findMatch(t[0], catalogue, undefined, undefined);
+  ok(m && m.item.name === t[1] && m.item.price === t[2],
+    "FY27 \"" + t[0].slice(0, 32) + "\" -> " + t[1] + " $" + t[2] +
+    (m ? (" (got " + m.item.name + " $" + m.item.price + ")") : " (no match)"));
+});
+// The new $15/$18 platters must not steal the existing standup/crew items.
+var standup = engine.findMatch("Standup Breakfast Sliced Tropical Fruit Platter", catalogue, undefined, undefined);
+ok(standup && standup.item.price === 35, "standup tropical fruit platter still $35 (not the $15 add-on)");
+var crewCheese = engine.findMatch("Crew Cheese Platter with Crackers", catalogue, undefined, undefined);
+ok(crewCheese && crewCheese.item.price === 24, "crew cheese platter still $24 (not the $18 add-on)");
+
 console.log("\n----------------------------------------");
 console.log(passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);
