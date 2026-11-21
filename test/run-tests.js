@@ -1521,6 +1521,27 @@ var plExcess = engine.checkDocument(
 ok(/additional course .*or course shift/i.test(plExcess.notes.join(" ")),
   "an $18 excess on a plated lunch names both additional course and course shift");
 
+section("Decimal staff-hours parse + shift crossing midnight (Sat→Sun rate)");
+// Saturday event; operational shift 1820-0030 runs 30 min into Sunday.
+var mnDoc = engine.checkDocument(engine.parseBeo(
+  "Miscellaneous\n30.85 Operational staff hours (5 Staff 1820- 0030) @ $55.00\nperson, per hour\n" +
+  "27.5 Security officer hours - Saturday rate (5 guards 1830- 0000) @ $75.00 per hour\n",
+  catalogue), catalogue, "2026-11-21");
+var opMN = mnDoc.items.find(function (r) { return r.matchedName === "Operational Staff"; });
+ok(opMN && opMN.qty === 30.85, "decimal hours parsed as 30.85, not 85 (got " + (opMN && opMN.qty) + ")");
+ok(opMN && opMN.priceStatus === "review" && /crosses midnight into Sunday/.test(opMN.notes.join(" ")),
+  "operational shift past midnight flagged for review");
+ok(opMN && /2\.5 staff-hours at the Sunday rate \(\$70/.test(opMN.notes.join(" ")),
+  "names 2.5 staff-hours at the Sunday $70 rate");
+var secMN = mnDoc.items.find(function (r) { return r.matchedName === "Security Officer"; });
+ok(secMN && secMN.qty === 27.5, "decimal security hours parsed as 27.5, not 5 (got " + (secMN && secMN.qty) + ")");
+ok(secMN && secMN.priceStatus === "correct", "security ending exactly at 0000 does NOT cross midnight");
+// A Saturday shift that stays within the day is not flagged.
+var sameDay = engine.checkDocument(engine.parseBeo(
+  "Miscellaneous\n20 Operational staff hours (4 Staff 1000- 1500) @ $55.00 person, per hour\n",
+  catalogue), catalogue, "2026-11-21").items.find(function (r) { return r.matchedName === "Operational Staff"; });
+ok(sameDay && sameDay.priceStatus === "correct", "a same-day Saturday operational shift stays correct");
+
 console.log("\n----------------------------------------");
 console.log(passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

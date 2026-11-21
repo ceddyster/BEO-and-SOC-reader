@@ -1222,6 +1222,80 @@
     var d = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2]));
     return isNaN(d.getTime()) ? null : d.getUTCDay();
   }
+  // ISO date n days after the given ISO date, or null.
+  function addDaysIso(iso, n) {
+    if (!iso) return null;
+    var p = iso.split("-");
+    if (p.length !== 3) return null;
+    var d = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2]));
+    if (isNaN(d.getTime())) return null;
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  }
+  // Parse a staff-shift window "1820- 0030" or "18:20 - 00:30" from a line.
+  // Returns start/end minutes and the minutes past midnight the shift runs into
+  // the next day (0 when it ends at or before midnight).
+  function parseShiftWindow(text) {
+    var m = String(text || "").match(/(\d{1,2}):?(\d{2})\s*[-–—]\s*(\d{1,2}):?(\d{2})/);
+    if (!m) return null;
+    var sH = +m[1], sM = +m[2], eH = +m[3], eM = +m[4];
+    if (sH > 23 || eH > 23 || sM > 59 || eM > 59) return null;
+    var start = sH * 60 + sM, end = eH * 60 + eM;
+    var postMin = (end <= start && end > 0) ? end : 0;
+    function pad2(x) { return (x < 10 ? "0" : "") + x; }
+    return { startMin: start, endMin: end, postMidnightMin: postMin,
+      startTxt: pad2(sH) + pad2(sM), endTxt: pad2(eH) + pad2(eM) };
+  }
+  // Number of staff/guards in a line like "(5 Staff 1820- 0030)".
+  function parseStaffCount(text) {
+    var m = String(text || "").match(/\(\s*(\d+)\s*(?:x\s*)?(?:staff|guards?|security|ppl|people|pax)\b/i);
+    return m ? +m[1] : null;
+  }
+  // A staff shift that runs past midnight has its after-midnight hours fall on
+  // the next calendar day, which may carry a different rate (e.g. Saturday into
+  // Sunday). Returns a review note (and the dollar split when the staff count is
+  // known), or null when nothing crosses midnight or the next-day rate is the
+  // same. `rates` is the day-rate table, `baseRate`/`baseLabel` the line's own
+  // day.
+  function crossMidnightSplit(item, eventDate, catalogue, rates, baseRate, baseLabel) {
+    var postMin = item.shiftPostMidnightMin || 0;
+    if (postMin <= 0) return null;
+    var nextRate = null, nextLabel = null;
+    var nextIso = addDaysIso(eventDate, 1);
+    if (nextIso && catalogue.publicHolidays && catalogue.publicHolidays[nextIso]) {
+      nextRate = rates.publicHoliday; nextLabel = "a public holiday";
+    } else if (nextIso != null) {
+      var nd = dayOfWeek(nextIso);
+      if (nd === 0) { nextRate = rates.sunday; nextLabel = "Sunday"; }
+      else if (nd === 6) { nextRate = rates.saturday; nextLabel = "Saturday"; }
+      else if (nd != null) { nextRate = rates.weekday; nextLabel = WEEKDAY_NAMES[nd] + " (weekday)"; }
+    }
+    var span = (item.shiftStartTxt && item.shiftEndTxt) ? (item.shiftStartTxt + "–" + item.shiftEndTxt) : "this shift";
+    var head = "Shift " + span + " crosses midnight" + (nextLabel ? " into " + nextLabel : "") + ". ";
+    if (nextRate == null) {
+      // No event date to resolve the next day — surface it, but don't force a
+      // review (we can't assert the rate actually differs).
+      return { soft: true, note: head + "Confirm the after-midnight hours are charged at the correct next-day rate." };
+    }
+    if (Math.abs(nextRate - baseRate) <= 0.005) return null; // same rate next day — no split needed
+    var count = item.staffCount, total = item.qty;
+    if (count != null && total != null) {
+      var postHours = round2(count * postMin / 60);
+      var preHours = round2(total - postHours);
+      if (preHours < 0) return { note: head + "The after-midnight hours should be at the " + nextLabel +
+        " rate ($" + nextRate + "/hr), not " + baseLabel + " ($" + baseRate + "/hr). Confirm the split." };
+      var expectedTotal = round2(preHours * baseRate + postHours * nextRate);
+      var chargedTotal = round2(total * (item.unitPrice || 0));
+      return { note: head + count + " staff × " + postMin + " min after midnight = " + postHours +
+        " staff-hour" + (postHours === 1 ? "" : "s") + " at the " + nextLabel + " rate ($" + nextRate +
+        "/hr), the remaining " + preHours + " at " + baseLabel + " ($" + baseRate + "/hr). Expected ≈ " +
+        money(expectedTotal) + " (" + preHours + "h × $" + baseRate + " + " + postHours + "h × $" +
+        nextRate + "); charged flat $" + (item.unitPrice) + "/hr = " + money(chargedTotal) + ". Confirm the split.",
+        expectedTotal: expectedTotal, chargedTotal: chargedTotal };
+    }
+    return { note: head + "The after-midnight hours should be at the " + nextLabel + " rate ($" + nextRate +
+      "/hr), not " + baseLabel + " ($" + baseRate + "/hr). Confirm the split." };
+  }
 
   var NUM_WORDS = { one: "1", two: "2", three: "3", four: "4", five: "5", six: "6",
     seven: "7", eight: "8", nine: "9", ten: "10", twelve: "12" };
@@ -1832,18 +1906,22 @@
     // Security officer hours: "5 Security officer hours ... @ $75.00 per hour".
     // Rate depends on the event's day of week (Mon–Fri / Sat / Sun), so this is
     // price-checked (kind "security") against the catalogue's security rates.
-    re = /(\d+)\s+security officer hours?[\s\S]{0,120}?@\s*\$?([\d,]+(?:\.\d{1,2})?)\s*per\s+hour/g;
+    re = /(\d+(?:\.\d+)?)\s+security officer hours?[\s\S]{0,120}?@\s*\$?([\d,]+(?:\.\d{1,2})?)\s*per\s+hour/g;
     while ((m = re.exec(soft)) !== null) {
-      var h = parseInt(m[1], 10), rate = parseMoney(m[2]);
+      var h = parseFloat(m[1]), rate = parseMoney(m[2]);
       // A security line often names its own day (e.g. "Saturday rate") because
       // an event can cross midnight into a higher-rate day; prefer that over the
       // event date.
       var secDay = /\bsunday\b/i.test(m[0]) ? "sunday"
         : /\bsaturday\b/i.test(m[0]) ? "saturday"
         : /\b(mon|tue|wed|thu|fri|weekday|week\s*day)\w*\b/i.test(m[0]) ? "weekday" : null;
-      var secJ = lineIndexOf(/\d+\s+security officer hours?/i);
+      var secShift = parseShiftWindow(m[0]);
+      var secJ = lineIndexOf(/\d+(?:\.\d+)?\s+security officer hours?/i);
       pushUnique({ qty: h, name: "Security officer hours", unitPrice: rate,
         lineTotal: round2(h * rate), kind: "security", beoUnit: "hour", securityDay: secDay,
+        staffCount: parseStaffCount(m[0]),
+        shiftPostMidnightMin: secShift ? secShift.postMidnightMin : 0,
+        shiftStartTxt: secShift ? secShift.startTxt : null, shiftEndTxt: secShift ? secShift.endTxt : null,
         sourceExcerpt: excerpt(secJ - 1, secJ + 2), sourceLine: secJ, headLine: secJ, source: "BEO" });
     }
 
@@ -1851,16 +1929,20 @@
     // 02:00) @ $55.00 person, per hour" — same shape as security, priced per
     // staff-hour at a day-of-week rate (kind "operational"). The amount and
     // "per hour" can be split by a "person," wrap, so the gap is tolerated.
-    re = /(\d+)\s+operational staff hours?[\s\S]{0,140}?@\s*\$?([\d,]+(?:\.\d{1,2})?)\s*(?:person\s*,?\s*)?(?:per\s+)?hour/gi;
+    re = /(\d+(?:\.\d+)?)\s+operational staff hours?[\s\S]{0,140}?@\s*\$?([\d,]+(?:\.\d{1,2})?)\s*(?:person\s*,?\s*)?(?:per\s+)?hour/gi;
     while ((m = re.exec(soft)) !== null) {
-      var oph = parseInt(m[1], 10), oprate = parseMoney(m[2]);
+      var oph = parseFloat(m[1]), oprate = parseMoney(m[2]);
       var opDay = /\bpublic\s*hol/i.test(m[0]) ? "publicHoliday"
         : /\bsunday\b/i.test(m[0]) ? "sunday"
         : /\bsaturday\b/i.test(m[0]) ? "saturday"
         : /\b(mon|tue|wed|thu|fri|weekday|week\s*day)\w*\b/i.test(m[0]) ? "weekday" : null;
-      var opJ = lineIndexOf(/\d+\s+operational staff hours?/i);
+      var opShift = parseShiftWindow(m[0]);
+      var opJ = lineIndexOf(/\d+(?:\.\d+)?\s+operational staff hours?/i);
       pushUnique({ qty: oph, name: "Operational staff hours", unitPrice: oprate,
         lineTotal: round2(oph * oprate), kind: "operational", beoUnit: "hour", securityDay: opDay,
+        staffCount: parseStaffCount(m[0]),
+        shiftPostMidnightMin: opShift ? opShift.postMidnightMin : 0,
+        shiftStartTxt: opShift ? opShift.startTxt : null, shiftEndTxt: opShift ? opShift.endTxt : null,
         sourceExcerpt: excerpt(opJ - 1, opJ + 2), sourceLine: opJ, headLine: opJ, source: "BEO" });
     }
 
@@ -2110,6 +2192,14 @@
           "/hour (" + (secD < 0 ? "under" : "over") + " by " + money(Math.abs(secD)) + "/hour" +
           (item.qty != null ? ", " + money(Math.abs(result.priceImpact)) + " across " + item.qty + " hour" + (item.qty > 1 ? "s" : "") : "") + ").");
       }
+      var secSplit = crossMidnightSplit(item, eventDate, catalogue, rates, secExp, dayLabel);
+      if (secSplit) {
+        result.notes.push(secSplit.note);
+        if (!secSplit.soft) {
+          if (result.status !== "math-error") result.status = "review";
+          result.priceStatus = "review";
+        }
+      }
       return result;
     }
 
@@ -2154,6 +2244,14 @@
         result.notes.push("Operational staff on " + opLabel + " should be $" + opExp + "/hour; charged " + money(opCharged) +
           "/hour (" + (opD < 0 ? "under" : "over") + " by " + money(Math.abs(opD)) + "/hour" +
           (item.qty != null ? ", " + money(Math.abs(result.priceImpact)) + " across " + item.qty + " hour" + (item.qty > 1 ? "s" : "") : "") + ").");
+      }
+      var opSplit = crossMidnightSplit(item, eventDate, catalogue, oprates, opExp, opLabel);
+      if (opSplit) {
+        result.notes.push(opSplit.note);
+        if (!opSplit.soft) {
+          if (result.status !== "math-error") result.status = "review";
+          result.priceStatus = "review";
+        }
       }
       return result;
     }
